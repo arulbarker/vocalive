@@ -1273,7 +1273,7 @@ class CohostTabBasic(QWidget):
 
             queue_limit_layout.addWidget(QLabel("Daily Limit:"))
             self.daily_limit_spin = QSpinBox()
-            self.daily_limit_spin.setRange(1, 10)
+            self.daily_limit_spin.setRange(1, 50)
             self.daily_limit_spin.setValue(self.cfg.get("viewer_daily_limit", 5))
             self.daily_limit_spin.valueChanged.connect(self.update_daily_limit)
             self.daily_limit_spin.setToolTip("Maximum interactions per viewer per day")
@@ -2029,20 +2029,23 @@ Current context: Digital products sales expert"""
             else:  # English
                 voices = voices_data.get("gtts_standard", {}).get("en-US", [])
             
-            if not voices:
+            if voices:
+                # Add each voice with proper display name and voice model
+                for voice in voices:
+                    model = voice.get("model", "")
+                    gender = voice.get("gender", "")
+                    display_name = f"{model} ({gender})"
+                    self.voice_cb.addItem(display_name, model)
+            else:
                 # Fallback voices jika file tidak ada
                 if lang == "Indonesia":
-                    self.voice_cb.addItem("Standard Indonesian", "id-ID-Standard-A")
+                    self.voice_cb.addItem("Standard Indonesian (FEMALE)", "id-ID-Standard-A")
+                    self.voice_cb.addItem("Standard Indonesian (MALE)", "id-ID-Standard-B")
                 else:
-                    self.voice_cb.addItem("Standard English", "en-US-Standard-A")
+                    self.voice_cb.addItem("Standard English (FEMALE)", "en-US-Standard-A")
+                    self.voice_cb.addItem("Standard English (MALE)", "en-US-Standard-B")
                 print(f"[WARNING] No voices found, using fallback for {lang}")
                 return
-            
-            for voice in voices:
-                model = voice.get("model", "unknown")
-                gender = voice.get("gender", "Unknown")
-                display = f"{gender} - {model}"
-                self.voice_cb.addItem(display, model)
             
             # Restore saved selection
             stored = self.cfg.get("cohost_voice_model", "")

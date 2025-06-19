@@ -248,17 +248,8 @@ class UpdateManager(QObject):
     
     def _get_fallback_update_info(self):
         """Fallback update info untuk testing atau emergency"""
-        # Bisa diubah manual untuk testing
-        fallback_version = "1.0.2"
-        
-        if self._is_newer_version(fallback_version):
-            return {
-                "version": fallback_version,
-                "download_url": f"https://github.com/{self.github_owner}/{self.github_repo}/releases/download/v{fallback_version}/StreamMateAI_v{fallback_version}.zip",
-                "changelog": "• Perbaikan bug pada sistem update\n• Peningkatan performa\n• UI improvements",
-                "release_date": datetime.now().isoformat(),
-                "file_size": 50 * 1024 * 1024  # 50MB
-            }
+        # Return None since current version (1.0.9) is newer than fallback
+        # This prevents false update notifications
         return None
     
     def _is_newer_version(self, new_version):

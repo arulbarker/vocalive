@@ -1,5 +1,25 @@
 # StreamMate AI Changelog
 
+## [v1.0.10] - 2025-01-19
+
+### ✨ Critical Bug Fixes
+- **Fixed CoHost Daily Limit**: Increased maximum daily interactions per viewer from 10 to 50
+- **Fixed Voice Preview System**: All voice models now play correctly with proper audio differentiation
+- **Fixed Update Notification**: Eliminated false update notifications when app is already latest version
+- **Enhanced Voice Loading**: Improved voice model loading with proper display names and parameters
+- **Improved Version Comparison**: Fixed version parsing logic for accurate update detection
+
+### 🔧 Technical Improvements
+- Removed duplicate voice loading code in CoHost tab
+- Normalized version string handling in update manager
+- Enhanced voice model parameter passing to TTS engine
+- Optimized update check frequency to prevent false positives
+
+### 📝 Notes
+- Users can now set daily limits up to 50 interactions per viewer
+- Voice preview now correctly demonstrates different voice models from voices.json
+- Update notifications will only appear for actual new versions
+
 ## [v1.0.9] - 2025-06-19
 
 ### ✨ New Features
