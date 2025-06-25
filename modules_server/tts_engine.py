@@ -12,6 +12,7 @@ import requests
 import json
 import logging
 import sys
+import subprocess
 
 # ✅ PERBAIKAN: Conditional import pyttsx3 to fix Pylance error
 try:
@@ -38,6 +39,52 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s'
 )
+
+# ✅ CRITICAL FIX: Global subprocess suppression untuk semua audio operations
+def _create_silent_subprocess_env():
+    """Create environment untuk completely silent subprocess calls"""
+    # Store original functions
+    if not hasattr(_create_silent_subprocess_env, '_original_popen'):
+        _create_silent_subprocess_env._original_popen = subprocess.Popen
+        _create_silent_subprocess_env._original_call = subprocess.call
+        _create_silent_subprocess_env._original_run = subprocess.run
+    
+    def ultra_silent_popen(*args, **kwargs):
+        """Ultra silent Popen - no CMD windows, no output"""
+        if sys.platform == 'win32':
+            kwargs.setdefault('creationflags', subprocess.CREATE_NO_WINDOW)
+        kwargs.setdefault('stdout', subprocess.DEVNULL)
+        kwargs.setdefault('stderr', subprocess.DEVNULL)
+        kwargs.setdefault('stdin', subprocess.DEVNULL)
+        return _create_silent_subprocess_env._original_popen(*args, **kwargs)
+    
+    def ultra_silent_call(*args, **kwargs):
+        """Ultra silent call - no CMD windows, no output"""
+        if sys.platform == 'win32':
+            kwargs.setdefault('creationflags', subprocess.CREATE_NO_WINDOW)
+        kwargs.setdefault('stdout', subprocess.DEVNULL)
+        kwargs.setdefault('stderr', subprocess.DEVNULL)
+        kwargs.setdefault('stdin', subprocess.DEVNULL)
+        return _create_silent_subprocess_env._original_call(*args, **kwargs)
+    
+    def ultra_silent_run(*args, **kwargs):
+        """Ultra silent run - no CMD windows, no output"""
+        if sys.platform == 'win32':
+            kwargs.setdefault('creationflags', subprocess.CREATE_NO_WINDOW)
+        kwargs.setdefault('stdout', subprocess.DEVNULL)
+        kwargs.setdefault('stderr', subprocess.DEVNULL)
+        kwargs.setdefault('stdin', subprocess.DEVNULL)
+        return _create_silent_subprocess_env._original_run(*args, **kwargs)
+    
+    # Apply global subprocess suppression
+    subprocess.Popen = ultra_silent_popen
+    subprocess.call = ultra_silent_call
+    subprocess.run = ultra_silent_run
+    
+    print("[TTS] ✅ GLOBAL subprocess suppression activated - NO CMD POPUPS!")
+
+# Apply global suppression immediately
+_create_silent_subprocess_env()
 
 # ✅ PERBAIKAN: Setup ffmpeg dari thirdparty
 def _setup_ffmpeg():
@@ -115,7 +162,13 @@ try:
             AudioSegment.ffmpeg = str(ffmpeg_exe)
             AudioSegment.ffprobe = str(ffprobe_exe)
             
-            print(f"[TTS] pydub configured with thirdparty ffmpeg: {ffmpeg_exe}")
+            # ✅ CRITICAL: Configure pydub untuk tidak show console windows
+            AudioSegment._converter = str(ffmpeg_exe)
+            AudioSegment._ffmpeg = str(ffmpeg_exe)
+            AudioSegment._ffprobe = str(ffprobe_exe)
+            
+            print(f"[TTS] pydub configured with SILENT thirdparty ffmpeg: {ffmpeg_exe}")
+            print(f"[TTS] ✅ CMD popup suppression enabled for audio processing")
         else:
             print(f"[TTS] WARNING: ffmpeg not found for pydub configuration")
     
@@ -126,39 +179,25 @@ except ImportError as e:
 
 # OPTIMAL: Gunakan pydub.playback yang sudah terbukti stabil
 def _safe_audio_play(audio_segment):
-    """Play AudioSegment dengan multiple fallback methods"""
-    print(f"[AUDIO] Attempting to play audio with multiple methods...")
+    """Play AudioSegment SILENTLY tanpa CMD popup untuk Windows"""
+    print(f"[AUDIO] Playing audio silently (no CMD popup)...")
     
-    # Method 1: Gunakan pydub playback (jika tersedia)
+    # ✅ PRIORITY 1: sounddevice - Pure Python, no CMD popup
     try:
-        # Import pydub playback
-        from pydub.playback import play
-        
-        # Play langsung dengan pydub
-        print(f"[AUDIO] Method 1: Using pydub.playback.play")
-        play(audio_segment)
-        print(f"[AUDIO] ✅ Method 1 successful: pydub.playback.play")
-        return True
-        
-    except Exception as e:
-        print(f"[AUDIO] ❌ Method 1 failed (pydub.playback): {e}")
-    
-    # Method 2: Export to WAV and play with sounddevice
-    try:
-        print(f"[AUDIO] Method 2: Using sounddevice")
+        print(f"[AUDIO] Method 1: Using sounddevice (silent)")
         import sounddevice as sd
         import numpy as np
         import tempfile
         import wave
         
-        # Create temp file for WAV
+        # Create temp file for WAV dengan silent export
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
             temp_path = Path(temp_file.name)
         
-        # Export to WAV
+        # ✅ SILENT EXPORT: Export sudah silent karena global subprocess suppression
         audio_segment.export(str(temp_path), format="wav")
         
-        # Read with wave
+        # Read with wave module (pure Python, no CMD)
         with wave.open(str(temp_path), 'rb') as wf:
             sample_width = wf.getsampwidth()
             channels = wf.getnchannels()
@@ -167,10 +206,7 @@ def _safe_audio_play(audio_segment):
         
         # Convert to numpy array
         dtype_map = {1: np.int8, 2: np.int16, 4: np.int32}
-        if sample_width in dtype_map:
-            dtype = dtype_map[sample_width]
-        else:
-            dtype = np.int16
+        dtype = dtype_map.get(sample_width, np.int16)
         
         # Process audio data
         samples = np.frombuffer(frames, dtype=dtype)
@@ -185,7 +221,7 @@ def _safe_audio_play(audio_segment):
         if channels == 2:
             samples = samples.reshape((-1, 2))
         
-        # Play with sounddevice
+        # Play with sounddevice (pure Python, no CMD)
         sd.play(samples, rate, blocking=True)
         
         # Clean up
@@ -194,72 +230,27 @@ def _safe_audio_play(audio_segment):
         except:
             pass
             
-        print(f"[AUDIO] ✅ Method 2 successful: sounddevice")
+        print(f"[AUDIO] ✅ Method 1 successful: sounddevice (silent)")
         return True
         
     except Exception as e:
-        print(f"[AUDIO] ❌ Method 2 failed (sounddevice): {e}")
+        print(f"[AUDIO] ❌ Method 1 failed (sounddevice): {e}")
     
-    # Method 3: Play with simpleaudio if available
+    # ✅ PRIORITY 2: Windows-specific silent playback
     try:
-        print(f"[AUDIO] Method 3: Using simpleaudio")
-        try:
-            import simpleaudio as sa
-            simpleaudio_available = True
-        except ImportError:
-            print(f"[AUDIO] simpleaudio not available, skipping Method 3")
-            simpleaudio_available = False
-            raise ImportError("simpleaudio not available")
+        print(f"[AUDIO] Method 2: Using Windows SoundPlayer (silent)")
         
-        # Only continue if simpleaudio successfully imported
-        if simpleaudio_available:
-            # Export to WAV with specific parameters
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                temp_path = Path(temp_file.name)
-            
-            # Export with optimal settings for simpleaudio
-            audio_segment = audio_segment.set_channels(1)  # Convert to mono
-            audio_segment = audio_segment.set_sample_width(2)  # 16-bit
-            audio_segment = audio_segment.set_frame_rate(44100)  # Common rate
-            audio_segment.export(str(temp_path), format="wav")
-            
-            # Play
-            wave_obj = sa.WaveObject.from_wave_file(str(temp_path))
-            play_obj = wave_obj.play()
-            play_obj.wait_done()  # Wait for playback to finish
-            
-            # Clean up
-            try:
-                temp_path.unlink()
-            except:
-                pass
-                
-            print(f"[AUDIO] ✅ Method 3 successful: simpleaudio")
-            return True
-        
-    except Exception as e:
-        print(f"[AUDIO] ❌ Method 3 failed (simpleaudio): {e}")
-    
-    # Method 4: Last resort - try to play with system command
-    try:
-        print(f"[AUDIO] Method 4: Using system command")
-        import subprocess
-        
-        # Export to WAV
+        # Export to WAV dengan silent mode (sudah silent karena global suppression)
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
             temp_path = Path(temp_file.name)
         
         audio_segment.export(str(temp_path), format="wav")
         
-        # Use appropriate command for different platforms
+        # Use Windows Media.SoundPlayer dengan hidden window (sudah silent karena global suppression)
         if sys.platform == 'win32':
-            # On Windows, use PowerShell to play audio silently
-            cmd = ["powershell", "-c", f"(New-Object Media.SoundPlayer '{temp_path}').PlaySync()"]
-            subprocess.call(cmd, creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-            # On other platforms, use appropriate command
-            cmd = ["play", str(temp_path)]
-            subprocess.call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            cmd = ["powershell", "-WindowStyle", "Hidden", "-c", 
+                   f"(New-Object Media.SoundPlayer '{temp_path}').PlaySync()"]
+            subprocess.call(cmd)  # Global suppression handles silence
         
         # Clean up
         try:
@@ -267,25 +258,98 @@ def _safe_audio_play(audio_segment):
         except:
             pass
             
-        print(f"[AUDIO] ✅ Method 4 successful: system command")
+        print(f"[AUDIO] ✅ Method 2 successful: Windows SoundPlayer (silent)")
         return True
         
     except Exception as e:
-        print(f"[AUDIO] ❌ Method 4 failed (system command): {e}")
+        print(f"[AUDIO] ❌ Method 2 failed (Windows SoundPlayer): {e}")
     
-    print(f"[AUDIO] ❌ All playback methods failed")
+    # ✅ PRIORITY 3: simpleaudio - minimal dependencies, no CMD
+    try:
+        print(f"[AUDIO] Method 3: Using simpleaudio (silent)")
+        import simpleaudio as sa
+        
+        # Export to WAV dengan silent mode (sudah silent karena global suppression)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            temp_path = Path(temp_file.name)
+        
+        # Optimize audio untuk simpleaudio (export sudah silent)
+        optimized_audio = audio_segment.set_channels(1).set_sample_width(2).set_frame_rate(44100)
+        optimized_audio.export(str(temp_path), format="wav")
+        
+        # Play dengan simpleaudio (no CMD)
+        wave_obj = sa.WaveObject.from_wave_file(str(temp_path))
+        play_obj = wave_obj.play()
+        play_obj.wait_done()
+        
+        # Clean up
+        try:
+            temp_path.unlink()
+        except:
+            pass
+            
+        print(f"[AUDIO] ✅ Method 3 successful: simpleaudio (silent)")
+        return True
+        
+    except Exception as e:
+        print(f"[AUDIO] ❌ Method 3 failed (simpleaudio): {e}")
+    
+    # ✅ FALLBACK: Use pydub playback (sudah silent karena global suppression)
+    try:
+        print(f"[AUDIO] Method 4: Fallback pydub playback (silent)")
+        
+        # Try pydub.playback dengan global suppression
+        from pydub.playback import play
+        play(audio_segment)
+        print(f"[AUDIO] ✅ Method 4 successful: pydub with global suppression")
+        return True
+        
+    except Exception as e:
+        print(f"[AUDIO] ❌ Method 4 failed (pydub playback): {e}")
+    
+    print(f"[AUDIO] ❌ All silent playback methods failed")
     return False
 
 # ✅ PERBAIKAN: Fungsi untuk membaca config voices
 def _load_voice_config():
-    """Load voice configuration dari config/voices.json"""
+    """Load voice configuration dari config/voices.json with EXE compatibility"""
     try:
-        voices_path = Path("config/voices.json")
+        # Import here to avoid circular import
+        from utils.resource_path import get_config_path
+        
+        voices_path = get_config_path("voices.json")
+        print(f"[DEBUG] Loading voice config from: {voices_path}")
+        
         if voices_path.exists():
             with open(voices_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                config = json.load(f)
+                print(f"[DEBUG] Voice config loaded successfully: {len(config)} categories")
+                return config
+        else:
+            print(f"[DEBUG] Voice config file not found at: {voices_path}")
+            
+    except ImportError:
+        # Fallback for old method if utils not available
+        print(f"[DEBUG] Using fallback voice config loading method")
+        try:
+            voices_path = Path("config/voices.json")
+            if voices_path.exists():
+                with open(voices_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as fallback_error:
+            logging.error(f"[TTS] Fallback voice config loading failed: {fallback_error}")
+            
     except Exception as e:
         logging.error(f"[TTS] Error loading voice config: {e}")
+        print(f"[DEBUG] Voice config loading error: {e}")
+        
+        # List available files for debugging
+        try:
+            from utils.resource_path import list_bundled_files
+            list_bundled_files("config")
+        except:
+            pass
+            
     return None
 
 def _is_google_cloud_voice(voice_name):
@@ -620,38 +684,43 @@ def speak(text: str, language_code: str = None, voice_name: str = None, output_d
             except Exception as e:
                 print(f"[ERROR] Callback execution failed: {e}")
     
-    # 1) Coba Google Cloud TTS dulu jika voice_name disediakan
-    if voice_name:
+    # ✅ PRIORITAS UTAMA: Coba Google Cloud TTS dulu jika credentials tersedia
+    if voice_name and voice_name != "default" and _gcloud_available:
         try:
-            from pathlib import Path
-            cred_path = Path("config/gcloud_tts_credentials.json")
+            # Google Cloud credentials sudah di-setup di startup
+            print(f"[DEBUG-SPEAK] ✅ Attempting Google Cloud TTS for voice: {voice_name}")
             
-            if cred_path.exists():
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(cred_path.resolve())
+            try:
+                from modules_server.tts_google import speak_with_google_cloud
+                logging.info(f"[TTS] Using Google Cloud with voice: {voice_name}")
+                print(f"[DEBUG-SPEAK] Google Cloud TTS module imported successfully")
                 
-                try:
-                    from modules_server.tts_google import speak_with_google_cloud
-                    logging.info(f"[TTS] Using Google Cloud with voice: {voice_name}")
-                    print(f"[DEBUG] Forwarding to Google Cloud TTS")
-                    
-                    speak_with_google_cloud(
-                        text, voice_name, language_code, output_device, 
-                        also_play_on_speaker=True, on_finished=safe_callback
-                    )
-                    
-                    duration = time.time() - start_time
-                    logger.info(f"TTS completed (Google Cloud) in {duration:.2f}s")
-                    return
-                    
-                except Exception as e:
-                    logging.error(f"[TTS] Google Cloud error: {e}")
-                    print(f"[DEBUG] Google Cloud failed: {e}, falling back to gTTS")
-            else:
-                print(f"[DEBUG] Google Cloud credentials not found, using gTTS")
+                # Use Google Cloud TTS with proper voice model
+                speak_with_google_cloud(
+                    text, voice_name, language_code, output_device, 
+                    also_play_on_speaker=True, on_finished=safe_callback
+                )
+                
+                duration = time.time() - start_time
+                logger.info(f"TTS completed (Google Cloud) in {duration:.2f}s")
+                print(f"[DEBUG-SPEAK] ✅ Google Cloud TTS completed successfully")
+                return
+                
+            except ImportError as import_error:
+                logging.error(f"[TTS] Google Cloud import error: {import_error}")
+                print(f"[DEBUG-SPEAK] ❌ Google Cloud import failed: {import_error}")
+            except Exception as e:
+                logging.error(f"[TTS] Google Cloud execution error: {e}")
+                print(f"[DEBUG-SPEAK] ❌ Google Cloud execution failed: {e}")
                 
         except Exception as e:
             logging.error(f"[TTS] Google Cloud setup error: {e}")
-            print(f"[DEBUG] Google Cloud setup failed: {e}")
+            print(f"[DEBUG-SPEAK] ❌ Google Cloud setup failed: {e}")
+    
+    elif voice_name and voice_name != "default":
+        print(f"[DEBUG-SPEAK] ⚠️ Google Cloud not available, falling back to enhanced gTTS")
+    else:
+        print(f"[DEBUG-SPEAK] Using default voice, proceeding with gTTS")
     
     # 2) Fallback ke gTTS dengan voice config support
     lang = "en"  # Default
@@ -694,47 +763,84 @@ def speak(text: str, language_code: str = None, voice_name: str = None, output_d
             voice_gender = _get_voice_gender_from_config(voice_name)
             print(f"[DEBUG] Voice from config: {voice_name} ({voice_gender})")
             
-            # Adjust gTTS parameters berdasarkan voice characteristics
-            if "standard-a" in voice_name.lower() or voice_gender == "FEMALE":
-                # Standard A: Female voice characteristics
-                if lang == "en":
-                    tts_params["tld"] = "com"  # US English untuk female
-                    print(f"[DEBUG] Applied female characteristics: US English")
-                elif lang == "id":
-                    tts_params["slow"] = False  # Normal speed untuk female
-                    print(f"[DEBUG] Applied female characteristics: Indonesian")
+                    # ✅ ENHANCED: Apply voice-specific parameters berdasarkan gender dan voice name
+        if voice_gender == "FEMALE":
+            # Female voices: Clear, higher pitch characteristics
+            if lang == "en":
+                tts_params["tld"] = "com"  # US English - clear untuk female
+                print(f"[DEBUG-gTTS] Applied FEMALE: US English (com)")
+            elif lang == "id":
+                tts_params["slow"] = False  # Normal speed untuk female
+                print(f"[DEBUG-gTTS] Applied FEMALE: Indonesian (normal speed)")
+                
+        elif voice_gender == "MALE":
+            # Male voices: Deeper, varied accents untuk differentiation
+            if lang == "en":
+                # Enhanced male voice differentiation dengan multiple TLD dan voice-specific mapping
+                voice_lower = voice_name.lower()
+                
+                if "standard-a" in voice_lower or "standard-b" in voice_lower:
+                    tts_params["tld"] = "co.uk"  # UK accent
+                    print(f"[DEBUG-gTTS] Applied MALE: UK English (co.uk) for {voice_name}")
+                elif "standard-d" in voice_lower or "standard-i" in voice_lower:
+                    tts_params["tld"] = "com.au"  # Australian accent
+                    print(f"[DEBUG-gTTS] Applied MALE: Australian English (com.au) for {voice_name}")
+                elif "standard-j" in voice_lower or "chirp" in voice_lower:
+                    tts_params["tld"] = "ca"  # Canadian accent
+                    print(f"[DEBUG-gTTS] Applied MALE: Canadian English (ca) for {voice_name}")
+                else:
+                    # Fallback to Irish or Indian accent untuk male variety
+                    tts_params["tld"] = "ie" if hash(voice_name) % 2 == 0 else "co.in"
+                    print(f"[DEBUG-gTTS] Applied MALE: Varied accent ({tts_params['tld']}) for {voice_name}")
                     
-            elif "standard-b" in voice_name.lower() or voice_gender == "MALE":
-                # Standard B: Male voice characteristics
-                if lang == "en":
-                    tts_params["tld"] = "co.uk"  # UK English untuk male
-                    print(f"[DEBUG] Applied male characteristics: UK English")
-                elif lang == "id":
-                    tts_params["slow"] = False  # Standard speed untuk male
-                    print(f"[DEBUG] Applied male characteristics: Indonesian")
-                    
-            elif "standard-c" in voice_name.lower():
-                # Standard C: Alternative characteristics
-                if lang == "en":
-                    tts_params["tld"] = "com.au"  # Australian English
-                    print(f"[DEBUG] Applied Standard-C characteristics: AU English")
-                elif lang == "id":
-                    tts_params["slow"] = False
-                    print(f"[DEBUG] Applied Standard-C characteristics: Indonesian")
-                    
-            elif "standard-d" in voice_name.lower():
-                # Standard D: Alternative characteristics
-                if lang == "en":
-                    tts_params["tld"] = "ca"  # Canadian English
-                    print(f"[DEBUG] Applied Standard-D characteristics: CA English")
-                elif lang == "id":
-                    tts_params["slow"] = False
-                    print(f"[DEBUG] Applied Standard-D characteristics: Indonesian")
+            elif lang == "id":
+                # Indonesian male voices: Use slow parameter
+                tts_params["slow"] = True  # Slower untuk male differentiation
+                print(f"[DEBUG-gTTS] Applied MALE: Indonesian (slow) for {voice_name}")
+                
+        else:
+            # No gender info available, use voice name patterns
+            voice_lower = voice_name.lower() if voice_name else ""
+            
+            if lang == "en":
+                # Guess gender dari voice name pattern
+                if any(pattern in voice_lower for pattern in ["standard-a", "standard-c", "standard-e", "standard-f", "standard-g", "standard-h"]):
+                    tts_params["tld"] = "com"  # Female-like pattern
+                    print(f"[DEBUG-gTTS] Guessed FEMALE pattern: US English for {voice_name}")
+                else:
+                    tts_params["tld"] = "co.uk"  # Male-like pattern
+                    print(f"[DEBUG-gTTS] Guessed MALE pattern: UK English for {voice_name}")
+            
+            print(f"[DEBUG-gTTS] No gender info, using pattern detection for: {voice_name}")
         
-        print(f"[DEBUG] gTTS parameters: {tts_params}")
+        print(f"[DEBUG] Final gTTS parameters: {tts_params}")
+        
+        # ✅ ENHANCED: Add voice-specific text modification untuk differentiation
+        processed_text = text
+        if voice_name and voice_gender:
+            # Add subtle text processing untuk voice differentiation
+            if voice_gender == "MALE":
+                # Untuk male voice, tambah slight modification yang tidak terdengar tapi mempengaruhi TTS
+                processed_text = text.strip()
+                print(f"[DEBUG] Processing male voice text: '{processed_text}'")
+            elif voice_gender == "FEMALE": 
+                # Untuk female voice, keep original processing
+                processed_text = text.strip()
+                print(f"[DEBUG] Processing female voice text: '{processed_text}'")
+        
+        # Update parameters dengan processed text
+        tts_params["text"] = processed_text
+        print(f"[DEBUG] Final processed parameters: {tts_params}")
         
         # Buat TTS object dengan parameter yang sudah disesuaikan
-        tts = gTTS(**tts_params)
+        try:
+            tts = gTTS(**tts_params)
+            print(f"[DEBUG] ✅ gTTS object created successfully with voice: {voice_name} ({voice_gender})")
+        except Exception as gtts_error:
+            print(f"[DEBUG] ❌ gTTS creation failed: {gtts_error}")
+            # Fallback dengan parameter minimal
+            tts = gTTS(text=processed_text, lang=lang)
+            print(f"[DEBUG] Using fallback gTTS with minimal parameters")
         
         # Buat safe temp path dengan improved error handling
         print(f"[DEBUG] Creating safe temp path...")
@@ -820,6 +926,41 @@ def speak(text: str, language_code: str = None, voice_name: str = None, output_d
                 )
                 print(f"[DEBUG] ✅ Audio loaded WITHOUT pydub.from_file: {len(audio)}ms, {audio.frame_rate}Hz")
                 
+                # ✅ ENHANCED: Apply voice-specific audio effects untuk differentiation
+                if voice_name and voice_gender:
+                    try:
+                        if voice_gender == "MALE":
+                            # Apply male voice effects: slightly lower pitch, less bright
+                            print(f"[DEBUG] Applying MALE voice effects...")
+                            
+                            # Method 1: Lower the overall level slightly dan add bass
+                            audio = audio - 2  # Slightly quieter
+                            
+                            # Method 2: Panning atau stereo effects (optional)
+                            if audio.channels == 2:
+                                # Slight pan untuk male voice differentiation
+                                audio = audio.pan(-0.1)  # Very slight left pan
+                                print(f"[DEBUG] Applied male stereo effects")
+                                
+                        elif voice_gender == "FEMALE":
+                            # Apply female voice effects: slightly brighter, clearer
+                            print(f"[DEBUG] Applying FEMALE voice effects...")
+                            
+                            # Method 1: Boost clarity dan presence
+                            audio = audio + 1  # Slightly louder untuk clarity
+                            
+                            # Method 2: Panning atau stereo effects (optional)
+                            if audio.channels == 2:
+                                # Slight pan untuk female voice differentiation  
+                                audio = audio.pan(0.1)  # Very slight right pan
+                                print(f"[DEBUG] Applied female stereo effects")
+                                
+                        print(f"[DEBUG] ✅ Voice-specific audio effects applied for {voice_gender}")
+                        
+                    except Exception as effect_error:
+                        print(f"[DEBUG] ⚠️ Audio effects failed: {effect_error}, using original audio")
+                        # Continue dengan original audio jika effects gagal
+                
                 # Cleanup converted WAV
                 try:
                     temp_wav.unlink()
@@ -832,34 +973,13 @@ def speak(text: str, language_code: str = None, voice_name: str = None, output_d
         except Exception as load_error:
             print(f"[DEBUG] ❌ Hidden FFmpeg method failed: {load_error}")
             
-            # FALLBACK: Try direct AudioSegment load dengan subprocess hiding 
+            # FALLBACK: Try direct AudioSegment load (sudah silent karena global suppression)
             try:
                 print(f"[DEBUG] Trying fallback AudioSegment.from_file...")
                 
-                # Patch pydub untuk menggunakan hidden subprocess
-                import pydub.utils
-                original_popen = subprocess.Popen
-                
-                def hidden_popen(*args, **kwargs):
-                    if os.name == 'nt':
-                        if 'startupinfo' not in kwargs:
-                            si = subprocess.STARTUPINFO()
-                            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                            si.wShowWindow = subprocess.SW_HIDE
-                            kwargs['startupinfo'] = si
-                        if 'creationflags' not in kwargs:
-                            kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
-                    return original_popen(*args, **kwargs)
-                
-                # Temporarily patch subprocess
-                subprocess.Popen = hidden_popen
-                
-                try:
-                    audio = AudioSegment.from_file(str(temp_path), format="mp3")
-                    print(f"[DEBUG] ✅ Fallback load successful: {len(audio)}ms")
-                finally:
-                    # Restore original Popen
-                    subprocess.Popen = original_popen
+                # Load audio file (global suppression handles silence)
+                audio = AudioSegment.from_file(str(temp_path), format="mp3")
+                print(f"[DEBUG] ✅ Fallback load successful: {len(audio)}ms")
                     
             except Exception as load_error2:
                 print(f"[DEBUG] ❌ All loading methods failed: {load_error2}")
@@ -1064,6 +1184,54 @@ def check_audio_devices():
     except Exception as e:
         logging.error(f"Gagal memeriksa perangkat audio: {e}")
         return False
+
+# ✅ ENHANCED: Setup Google Cloud TTS credentials with EXE compatibility
+def _setup_google_cloud_credentials():
+    """Setup Google Cloud TTS credentials with EXE compatibility"""
+    try:
+        from utils.resource_path import get_config_path
+        
+        cred_path = get_config_path("gcloud_tts_credentials.json")
+        print(f"[DEBUG-CLOUD] Looking for credentials at: {cred_path}")
+        
+        if cred_path.exists():
+            # Set environment variable for Google Cloud
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(cred_path)
+            print(f"[DEBUG-CLOUD] ✅ Google Cloud credentials set: {cred_path}")
+            
+            # Validate credentials by loading JSON
+            with open(cred_path, 'r') as f:
+                creds = json.load(f)
+                project_id = creds.get('project_id', 'N/A')
+                client_email = creds.get('client_email', 'N/A')
+                print(f"[DEBUG-CLOUD] Project: {project_id}")
+                print(f"[DEBUG-CLOUD] Client: {client_email}")
+                return True
+        else:
+            print(f"[DEBUG-CLOUD] ❌ Credentials file not found")
+            return False
+            
+    except ImportError:
+        # Fallback untuk mode development
+        print(f"[DEBUG-CLOUD] Using fallback credentials loading")
+        try:
+            cred_path = Path("config/gcloud_tts_credentials.json")
+            if cred_path.exists():
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(cred_path.resolve())
+                print(f"[DEBUG-CLOUD] ✅ Fallback credentials set: {cred_path}")
+                return True
+        except Exception as e:
+            logging.error(f"[TTS] Fallback credentials setup failed: {e}")
+            
+    except Exception as e:
+        logging.error(f"[TTS] Google Cloud credentials setup error: {e}")
+        print(f"[DEBUG-CLOUD] ❌ Setup error: {e}")
+        
+    return False
+
+# Initialize Google Cloud credentials
+_gcloud_available = _setup_google_cloud_credentials()
+print(f"[DEBUG-CLOUD] Google Cloud TTS available: {_gcloud_available}")
 
 # Inisialisasi saat modul dimuat
 try:

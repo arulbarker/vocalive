@@ -23,10 +23,10 @@ a = Analysis(
         ('config/packages.json', 'config'),
         ('config/voices.json', 'config'),
         ('config/production_config.json', 'config'),
-        # NOTE: ALL OAuth files EXCLUDED for security - will use server backend
-        # - google_oauth.json (contains client_secret - EXCLUDED)
-        # - google_token.json (contains OAuth tokens - EXCLUDED)
-        # - gcloud_tts_credentials.json (contains private keys - EXCLUDED)
+        ('config/gcloud_tts_credentials.json', 'config'),  # ✅ CLOUD TTS CREDENTIALS FOR VOICE DIFFERENTIATION
+        ('config/google_oauth.json', 'config'),           # ✅ OAUTH CONFIG FOR SERVICES
+        # NOTE: Sensitive files with tokens EXCLUDED for security
+        # - google_token.json (contains OAuth tokens - EXCLUDED)  
         # - development_config.json (contains admin keys - EXCLUDED)
         # - settings.json (user-specific data - will be created as template)
         # - credit_config.json (may contain sensitive data - EXCLUDED)
@@ -34,7 +34,8 @@ a = Analysis(
         ('modules_client', 'modules_client'),
         ('modules_server', 'modules_server'),
         ('listeners', 'listeners'),
-        ('test_build_oauth.py', '.'),  # Include test script for debugging
+        ('utils', 'utils'),
+        # ('test_build_oauth.py', '.'),  # Include test script for debugging - REMOVED
         ('icon.ico', '.'),
     ] + pytchat_datas,
     hiddenimports=[

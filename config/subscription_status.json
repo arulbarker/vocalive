@@ -4,13 +4,13 @@
   "package": "basic",
   "credit_balance": 103098.39,
   "credit_used": 767.935,
-  "hours_credit": 103097.465,
-  "hours_used": 768.8599,
+  "hours_credit": 103091.06083333332,
+  "hours_used": 775.2641,
   "tier": "basic",
   "is_valid": true,
   "expire_date": null,
   "synced_from_vps": true,
   "vps_source_only": true,
   "last_sync": "2025-06-19T16:40:30.253000+00:00",
-  "updated_at": "2025-06-19T23:41:04.963673+07:00"
+  "updated_at": "2025-06-25T23:38:59.157624+07:00"
 }

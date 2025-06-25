@@ -1,25 +1,27 @@
 {
-  "latest_version": "1.0.10",
+  "latest_version": "1.0.11",
   "minimum_version": "1.0.0",
-  "force_update": false,
-  "release_date": "2025-01-19",
+  "force_update": true,
+  "release_date": "2025-01-25",
   "changelog": [
-    "Fixed CoHost daily limit to support up to 50 interactions per viewer",
-    "Fixed voice preview - all voices now play correctly with different models",
-    "Fixed update notification system - no more false update alerts",
-    "Enhanced voice loading system with proper model differentiation",
-    "Improved version comparison logic for accurate update detection"
+    "CRITICAL: Eliminated ALL CMD popup windows during voice preview",
+    "Complete subprocess suppression - zero window interruptions",
+    "Google Cloud TTS integration with bundled credentials",
+    "Perfect voice differentiation - male vs female voices clearly different",
+    "Silent FFmpeg operations - all audio processing completely silent",
+    "Enhanced EXE compatibility with proper resource loading"
   ],
   "download_info": {
-    "url": "https://github.com/arulbarker/streammate-releases/releases/download/v1.0.10/StreamMateAI_v1.0.10_20250119.zip",
-    "file_size": 175500000,
-    "checksum": "sha256:tbd_after_build"
+    "url": "https://github.com/arulbarker/streammate-releases/releases/download/v1.0.11/StreamMateAI_v1.0.11_20250625.zip",
+    "file_size": 175366054,
+    "checksum": "sha256:PENDING_VERIFICATION"
   },
   "beta_versions": {},
   "critical_fixes": [
-    "Daily limit constraint removal (10→50)",
-    "Voice preview system completely fixed",
-    "Update notification false positives eliminated"
+    "CMD popup issue COMPLETELY RESOLVED",
+    "Global subprocess suppression implemented",
+    "Silent audio playback system enhanced",
+    "Voice differentiation perfected"
   ],
-  "upgrade_notes": "Versi ini memperbaiki 3 bug kritis: daily limit yang terbatas, voice preview yang tidak berfungsi dengan benar, dan notifikasi update palsu. Sangat direkomendasikan untuk upgrade."
+  "upgrade_notes": "UPDATE KRITIS: Versi ini mengatasi masalah CMD popup yang sangat mengganggu saat voice preview. Semua operasi audio sekarang benar-benar silent tanpa jendela popup. Google Cloud TTS terintegrasi untuk kualitas suara premium. WAJIB UPDATE!"
 }

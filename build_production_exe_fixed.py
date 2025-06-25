@@ -142,10 +142,10 @@ a = Analysis(
         ('config/packages.json', 'config'),
         ('config/voices.json', 'config'),
         ('config/production_config.json', 'config'),
-        # NOTE: ALL OAuth files EXCLUDED for security - will use server backend
-        # - google_oauth.json (contains client_secret - EXCLUDED)
-        # - google_token.json (contains OAuth tokens - EXCLUDED)
-        # - gcloud_tts_credentials.json (contains private keys - EXCLUDED)
+        ('config/gcloud_tts_credentials.json', 'config'),  # ✅ CLOUD TTS CREDENTIALS FOR VOICE DIFFERENTIATION
+        ('config/google_oauth.json', 'config'),           # ✅ OAUTH CONFIG FOR SERVICES
+        # NOTE: Sensitive files with tokens EXCLUDED for security
+        # - google_token.json (contains OAuth tokens - EXCLUDED)  
         # - development_config.json (contains admin keys - EXCLUDED)
         # - settings.json (user-specific data - will be created as template)
         # - credit_config.json (may contain sensitive data - EXCLUDED)
@@ -153,7 +153,8 @@ a = Analysis(
         ('modules_client', 'modules_client'),
         ('modules_server', 'modules_server'),
         ('listeners', 'listeners'),
-        ('test_build_oauth.py', '.'),  # Include test script for debugging
+        ('utils', 'utils'),
+        # ('test_build_oauth.py', '.'),  # Include test script for debugging - REMOVED
         ('icon.ico', '.'),
     ] + pytchat_datas,
     hiddenimports=[
@@ -261,7 +262,7 @@ exe = EXE(
     
     # Write spec file
     spec_path = Path("StreamMateAI_Production.spec")
-    spec_path.write_text(spec_content)
+    spec_path.write_text(spec_content, encoding='utf-8')
     print("  [CREATE] Created custom spec file")
     
     # Create version info file for signing
@@ -271,8 +272,8 @@ exe = EXE(
 # http://msdn.microsoft.com/en-us/library/ms646997.aspx
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 9, 0),
-    prodvers=(1, 0, 9, 0),
+    filevers=(1, 0, 11, 0),
+    prodvers=(1, 0, 11, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -287,12 +288,12 @@ VSVersionInfo(
           u'040904B0',
           [StringStruct(u'CompanyName', u'StreamMate AI'),
            StringStruct(u'FileDescription', u'StreamMate AI - Live Stream Assistant'),
-           StringStruct(u'FileVersion', u'1.0.9.0'),
+           StringStruct(u'FileVersion', u'1.0.11.0'),
            StringStruct(u'InternalName', u'StreamMateAI'),
            StringStruct(u'LegalCopyright', u'Copyright (C) 2024-2025 StreamMate AI'),
            StringStruct(u'OriginalFilename', u'StreamMateAI.exe'),
            StringStruct(u'ProductName', u'StreamMate AI'),
-           StringStruct(u'ProductVersion', u'1.0.9.0')])
+           StringStruct(u'ProductVersion', u'1.0.11.0')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]
@@ -356,7 +357,7 @@ VSVersionInfo(
         print(f"[ERROR] Build failed: {result.stderr}")
         return False
 
-def create_production_package(version="1.0.9"):
+def create_production_package(version="1.0.11"):
     """
     Buat paket produksi lengkap - UPDATED: No Whisper, Super Direct STT only
     SECURITY: Exclude sensitive files and credentials
@@ -428,17 +429,17 @@ def create_production_package(version="1.0.9"):
     
     # Safe configs that can be bundled
     safe_configs = [
-        "config/settings_default.json",  # Default settings template
-        "config/packages.json",          # Package info
-        "config/voices.json",            # Voice list
-        "config/google_oauth.json",      # OAuth template (no tokens)
-        "config/production_config.json", # Production settings
+        "config/settings_default.json",     # Default settings template
+        "config/packages.json",             # Package info
+        "config/voices.json",               # Voice list
+        "config/google_oauth.json",         # OAuth template (no tokens)
+        "config/production_config.json",    # Production settings
+        "config/gcloud_tts_credentials.json", # ✅ NEEDED for Google Cloud TTS voice differentiation
     ]
     
     # SENSITIVE FILES - NEVER BUNDLE THESE
     sensitive_files = [
         "config/google_token.json",         # Contains OAuth tokens
-        "config/gcloud_tts_credentials.json", # Contains private keys
         "config/development_config.json",   # Contains dev admin keys
         "config/subscription_status.json",  # User subscription data
         "config/viewer_memory.json",        # User data

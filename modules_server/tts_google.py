@@ -1,19 +1,22 @@
 # modules_server/tts_google.py
 import os
 import sys
+import json
+import logging
+import tempfile
+import threading
+from pathlib import Path
 from google.cloud import texttospeech
 from dotenv import load_dotenv
 import sounddevice as sd
 import soundfile as sf
-import tempfile
 import time
-import threading
 import traceback
 
 # Load environment variables
 load_dotenv()
 
-# modules_server/tts_google.py (perubahan pada fungsi utama)
+logger = logging.getLogger('StreamMate')
 
 def speak_with_google_cloud(
     text: str,
@@ -24,270 +27,264 @@ def speak_with_google_cloud(
     on_finished: callable = None
 ):
     """
-    Synthesizes speech from text using Google Cloud TTS with better error handling.
-    """
-    # Log untuk debugging
-    print(f"[DEBUG-GOOGLE] speak_with_google_cloud called with: voice={voice_name}, callback={on_finished is not None}")
+    Advanced Google Cloud TTS dengan voice model yang spesifik
     
-    # Ambil konfigurasi virtual mic jika tersedia
+    Args:
+        text (str): Text to synthesize
+        voice_name (str): Voice model name (e.g. 'id-ID-Standard-A')
+        language_code (str): Language code (e.g. 'id-ID')
+        device_index (int): Audio output device
+        also_play_on_speaker (bool): Play on default speaker
+        on_finished (callable): Callback when finished
+    """
     try:
-        from pathlib import Path
-        import json
+        # Import Google Cloud TTS
+        print(f"[GCLOUD-TTS] Google Cloud TTS imported successfully")
         
-        # Load virtual mic config
-        vm_config_path = Path("config/live_state.json")
-        if vm_config_path.exists():
-            vm_config = json.loads(vm_config_path.read_text(encoding="utf-8"))
-            
-            # Cek apakah dual output diaktifkan
-            also_play_on_speaker = vm_config.get("dual_output", also_play_on_speaker)
-            
-            # Gunakan device index dari config jika tidak ditentukan
-            if device_index is None and vm_config.get("virtual_mic_active", False):
-                device_index = vm_config.get("virtual_mic_device_index")
-                print(f"[DEBUG-GOOGLE] Using device index from config: {device_index}")
-    except Exception as e:
-        print(f"[DEBUG-GOOGLE] Error loading VM config: {e}")
-    
-    # Buat thread terpisah untuk menjalankan TTS agar UI tidak freeze
-    tts_thread = threading.Thread(
-        target=_tts_worker,
-        args=(text, voice_name, language_code, device_index, also_play_on_speaker, on_finished),
-        daemon=True
-    )
-    tts_thread.start()
-    return True
-
-def _preprocess_text_for_google_tts(text):
-    """
-    🔥 ADVANCED: Preprocess text specifically for Google Cloud TTS to minimize chunking
-    """
-    if not text:
-        return text
-    
-    import re
-    
-    # 🎯 PREVENT GOOGLE TTS CHUNKING STRATEGIES:
-    
-    # 1. Replace potential break words with smoother alternatives
-    break_patterns = {
-        r'\bnih\s+mau\b': 'nih mau',
-        r'\bnih\s+akan\b': 'nih akan', 
-        r'\bsini\s+lagi\b': 'sini lagi',
-        r'\bmau\s+cobain\b': 'mau cobain',
-        r'\bgame\s+seru\b': 'game seru',
-        r'\bstreaming\s+game\b': 'streaming game',
-        r'\bmisi\s+baru\b': 'misi baru',
-        r'\bhalo\s+juga\b': 'halo juga',
-        r'\bsantai\s+streaming\b': 'santai streaming'
-    }
-    
-    for pattern, replacement in break_patterns.items():
-        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-    
-    # 2. Add strategic commas to guide natural speech rhythm
-    # This helps Google TTS understand the natural flow
-    text = re.sub(r'\b(halo|hai|hey)\s+([A-Z][A-Z\s]*[A-Z])\s+', r'\1 \2, ', text, flags=re.IGNORECASE)  # "halo USERNAME" -> "halo USERNAME,"
-    text = re.sub(r'\b(woi|yo|hey)\s+([A-Z][A-Z\s]*[A-Z])\s+', r'\1 \2, ', text, flags=re.IGNORECASE)  # "woi USERNAME" -> "woi USERNAME,"
-    
-    # 3. Group related words to prevent breaks
-    # Use SSML-like grouping concepts but in plain text
-    text = re.sub(r'\b(lagi|sedang)\s+(santai|streaming|main|gaming)\b', r'\1 \2', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(game|main)\s+(seru|bagus|keren|asyik)\b', r'\1 \2', text, flags=re.IGNORECASE)
-    
-    # 4. Fix common Indonesian TTS break points
-    text = re.sub(r'\bnih\s+([a-z]+)\b', r'nih \1', text, flags=re.IGNORECASE)  # Ensure "nih" flows naturally
-    text = re.sub(r'\bbang\s+([a-z]+)\b', r'bang \1', text, flags=re.IGNORECASE)  # Ensure "bang" flows naturally
-    
-    # 5. Remove extra spaces that might cause micro-pauses
-    text = re.sub(r'\s+', ' ', text)
-    
-    # 6. Ensure proper punctuation spacing for natural rhythm
-    text = re.sub(r'([.!?])\s*', r'\1 ', text)
-    text = re.sub(r'([,])\s*', r'\1 ', text)
-    
-    # 7. Final normalization
-    text = text.strip()
-    
-    return text
-
-def _tts_worker(text, voice_name, language_code, device_index, also_play_on_speaker, on_finished):
-    """Worker function to run TTS in a separate thread."""
-    temp_path = None
-    
-    try:
-        # 🔥 PREPROCESS TEXT to reduce chunking
-        processed_text = _preprocess_text_for_google_tts(text)
-        print(f"[TTS] Original: '{text[:50]}...'")
-        print(f"[TTS] Processed: '{processed_text[:50]}...'")
-        
-        print(f"[TTS] Memulai TTS: voice_name={voice_name}, lang={language_code}, text='{processed_text[:40]}...'")
-        print(f"[DEBUG-GOOGLE] TTS worker started, has callback: {on_finished is not None}")
-        
-        # Create Google Cloud TTS client
+        # Create client
         client = texttospeech.TextToSpeechClient()
+        print(f"[GCLOUD-TTS] Client created successfully")
         
-        # Set up input configuration with processed text
-        synthesis_input = texttospeech.SynthesisInput(text=processed_text)
+        # Parse voice name to get language and gender
+        voice_info = _parse_voice_name(voice_name)
+        actual_lang = language_code or voice_info.get('language', 'id-ID')
         
-        # Set up voice configuration
+        print(f"[GCLOUD-TTS] Voice request: {voice_name}")
+        print(f"[GCLOUD-TTS] Language: {actual_lang}")
+        print(f"[GCLOUD-TTS] Gender: {voice_info.get('gender', 'UNKNOWN')}")
+        
+        # Set the text input to be synthesized
+        synthesis_input = texttospeech.SynthesisInput(text=text)
+        
+        # Build the voice request
+        voice_gender = texttospeech.SsmlVoiceGender.NEUTRAL
+        if voice_info.get('gender') == 'MALE':
+            voice_gender = texttospeech.SsmlVoiceGender.MALE
+        elif voice_info.get('gender') == 'FEMALE':
+            voice_gender = texttospeech.SsmlVoiceGender.FEMALE
+        
+        # Voice selection with fallback
         voice = texttospeech.VoiceSelectionParams(
-            language_code=language_code,
-            name=voice_name
+            language_code=actual_lang,
+            name=voice_name,  # Try exact voice name first
+            ssml_gender=voice_gender,
         )
         
-        # 🎯 ENHANCED: Audio config to reduce chunking artifacts
+        # Select the type of audio file you want returned
         audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.LINEAR16,
-            # Add speaking rate for smoother delivery
-            speaking_rate=1.0,  # Normal rate - don't slow down artificially
-            # Add pitch for more natural delivery
-            pitch=0.0  # Neutral pitch
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=1.0,  # Normal speed
+            pitch=0.0,          # Normal pitch
+            volume_gain_db=0.0  # Normal volume
         )
-
-        # Generate speech
+        
+        # Apply voice-specific adjustments
+        if voice_info.get('gender') == 'MALE':
+            # Male voice adjustments
+            audio_config.pitch = -2.0          # Slightly lower pitch
+            audio_config.speaking_rate = 0.9   # Slightly slower
+            print(f"[GCLOUD-TTS] Applied MALE voice adjustments")
+        elif voice_info.get('gender') == 'FEMALE':
+            # Female voice adjustments  
+            audio_config.pitch = 1.0           # Slightly higher pitch
+            audio_config.speaking_rate = 1.1   # Slightly faster
+            print(f"[GCLOUD-TTS] Applied FEMALE voice adjustments")
+        
+        print(f"[GCLOUD-TTS] Making synthesis request...")
+        
+        # Perform the text-to-speech request
         response = client.synthesize_speech(
             input=synthesis_input,
             voice=voice,
             audio_config=audio_config
         )
-
-        # Save to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as out:
-            out.write(response.audio_content)
-            temp_path = out.name
-
-        # Load audio file
-        data, fs = sf.read(temp_path, dtype='float32')
         
-        # --- IMPLEMENTASI DUAL OUTPUT ---
-        try:
-            # Check booster settings
-            boost_vm = False
-            try:
-                import json
-                from pathlib import Path
-                vm_config_path = Path("config/live_state.json")
-                if vm_config_path.exists():
-                    vm_config = json.loads(vm_config_path.read_text(encoding="utf-8"))
-                    boost_vm = vm_config.get("boost_virtual_mic", False)
-            except:
-                pass
-                
-            # Create boosted version if needed
-            if boost_vm and device_index is not None:
-                import numpy as np
-                # Boost +3dB (multiply by ~1.4)
-                vm_data = data * 1.4
-                # Clip to prevent distortion
-                vm_data = np.clip(vm_data, -1.0, 1.0)
-            else:
-                vm_data = data
-            
-            if device_index is not None and also_play_on_speaker:
-                # --- MODE DUAL OUTPUT ---
-                print(f"[DEBUG-GOOGLE] Using dual output mode (VM + Speaker)")
-                
-                # Playback ke virtual mic dalam thread terpisah
-                def vm_thread_func():
-                    try:
-                        sd.play(vm_data, fs, device=device_index)
-                        sd.wait()  # Wait for playback to finish
-                        print(f"[DEBUG-GOOGLE] VM playback completed")
-                    except Exception as e:
-                        print(f"[DEBUG-GOOGLE] Error in VM thread: {e}")
-                
-                # Start thread for virtual mic
-                vm_thread = threading.Thread(target=vm_thread_func, daemon=True)
-                vm_thread.start()
-                
-                # Play di speaker default dan tunggu
-                sd.play(data, fs)
-                sd.wait()
-                
-                # Tunggu virtual mic thread selesai
-                vm_thread.join(timeout=10.0)
-                
-            elif device_index is not None:
-                # --- MODE VM ONLY ---
-                print(f"[DEBUG-GOOGLE] Playing only on virtual mic (device {device_index})")
-                sd.play(vm_data, fs, device=device_index)
-                sd.wait()
-            else:
-                # --- MODE SPEAKER ONLY ---
-                print(f"[DEBUG-GOOGLE] Playing only on default speaker")
-                sd.play(data, fs)
-                sd.wait()
+        print(f"[GCLOUD-TTS] ✅ Synthesis successful, audio size: {len(response.audio_content)} bytes")
         
-        except Exception as e:
-            print(f"[TTS] Error in audio routing: {e}")
-            # Fallback to simple playback
-            sd.play(data, fs)
-            sd.wait()
-
-        print("[TTS] Google Cloud TTS berhasil")
-        
-        # PENTING: Panggil callback on_finished setelah playback selesai
-        if on_finished:
-            try:
-                print(f"[DEBUG-GOOGLE] Calling on_finished callback")
-                # Use QTimer if in Qt environment with a small delay to ensure audio playback is complete
-                if 'PyQt6' in sys.modules:
-                    from PyQt6.QtCore import QTimer, QCoreApplication
-                    print(f"[DEBUG-GOOGLE] Using QTimer.singleShot for callback with 100ms delay")
-                    # Add a small delay to ensure audio is completely finished
-                    QTimer.singleShot(100, on_finished)
-                else:
-                    print(f"[DEBUG-GOOGLE] Calling callback directly")
-                    on_finished()
-                print(f"[DEBUG-GOOGLE] Callback initiated")
-            except Exception as callback_error:
-                print(f"[TTS] Error in on_finished callback: {callback_error}")
-                print(f"{traceback.format_exc()}")
-                # Try again with a different approach
-                try:
-                    print(f"[DEBUG-GOOGLE] Retrying callback with direct call")
-                    on_finished()
-                except Exception as retry_error:
-                    print(f"[TTS] Retry callback also failed: {retry_error}")
+        # Play the audio
+        if also_play_on_speaker:
+            _play_google_audio(response.audio_content, on_finished)
         else:
-            print(f"[DEBUG-GOOGLE] No callback provided")
+            print(f"[GCLOUD-TTS] Audio ready but playback skipped")
+            if on_finished:
+                on_finished()
+                
+    except ImportError as e:
+        logger.error(f"[GCLOUD-TTS] Google Cloud TTS not available: {e}")
+        print(f"[GCLOUD-TTS] ❌ Import error: {e}")
+        if on_finished:
+            on_finished()
+    except Exception as e:
+        logger.error(f"[GCLOUD-TTS] Synthesis error: {e}")
+        print(f"[GCLOUD-TTS] ❌ Synthesis error: {e}")
+        
+        # Try to get more specific error info
+        if hasattr(e, 'code'):
+            print(f"[GCLOUD-TTS] Error code: {e.code}")
+        if hasattr(e, 'details'):
+            print(f"[GCLOUD-TTS] Error details: {e.details}")
+            
+        if on_finished:
+            on_finished()
+
+def _parse_voice_name(voice_name):
+    """Parse voice name to extract language and gender info"""
+    voice_info = {
+        'language': 'id-ID',
+        'gender': 'NEUTRAL'
+    }
+    
+    if not voice_name:
+        return voice_info
+    
+    try:
+        # Load voice config untuk gender mapping
+        from modules_server.tts_engine import _load_voice_config, _get_voice_gender_from_config, _get_voice_lang_from_config
+        
+        # Get gender from config
+        gender = _get_voice_gender_from_config(voice_name)
+        if gender:
+            voice_info['gender'] = gender
+            
+        # Get language from config
+        lang = _get_voice_lang_from_config(voice_name)
+        if lang:
+            voice_info['language'] = lang
+            
+        print(f"[GCLOUD-TTS] Parsed voice '{voice_name}': {voice_info}")
         
     except Exception as e:
-        print(f"❌ Google Cloud TTS gagal: {e}")
-        print(f"Stack trace: {traceback.format_exc()}")
+        print(f"[GCLOUD-TTS] Error parsing voice name: {e}")
         
-        # Tetap panggil callback jika terjadi error
-        if on_finished:
-            try:
-                print(f"[DEBUG-GOOGLE] Calling on_finished callback after error")
-                if 'PyQt6' in sys.modules:
-                    from PyQt6.QtCore import QTimer
-                    QTimer.singleShot(0, on_finished)
-                else:
-                    on_finished()
-            except Exception as callback_error:
-                print(f"[TTS] Error in on_finished callback after error: {callback_error}")
+        # Fallback parsing berdasarkan nama
+        if voice_name.startswith('id-ID'):
+            voice_info['language'] = 'id-ID'
+        elif voice_name.startswith('en-US'):
+            voice_info['language'] = 'en-US'
+        elif voice_name.startswith('en-GB'):
+            voice_info['language'] = 'en-GB'
+        elif voice_name.startswith('en-AU'):
+            voice_info['language'] = 'en-AU'
+        
+        # Simple gender detection dari nama
+        if 'Standard-A' in voice_name or 'Standard-C' in voice_name:
+            voice_info['gender'] = 'FEMALE'
+        elif 'Standard-B' in voice_name or 'Standard-D' in voice_name:
+            voice_info['gender'] = 'MALE'
     
-    finally:
-        # Clean up temp file
-        if temp_path and os.path.exists(temp_path):
+    return voice_info
+
+def _play_google_audio(audio_content, on_finished=None):
+    """Play audio content from Google Cloud TTS SILENTLY (no CMD popup)"""
+    try:
+        print(f"[GCLOUD-TTS] Playing audio content ({len(audio_content)} bytes) - SILENT MODE")
+        
+        # Import pydub untuk audio processing
+        from pydub import AudioSegment
+        import subprocess
+        
+        # Create temp file untuk audio
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+            temp_file.write(audio_content)
+            temp_path = temp_file.name
+        
+        try:
+            # Load audio dengan pydub (SILENTLY)
+            print(f"[GCLOUD-TTS] Loading audio from temp file...")
+            audio_segment = AudioSegment.from_mp3(temp_path)
+            print(f"[GCLOUD-TTS] Audio loaded: {len(audio_segment)}ms duration")
+            
+            # Play audio dalam thread terpisah dengan SILENT mode
+            def silent_play_thread():
+                try:
+                    # Use our enhanced _safe_audio_play function untuk silent playback
+                    from modules_server.tts_engine import _safe_audio_play
+                    
+                    print(f"[GCLOUD-TTS] Using silent audio playback...")
+                    success = _safe_audio_play(audio_segment)
+                    
+                    if success:
+                        print(f"[GCLOUD-TTS] ✅ Silent playback completed")
+                    else:
+                        print(f"[GCLOUD-TTS] ⚠️ Silent playback failed, trying fallback")
+                        
+                        # Last resort fallback (sudah silent karena global suppression)
+                        try:
+                            from pydub.playback import play
+                            play(audio_segment)
+                            print(f"[GCLOUD-TTS] ✅ Fallback playback completed (silent)")
+                                
+                        except Exception as fallback_error:
+                            print(f"[GCLOUD-TTS] ❌ Fallback playback error: {fallback_error}")
+                    
+                except Exception as e:
+                    print(f"[GCLOUD-TTS] ❌ Silent playback error: {e}")
+                finally:
+                    # Cleanup
+                    try:
+                        Path(temp_path).unlink()
+                        print(f"[GCLOUD-TTS] Temp file cleaned up")
+                    except:
+                        pass
+                    
+                    if on_finished:
+                        try:
+                            on_finished()
+                            print(f"[GCLOUD-TTS] Callback executed")
+                        except Exception as callback_error:
+                            print(f"[GCLOUD-TTS] Callback error: {callback_error}")
+            
+            # Start silent playback thread
+            thread = threading.Thread(target=silent_play_thread, daemon=True)
+            thread.start()
+            print(f"[GCLOUD-TTS] Silent playback thread started")
+            
+        except Exception as e:
+            print(f"[GCLOUD-TTS] Audio processing error: {e}")
+            # Cleanup on error
             try:
-                os.unlink(temp_path)
+                Path(temp_path).unlink()
             except:
                 pass
+            if on_finished:
+                on_finished()
+                
+    except ImportError:
+        print(f"[GCLOUD-TTS] pydub not available for audio playback")
+        if on_finished:
+            on_finished()
+    except Exception as e:
+        print(f"[GCLOUD-TTS] Audio playback error: {e}")
+        if on_finished:
+            on_finished()
 
-# Test function if run directly
+def test_google_cloud_tts():
+    """Test function untuk Google Cloud TTS"""
+    print("=== TESTING GOOGLE CLOUD TTS ===")
+    
+    test_voices = [
+        ("id-ID-Standard-A", "Halo, ini adalah tes suara perempuan Indonesia"),
+        ("id-ID-Standard-B", "Halo, ini adalah tes suara laki-laki Indonesia"),
+        ("en-US-Standard-C", "Hello, this is a female English voice test"),
+        ("en-US-Standard-D", "Hello, this is a male English voice test"),
+    ]
+    
+    for voice_name, text in test_voices:
+        print(f"\nTesting voice: {voice_name}")
+        
+        def test_callback():
+            print(f"✅ {voice_name} test completed")
+        
+        speak_with_google_cloud(
+            text=text,
+            voice_name=voice_name,
+            on_finished=test_callback
+        )
+        
+        # Wait a bit between tests
+        time.sleep(2)
+    
+    print("=== GOOGLE CLOUD TTS TEST COMPLETED ===")
+
 if __name__ == "__main__":
-    test_text = "Ini adalah test text to speech menggunakan Google Cloud."
-    
-    def test_callback():
-        print("Callback called - audio playback is complete!")
-    
-    speak_with_google_cloud(
-        test_text, 
-        voice_name="id-ID-Standard-A",
-        on_finished=test_callback
-    )
-    # Sleep to let the thread finish
-    time.sleep(10)
+    test_google_cloud_tts()

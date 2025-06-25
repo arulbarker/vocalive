@@ -521,7 +521,7 @@ class PytchatListenerThread(QThread):
 
 # ✅ FIX: Gunakan fungsi helper untuk path log yang aman untuk EXE
 COHOST_LOG = get_app_data_path("cohost_log.txt")
-VOICES_PATH = ROOT / "config" / "voices.json"
+# VOICES_PATH = ROOT / "config" / "voices.json"  # Old method, replaced with EXE-compatible method
 CHAT_BUFFER = ROOT / "temp" / "chat_buffer.txt"
 
 # Pastikan direktori temp ada
@@ -1842,31 +1842,58 @@ Current context: Digital products sales expert"""
         code = "id-ID" if self.out_lang.currentText() == "Indonesia" else "en-US"
         voice_display = self.voice_cb.currentText()
         
-        # Log untuk debugging
+        # Enhanced debugging untuk EXE troubleshooting
         self.log_user("Playing voice preview...", "🔈")
         self.log_debug(f"Preview voice: {voice_display} -> {voice}")
         self.log_debug(f"Language code: {code}")
+        self.log_debug(f"Voice combo count: {self.voice_cb.count()}")
         
-        # Teks preview yang lebih informatif
+        # Debug voice loading
+        try:
+            from utils.resource_path import get_config_path, list_bundled_files
+            voices_path = get_config_path("voices.json")
+            self.log_debug(f"Voices path: {voices_path}")
+            self.log_debug(f"Voices file exists: {voices_path.exists()}")
+            
+            # List config files for debugging
+            config_files = list_bundled_files("config")
+            self.log_debug(f"Config files found: {[f.name for f in config_files if f.is_file()]}")
+            
+        except Exception as debug_error:
+            self.log_debug(f"Debug info error: {debug_error}")
+        
+        # Teks preview yang lebih informatif dengan model info
         if voice and voice != "default":
-            preview_text = f"This is {voice_display} voice preview. Hello, I am your AI CoHost!"
+            preview_text = f"Testing {voice}. This voice should sound different from others."
         else:
-            preview_text = "This is default voice preview. Hello, I am your AI CoHost!"
+            preview_text = "Testing default voice. Each voice model should sound unique."
+        
+        self.log_debug(f"Preview text: {preview_text[:50]}...")
         
         try:
+            # Import TTS engine untuk debugging
+            from modules_server.tts_engine import speak
+            
             # Pastikan voice parameter dikirim dengan benar
+            self.log_debug(f"Calling speak() with voice_name='{voice}', language_code='{code}'")
+            
             speak(
                 text=preview_text, 
                 language_code=code, 
                 voice_name=voice,
                 output_device=None,
-                on_finished=lambda: self.log_user("Preview completed", "✅")
+                on_finished=lambda: self.log_user(f"Preview completed for {voice}", "✅")
             )
+            
         except Exception as e:
             self.log_error(f"Voice preview failed: {e}")
+            self.log_debug(f"Preview error details: {str(e)}")
+            
             # Fallback preview dengan info error
             try:
-                fallback_text = f"Fallback preview for {voice_display}"
+                fallback_text = f"Fallback test for {voice_display}. If all voices sound the same, there may be a configuration issue."
+                self.log_debug(f"Trying fallback with text: {fallback_text[:50]}...")
+                
                 speak(
                     text=fallback_text,
                     language_code=code,
@@ -1876,6 +1903,7 @@ Current context: Digital products sales expert"""
                 )
             except Exception as e2:
                 self.log_error(f"Fallback preview also failed: {e2}")
+                self.log_debug(f"Fallback error details: {str(e2)}")
 
     def save_hotkey(self):
         """Simpan hotkey hold-to-talk"""
@@ -2020,7 +2048,24 @@ Current context: Digital products sales expert"""
                 
             self.voice_cb.clear()
             
-            voices_data = json.loads(VOICES_PATH.read_text(encoding="utf-8"))
+            # Load voices using EXE-compatible method
+            try:
+                from utils.resource_path import get_config_path
+                voices_path = get_config_path("voices.json")
+                print(f"[DEBUG] Loading voices from: {voices_path}")
+                
+                if voices_path.exists():
+                    voices_data = json.loads(voices_path.read_text(encoding="utf-8"))
+                    print(f"[DEBUG] Voices loaded successfully: {len(voices_data)} categories")
+                else:
+                    print(f"[DEBUG] Voices file not found at: {voices_path}")
+                    raise FileNotFoundError("voices.json not found")
+                    
+            except ImportError:
+                # Fallback for development mode
+                print(f"[DEBUG] Using fallback voice loading method")
+                voices_path = Path("config/voices.json")
+                voices_data = json.loads(voices_path.read_text(encoding="utf-8"))
             lang = self.out_lang.currentText() if hasattr(self, 'out_lang') else "Indonesia"
             
             # Basic mode menggunakan gTTS standard voices
