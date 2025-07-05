@@ -257,6 +257,30 @@ except ImportError:
         TUTORIAL_AVAILABLE = False
         print("[WARNING] TutorialTab not available")
 
+# Import CoHost Seller tab
+try:
+    from ui.cohost_seller_tab import CohostSellerTab
+    COHOST_SELLER_AVAILABLE = True
+except ImportError:
+    try:
+        from cohost_seller_tab import CohostSellerTab
+        COHOST_SELLER_AVAILABLE = True
+    except ImportError:
+        COHOST_SELLER_AVAILABLE = False
+        print("[WARNING] CohostSellerTab not available")
+
+# Import Credit Wallet tab
+try:
+    from ui.credit_wallet_tab import CreditWalletTab
+    CREDIT_WALLET_AVAILABLE = True
+except ImportError:
+    try:
+        from credit_wallet_tab import CreditWalletTab
+        CREDIT_WALLET_AVAILABLE = True
+    except ImportError:
+        CREDIT_WALLET_AVAILABLE = False
+        print("[WARNING] CreditWalletTab not available")
+
 # Import subscription checker
 try:
     from modules_server.subscription_checker import (
@@ -762,25 +786,56 @@ class MainWindow(QMainWindow):
             print(f"[ERROR] Error in check_demo_status: {e}")
             return False
 
+    def _check_purchased_packages(self):
+        """Check which packages user has actually purchased"""
+        try:
+            subscription_file = Path("config/subscription_status.json")
+            if not subscription_file.exists():
+                return {"basic": False, "cohost_seller": False}
+            
+            with open(subscription_file, 'r', encoding='utf-8') as f:
+                sub_data = json.load(f)
+            
+            return {
+                "basic": sub_data.get("basic", {}).get("active", False),
+                "cohost_seller": sub_data.get("cohost_seller", {}).get("active", False)
+            }
+        except Exception as e:
+            logger.error(f"Error checking purchased packages: {e}")
+            return {"basic": False, "cohost_seller": False}
+
     def pilih_paket(self, paket):
-        """Initialize main UI for Basic mode only."""
+        """Initialize main UI based on actually purchased packages."""
         print(f"[DEBUG] PILIH_PAKET: Called with paket: {paket}")
         
         try:
             logger.info(f"Memanggil pilih_paket dengan paket: {paket}")
 
-            # Force basic mode
-            paket = "basic"
-            self.cfg.set("paket", paket)
-            print(f"[DEBUG] PILIH_PAKET: Forced to basic mode")
+            # Check what packages are actually purchased
+            purchased = self._check_purchased_packages()
+            print(f"[DEBUG] PILIH_PAKET: Purchased packages: {purchased}")
 
-            # Create basic tabs
-            print(f"[DEBUG] PILIH_PAKET: Creating basic tabs")
+            # Determine which mode to use based on purchases
+            if purchased["cohost_seller"]:
+                actual_mode = "cohost_seller"
+            elif purchased["basic"]:
+                actual_mode = "basic"
+            else:
+                # No packages purchased - redirect to subscription tab
+                print(f"[DEBUG] PILIH_PAKET: No packages purchased, redirecting to subscription")
+                self._navigate_to_subscription_safely()
+                return
+
+            self.cfg.set("paket", actual_mode)
+            print(f"[DEBUG] PILIH_PAKET: Using actual mode: {actual_mode}")
+
+            # Create tabs based on purchased packages
+            print(f"[DEBUG] PILIH_PAKET: Creating tabs for {actual_mode} mode")
             tabs = QTabWidget()
             tabs.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-            # Setup basic tabs only
-            self._setup_basic_tabs(tabs)
+            # Setup tabs based on purchased packages
+            self._setup_tabs_by_packages(tabs, purchased)
 
             # Setup dan tampilkan main tabs
             self.main_tabs = tabs
@@ -789,20 +844,23 @@ class MainWindow(QMainWindow):
             print(f"[DEBUG] PILIH_PAKET: Main tabs added to stack and set as current")
 
             # Update status
-            self.status_bar.showMessage(f"StreamMate Basic activated", 5000)
+            if purchased["cohost_seller"]:
+                self.status_bar.showMessage(f"StreamMate CoHost Seller activated", 5000)
+            else:
+                self.status_bar.showMessage(f"StreamMate Basic activated", 5000)
             print(f"[DEBUG] PILIH_PAKET: Status bar updated")
 
             # Start session tracking jika tersedia
             if SUBSCRIPTION_CHECKER_AVAILABLE:
-                start_usage_tracking(f"init_basic")
+                start_usage_tracking(f"init_{actual_mode}")
 
-            print(f"[DEBUG] PILIH_PAKET: Basic mode berhasil diaktifkan")
-            logger.info(f"Basic mode berhasil diaktifkan")
+            print(f"[DEBUG] PILIH_PAKET: {actual_mode} mode berhasil diaktifkan")
+            logger.info(f"{actual_mode} mode berhasil diaktifkan")
             
             # Connect subscription tab signal
             if hasattr(self, 'subscription_tab') and self.subscription_tab:
                 self.subscription_tab.package_activated.connect(self.activate_basic_mode_from_subscription)
-                self.subscription_tab.demo_expired_signal.connect(self.handle_demo_expired) # <--- TAMBAHKAN BARIS INI
+                self.subscription_tab.demo_expired_signal.connect(self.handle_demo_expired)
             
         except Exception as e:
             print(f"[DEBUG] PILIH_PAKET: Error in pilih_paket: {e}")
@@ -818,99 +876,101 @@ class MainWindow(QMainWindow):
             except Exception as fallback_error:
                 print(f"[DEBUG] PILIH_PAKET: Fallback also failed: {fallback_error}")
 
-    def _setup_basic_tabs(self, tabs):
-        """Setup tab untuk mode Basic dengan fallback untuk missing components."""
+    def _setup_tabs_by_packages(self, tabs, purchased):
+        """Setup tabs based on what packages user has purchased"""
         try:
-            # Tab Cohost - yang paling penting
-            if COHOST_AVAILABLE:
-                self.cohost_tab = CohostTabBasic()
-                tabs.addTab(self.cohost_tab, "🤖 Cohost Chat")
-                print("[INFO] Cohost tab added successfully")
+            print(f"[DEBUG] Setting up tabs for purchased packages: {purchased}")
+            
+            # Always show Credit Wallet for top-up
+            if CREDIT_WALLET_AVAILABLE:
+                self.credit_wallet_tab = CreditWalletTab()
+                tabs.addTab(self.credit_wallet_tab, "💰 Credit Wallet")
+                print("[INFO] Credit Wallet tab added successfully")
+
+            # Only show basic features if Basic package is purchased
+            if purchased["basic"]:
+                # Tab Cohost - Basic features
+                if COHOST_AVAILABLE:
+                    self.cohost_tab = CohostTabBasic()
+                    tabs.addTab(self.cohost_tab, "🤖 Cohost Chat")
+                    print("[INFO] Cohost tab added (Basic purchased)")
+                else:
+                    placeholder = QWidget()
+                    layout = QVBoxLayout(placeholder)
+                    label = QLabel("🤖 Cohost Chat\n\n(Under development)")
+                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    label.setStyleSheet("font-size: 16px; color: #888;")
+                    layout.addWidget(label)
+                    tabs.addTab(placeholder, "🤖 Cohost Chat")
+                    print("[WARNING] Cohost tab not available - using placeholder")
+
+                # Tab Overlay
+                if OVERLAY_AVAILABLE:
+                    self.overlay_tab = OverlayTab()
+                    tabs.addTab(self.overlay_tab, "💬 Chat Overlay")
+                    print("[INFO] Overlay tab added (Basic purchased)")
+
+                # Tab Trakteer
+                if TRAKTEER_AVAILABLE:
+                    self.trakteer_tab = TrakteerTab()
+                    tabs.addTab(self.trakteer_tab, "🎁 Trakteer")
+                    print("[INFO] Trakteer tab added (Basic purchased)")
+
+                    # Tab Reply Log
+                    if REPLY_LOG_AVAILABLE:
+                        self.reply_log_tab = ReplyLogTab()
+                        tabs.addTab(self.reply_log_tab, "📝 Reply Log")
+                        print("[INFO] Reply Log tab added (Basic purchased)")
             else:
-                # Fallback placeholder tab
+                # Show locked placeholder for Basic features
                 placeholder = QWidget()
                 layout = QVBoxLayout(placeholder)
-                label = QLabel("🤖 Cohost Chat\n\n(Under development)")
+                label = QLabel("🔒 Basic Features Locked\n\nPurchase Basic package with credits\nto unlock these features")
                 label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 label.setStyleSheet("font-size: 16px; color: #888;")
                 layout.addWidget(label)
-                tabs.addTab(placeholder, "🤖 Cohost Chat")
-                print("[WARNING] Cohost tab not available - using placeholder")
+                tabs.addTab(placeholder, "🔒 Basic Features")
+                print("[INFO] Basic features locked - user needs to purchase")
 
-            # Tab Overlay
-            if OVERLAY_AVAILABLE:
-                self.overlay_tab = OverlayTab()
-                tabs.addTab(self.overlay_tab, "💬 Chat Overlay")
-                print("[INFO] Overlay tab added successfully")
+            # Only show CoHost Seller if that package is purchased
+            if purchased["cohost_seller"]:
+                if COHOST_SELLER_AVAILABLE:
+                    self.cohost_seller_tab = CohostSellerTab()
+                    tabs.addTab(self.cohost_seller_tab, "🛍️ CoHost Seller")
+                    print("[INFO] CoHost Seller tab added (CoHost Seller purchased)")
+                else:
+                    placeholder = QWidget()
+                    layout = QVBoxLayout(placeholder)
+                    label = QLabel("🛍️ CoHost Seller\n\n(Under development)")
+                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    label.setStyleSheet("font-size: 16px; color: #888;")
+                    layout.addWidget(label)
+                    tabs.addTab(placeholder, "🛍️ CoHost Seller")
+                    print("[WARNING] CoHost Seller tab not available - using placeholder")
             else:
+                # Show locked placeholder for CoHost Seller
                 placeholder = QWidget()
                 layout = QVBoxLayout(placeholder)
-                label = QLabel("💬 Chat Overlay\n\n(Under development)")
+                label = QLabel("🔒 CoHost Seller Locked\n\nPurchase CoHost Seller package\nwith credits to unlock")
                 label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 label.setStyleSheet("font-size: 16px; color: #888;")
                 layout.addWidget(label)
-                tabs.addTab(placeholder, "💬 Chat Overlay")
-                print("[WARNING] Overlay tab not available - using placeholder")
+                tabs.addTab(placeholder, "🔒 CoHost Seller")
+                print("[INFO] CoHost Seller locked - user needs to purchase")
 
-            # Tab Trakteer
-            if TRAKTEER_AVAILABLE:
-                self.trakteer_tab = TrakteerTab()
-                tabs.addTab(self.trakteer_tab, "🎁 Trakteer")
-                print("[INFO] Trakteer tab added successfully")
-            else:
-                placeholder = QWidget()
-                layout = QVBoxLayout(placeholder)
-                label = QLabel("🎁 Donation\n\n(Under development)")
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                label.setStyleSheet("font-size: 16px; color: #888;")
-                layout.addWidget(label)
-                tabs.addTab(placeholder, "🎁 Trakteer")
-                print("[WARNING] Trakteer tab not available - using placeholder")
-
-            # Tab Reply Log
-            if REPLY_LOG_AVAILABLE:
-                self.reply_log_tab = ReplyLogTab()
-                tabs.addTab(self.reply_log_tab, "📝 Reply Log")
-                print("[INFO] Reply Log tab added successfully")
-            else:
-                placeholder = QWidget()
-                layout = QVBoxLayout(placeholder)
-                label = QLabel("📝 Reply Log\n\n(Under development)")
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                label.setStyleSheet("font-size: 16px; color: #888;")
-                layout.addWidget(label)
-                tabs.addTab(placeholder, "📝 Reply Log")
-                print("[WARNING] Reply Log tab not available - using placeholder")
-
-            # Tab System Log - DISABLED for end users (Developer tool only)
-            # NOTE: Uncomment lines below to re-enable System Log Tab
-            # self.system_log_tab = SystemLogTab()
-            # tabs.addTab(self.system_log_tab, "🔍 System Log")
-            # print("[INFO] System Log tab added successfully")
-            print("[INFO] System Log tab disabled (Developer tool - not needed for end users)")
-
-            # Tab Tutorial
+            # Tab Tutorial - always available
             if TUTORIAL_AVAILABLE:
                 self.tutorial_tab = TutorialTab()
                 tabs.addTab(self.tutorial_tab, "❓ Tutorial")
                 print("[INFO] Tutorial tab added successfully")
-            else:
-                placeholder = QWidget()
-                layout = QVBoxLayout(placeholder)
-                label = QLabel("❓ Tutorial\n\n(Tutorial feature coming soon)")
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                label.setStyleSheet("font-size: 16px; color: #888;")
-                layout.addWidget(label)
-                tabs.addTab(placeholder, "❓ Tutorial")
-                print("[WARNING] Tutorial tab not available - using placeholder")
 
-            # Tab Profile - selalu tersedia
+            # Tab Profile - always available
             self.profile_tab = ProfileTab(self)
             tabs.addTab(self.profile_tab, "👤 Profile")
             print("[INFO] Profile tab added successfully")
 
-            # Connect signals untuk reply log dan overlay jika tersedia
-            if hasattr(self, 'cohost_tab') and hasattr(self.cohost_tab, 'replyGenerated'):
+            # Connect signals only if basic features are purchased
+            if purchased["basic"] and hasattr(self, 'cohost_tab') and hasattr(self.cohost_tab, 'replyGenerated'):
                 # Connect ke reply log jika tersedia
                 if hasattr(self, 'reply_log_tab'):
                     self.cohost_tab.replyGenerated.connect(self._handle_new_reply)
@@ -924,7 +984,7 @@ class MainWindow(QMainWindow):
                     print("[INFO] Connected cohost to overlay")
 
         except Exception as e:
-            print(f"[ERROR] Error setting up basic tabs: {e}")
+            print(f"[ERROR] Error setting up tabs by packages: {e}")
             import traceback
             traceback.print_exc()
 
@@ -1406,10 +1466,37 @@ class MainWindow(QMainWindow):
             event.ignore()
 
     def activate_basic_mode_from_subscription(self, package):
-        """Aktifkan basic mode dari subscription tab."""
+        """Aktifkan mode dari subscription tab."""
         try:
             logger.info(f"Activating {package} mode from subscription tab")
             
+            if package == "cohost_seller":
+                # Handle CoHost Seller activation
+                QMessageBox.information(
+                    self, "CoHost Seller Activated! 🛍️",
+                    "CoHost Seller package has been activated!\n\n"
+                    "✅ Product Management (2 slots)\n"
+                    "✅ Smart Trigger System\n"
+                    "✅ Auto OBS Scene Switch\n"
+                    "✅ Sales Analytics\n"
+                    "✅ Live Selling AI\n\n"
+                    "You can now access CoHost Seller features in the main tabs!"
+                )
+                
+                # Navigate to CoHost Seller tab if available
+                if hasattr(self, 'main_tabs') and self.main_tabs:
+                    for i in range(self.main_tabs.count()):
+                        tab_text = self.main_tabs.tabText(i)
+                        if "cohost seller" in tab_text.lower():
+                            self.main_tabs.setCurrentIndex(i)
+                            break
+                else:
+                    # Create main tabs if not exists
+                    self.pilih_paket("basic")
+                
+                return
+            
+            # Handle basic mode activation
             # Validasi kredit sekali lagi
             from modules_server.real_credit_tracker import credit_tracker
             if not credit_tracker.check_credit_available(5.0):
@@ -1428,10 +1515,10 @@ class MainWindow(QMainWindow):
                 start_usage_tracking("basic_mode_activated")
                 
         except Exception as e:
-            logger.error(f"Error activating basic mode: {e}")
+            logger.error(f"Error activating {package} mode: {e}")
             QMessageBox.critical(
                 self, "Error",
-                f"Failed to activate Basic Mode: {str(e)}"
+                f"Failed to activate {package} Mode: {str(e)}"
             )
 
     def show_subscription_tab(self):

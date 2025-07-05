@@ -57,3 +57,7 @@ huggingface_hub>=0.16.4
 pydantic==2.5.0
 mysql-connector-python==8.2.0
 python-multipart==0.0.6
+
+# OBS WebSocket Integration for CoHost Seller
+obs-websocket-py
+websockets

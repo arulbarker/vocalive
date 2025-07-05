@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel, QMessageBox, 
     QHBoxLayout, QProgressBar, QFrame, QGroupBox, QGridLayout,
     QSpacerItem, QScrollArea, QSizePolicy, QTextEdit, QComboBox,
-    QSpinBox, QInputDialog, QLineEdit
+    QSpinBox, QInputDialog, QLineEdit, QDialog
 )
 from PyQt6.QtGui import QFont, QDesktopServices, QColor, QPixmap
 from PyQt6.QtCore import QUrl, Qt, QTimer, pyqtSignal
@@ -212,7 +212,7 @@ class SubscriptionTab(QWidget):
         return header
         
     def create_status_section(self):
-        """Create status section dengan informasi lengkap"""
+        """Create status section dengan informasi lengkap dan tombol top-up"""
         status_frame = QFrame()
         status_frame.setStyleSheet("""
             QFrame {
@@ -223,7 +223,38 @@ class SubscriptionTab(QWidget):
             }
         """)
         
-        layout = QGridLayout(status_frame)
+        main_layout = QVBoxLayout(status_frame)
+        main_layout.setSpacing(15)
+        
+        # Top section with Top-up button
+        top_section = QHBoxLayout()
+        
+        # Top-up Credits button - Moved here
+        topup_btn = QPushButton("💳 Top-up Credits")
+        topup_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+                max-width: 150px;
+            }
+            QPushButton:hover {
+                background-color: #45A049;
+            }
+        """)
+        topup_btn.clicked.connect(self.show_topup_options)
+        top_section.addWidget(topup_btn)
+        
+        top_section.addStretch()
+        main_layout.addLayout(top_section)
+        
+        # Status grid
+        status_grid = QWidget()
+        layout = QGridLayout(status_grid)
         layout.setSpacing(15)
         
         # Row 1: Status Langganan
@@ -261,6 +292,8 @@ class SubscriptionTab(QWidget):
         
         # Column stretch
         layout.setColumnStretch(1, 1)
+        
+        main_layout.addWidget(status_grid)
         
         return status_frame
         
@@ -384,7 +417,7 @@ class SubscriptionTab(QWidget):
         return widget
         
     def create_packages_section(self):
-        """Create package cards dengan tombol beli kredit"""
+        """Create package cards yang dibeli dengan kredit"""
         packages_frame = QFrame()
         packages_frame.setStyleSheet("""
             QFrame {
@@ -397,26 +430,91 @@ class SubscriptionTab(QWidget):
         main_layout = QVBoxLayout(packages_frame)
         
         # Section title
-        title = QLabel("📦 Choose Subscription Package")
+        title = QLabel("📦 Choose Features Package (Paid with Credits)")
         title.setStyleSheet("""
             QLabel {
                 font-size: 20px;
                 font-weight: bold;
                 color: #333;
-                margin-bottom: 20px;
+                margin-bottom: 10px;
             }
         """)
         main_layout.addWidget(title)
+        
+        # Current balance display
+        try:
+            from modules_client.credit_wallet_client import get_current_balance
+            current_balance = get_current_balance()
+            balance_label = QLabel(f"💰 Your Current Balance: {current_balance:,} credits")
+            balance_label.setStyleSheet("""
+                QLabel {
+                    font-size: 16px;
+                    color: #4CAF50;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                    background-color: #E8F5E8;
+                    padding: 10px;
+                    border-radius: 8px;
+                    border-left: 4px solid #4CAF50;
+                }
+            """)
+            main_layout.addWidget(balance_label)
+        except:
+            pass
+        
+        # Info label about credit purchases with top-up button
+        info_widget = QFrame()
+        info_widget.setStyleSheet("""
+            QFrame {
+                background-color: #E3F2FD;
+                border-radius: 8px;
+                border-left: 4px solid #2196F3;
+                padding: 15px;
+                margin-bottom: 20px;
+            }
+        """)
+        info_layout = QHBoxLayout(info_widget)
+        
+        info_label = QLabel("💡 Need more credits? Top-up first, then purchase packages below")
+        info_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #666;
+                font-style: italic;
+            }
+        """)
+        info_label.setWordWrap(True)
+        info_layout.addWidget(info_label)
+        
+        # Quick top-up button in info section
+        quick_topup_btn = QPushButton("💳 Quick Top-up")
+        quick_topup_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: bold;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #45A049;
+            }
+        """)
+        quick_topup_btn.clicked.connect(self.show_topup_options)
+        info_layout.addWidget(quick_topup_btn)
+        
+        main_layout.addWidget(info_widget)
         
         # Cards container
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(20)
         
-        # BASIC PACKAGE CARD
+        # BASIC PACKAGE CARD - Updated for credit purchase
         basic_card = self.create_package_card(
             title="BASIC",
-            price="Rp 100.000| $6,14",
-            credits="100.000 credits",
+            price="100,000 Credits",  # Changed from money to credits
+            credits="One-time purchase",
             features=[
                 "✅ Auto-Reply AI (Trigger Mode)",
                 "⏳ Voice Translation (Coming Soon)",
@@ -432,11 +530,32 @@ class SubscriptionTab(QWidget):
         )
         cards_layout.addWidget(basic_card)
         
+        # COHOST SELLER PACKAGE CARD - Updated for credit purchase
+        seller_card = self.create_package_card(
+            title="COHOST SELLER",
+            price="300,000 Credits",  # Changed from money to credits
+            credits="One-time purchase",
+            features=[
+                "✅ All Basic features",
+                "🛍️ Product Management (2 slots)",
+                "🎯 Smart Trigger System",
+                "📺 Auto OBS Scene Switch",
+                "📊 Sales Analytics",
+                "🔥 Live Selling AI",
+                "💰 +8 slots (100k each)"
+            ],
+            color="#E91E63",
+            package_id="cohost_seller",
+            is_available=True,
+            is_popular=False
+        )
+        cards_layout.addWidget(seller_card)
+        
         # PRO PACKAGE CARD (LOCKED)
         pro_card = self.create_package_card(
             title="PRO",
-            price="Rp 250.000",
-            credits="100.000 credits",
+            price="Coming Soon",
+            credits="TBA Credits",
             features=[
                 "✅ All Basic features",
                 "✅ Sequential & Delay Mode",
@@ -593,7 +712,7 @@ class SubscriptionTab(QWidget):
         
         if is_available:
             # Buy package button
-            buy_btn = QPushButton(f"🛒 Buy {title}")
+            buy_btn = QPushButton(f"💳 Buy {title} with Credits")
             buy_btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {color};
@@ -1205,75 +1324,240 @@ class SubscriptionTab(QWidget):
             self.usage_value.setStyleSheet(self.get_value_style("#D32F2F"))  # Red - high usage
 
     def buy_package(self, package_name):
-        """Proses pembelian paket dengan server yang benar."""
-        print("\n=== DEBUG PAYMENT START ===")
+        """Proses pembelian paket dengan kredit yang sudah dimiliki."""
+        print("\n=== DEBUG CREDIT PURCHASE START ===")
         print(f"DEBUG: Package name: {package_name}")
         
-        email = self.cfg.get("user_data", {}).get("email", "")
-        print(f"DEBUG: User email: {email}")
+        # Special handling for CoHost Seller (already uses credit system)
+        if package_name == "cohost_seller":
+            self.buy_cohost_seller_package()
+            return
         
-        if not email:
-            print("DEBUG: No email found in config")
-            QMessageBox.warning(self, "Login Required", "Please login first")
+        # Handle Basic package purchase with credits
+        if package_name == "basic":
+            self.buy_basic_package_with_credits()
             return
             
+        # For other packages (like PRO), show coming soon
+        QMessageBox.information(
+            self, "Coming Soon", 
+            f"{package_name.capitalize()} package will be available soon!"
+        )
+        print("=== DEBUG CREDIT PURCHASE END ===\n")
+
+    def buy_basic_package_with_credits(self):
+        """Handle Basic package purchase with credits"""
         try:
-            payment_url = "http://69.62.79.238:8000/api/payment/create"  # Fixed: Use production server with correct port
-            print(f"DEBUG: Sending request to: {payment_url}")
-            print(f"DEBUG: Request payload: {{'email': {email}, 'package': {package_name}}}")
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                QMessageBox.warning(self, "Login Required", "Please login first to purchase Basic package")
+                return
             
-            response = requests.post(
-                payment_url,
-                json={"email": email, "package": package_name},
-                timeout=30
-            )
-            print(f"DEBUG: Response status code: {response.status_code}")
-            print(f"DEBUG: Response headers: {response.headers}")
-            print(f"DEBUG: Response text: {response.text}")
-
-            if response.status_code == 200:
-                data = response.json()
-                print(f"DEBUG: Parsed response data: {data}")
-                payment_url = data.get("data", {}).get("redirect_url")
-                print(f"DEBUG: Payment URL from response: {payment_url}")
-
-                if payment_url:
-                    print("DEBUG: Opening payment URL in browser")
-                    import webbrowser
-                    webbrowser.open(payment_url)
-                    
-                    QMessageBox.information(
-                        self, "Payment Started",
-                        f"Payment browser has been opened.\n\n"
-                        f"Package: {package_name.capitalize()}\n"
-                        f"Complete payment in the browser."
-                    )
-                else:
-                    print("DEBUG: No payment URL in response")
-                    QMessageBox.warning(self, "Error", "Payment URL not received")
-            else:
-                try:
-                    error_msg = response.json().get("detail", "Payment failed")
-                except Exception as e:
-                    error_msg = f"Payment failed (parse error): {str(e)}"
-                print(f"DEBUG: Payment error: {error_msg}")
-                QMessageBox.warning(self, "Payment Error", error_msg)
+            # Check current credit balance
+            try:
+                from modules_server.real_credit_tracker import get_current_credit_balance
+                current_balance = get_current_credit_balance()
+                required_credits = 100000  # 100,000 credits for Basic
                 
-        except requests.exceptions.ConnectionError as e:
-            print(f"DEBUG: Connection error: {str(e)}")
-            QMessageBox.critical(
-                self, "Connection Error",
-                "Cannot connect to payment server.\n\n"
-                "Please ensure:\n"
-                "• Internet connection is active\n"  
-                "• StreamMate server is running\n"
-                "• Port 8000 is accessible"
-            )
+                if current_balance < required_credits:
+                    QMessageBox.warning(
+                        self, "Insufficient Credits",
+                        f"Basic package requires {required_credits:,} credits.\n"
+                        f"Your current balance: {current_balance:,} credits\n\n"
+                        "Please top-up more credits in the Credit Wallet tab first."
+                    )
+                    return
+                
+                # Check if already has Basic package
+                subscription_file = Path("config/subscription_status.json")
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                        if sub_data.get("basic", {}).get("active", False):
+                            QMessageBox.information(
+                                self, "Already Purchased",
+                                "You already have the Basic package active!"
+                            )
+                            return
+                
+                # Confirm purchase
+                reply = QMessageBox.question(
+                    self, "Confirm Purchase",
+                    f"🚀 Basic Package\n\n"
+                    f"Price: {required_credits:,} credits\n"
+                    f"Includes:\n"
+                    f"• Auto-Reply AI (Trigger Mode)\n"
+                    f"• YouTube & TikTok Support\n"
+                    f"• Basic TTS Voices\n"
+                    f"• Chat Overlay\n"
+                    f"• 24/7 Support\n\n"
+                    f"Your balance after purchase: {current_balance - required_credits:,} credits\n\n"
+                    f"Proceed with purchase?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+                
+                # Deduct credits
+                from modules_server.real_credit_tracker import force_credit_deduction
+                deduction_success = force_credit_deduction(
+                    required_credits, 
+                    "basic_package_purchase", 
+                    "Basic Package Purchase"
+                )
+                
+                if not deduction_success:
+                    QMessageBox.critical(self, "Purchase Failed", "Credit deduction failed. Please try again.")
+                    return
+                
+                # Update subscription data
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                else:
+                    sub_data = {}
+                
+                # Add Basic package data
+                sub_data["basic"] = {
+                    "active": True,
+                    "purchased_at": datetime.now().isoformat(),
+                    "email": email,
+                    "package": "basic"
+                }
+                
+                with open(subscription_file, 'w', encoding='utf-8') as f:
+                    json.dump(sub_data, f, indent=2, ensure_ascii=False)
+                
+                # Show success message
+                QMessageBox.information(
+                    self, "Purchase Successful! 🎉",
+                    f"Basic package activated successfully!\n\n"
+                    f"✅ Credits deducted: {required_credits:,}\n"
+                    f"✅ Remaining balance: {current_balance - required_credits:,}\n\n"
+                    f"You can now access Basic features in the main application!"
+                )
+                
+                # Refresh UI
+                self.refresh_credits()
+                
+                # Emit signal to activate Basic mode
+                self.package_activated.emit("basic")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Purchase Error", f"Failed to process purchase: {str(e)}")
+                
         except Exception as e:
-            print(f"DEBUG: Unexpected error: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Payment error: {str(e)}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
+    def buy_cohost_seller_package(self):
+        """Handle CoHost Seller package purchase with credits"""
+        try:
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                QMessageBox.warning(self, "Login Required", "Please login first to purchase CoHost Seller")
+                return
             
-        print("=== DEBUG PAYMENT END ===\n")
+            # Check current credit balance
+            try:
+                from modules_server.real_credit_tracker import get_current_credit_balance
+                current_balance = get_current_credit_balance()
+                required_credits = 300000  # 300,000 credits for CoHost Seller
+                
+                if current_balance < required_credits:
+                    QMessageBox.warning(
+                        self, "Insufficient Credits",
+                        f"CoHost Seller package requires {required_credits:,} credits.\n"
+                        f"Your current balance: {current_balance:,} credits\n\n"
+                        "Please top-up more credits in the Credit Wallet tab first."
+                    )
+                    return
+                
+                # Check if already has CoHost Seller package
+                subscription_file = Path("config/subscription_status.json")
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                        if sub_data.get("cohost_seller", {}).get("active", False):
+                            QMessageBox.information(
+                                self, "Already Purchased",
+                                "You already have the CoHost Seller package active!"
+                            )
+                            return
+                
+                # Confirm purchase
+                reply = QMessageBox.question(
+                    self, "Confirm Purchase",
+                    f"🛍️ CoHost Seller Package\n\n"
+                    f"Price: {required_credits:,} credits\n"
+                    f"Includes:\n"
+                    f"• All Basic features\n"
+                    f"• Product Management (2 slots)\n"
+                    f"• Smart Trigger System\n"
+                    f"• Auto OBS Scene Switch\n"
+                    f"• Sales Analytics\n"
+                    f"• Live Selling AI\n"
+                    f"• Option to buy +8 more slots\n\n"
+                    f"Your balance after purchase: {current_balance - required_credits:,} credits\n\n"
+                    f"Proceed with purchase?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+                
+                # Deduct credits
+                from modules_server.real_credit_tracker import force_credit_deduction
+                deduction_success = force_credit_deduction(
+                    required_credits, 
+                    "cohost_seller_purchase", 
+                    "CoHost Seller Package Purchase"
+                )
+                
+                if not deduction_success:
+                    QMessageBox.critical(self, "Purchase Failed", "Credit deduction failed. Please try again.")
+                    return
+                
+                # Update subscription data
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                else:
+                    sub_data = {}
+                
+                # Add CoHost Seller data
+                sub_data["cohost_seller"] = {
+                    "active": True,
+                    "purchased_at": datetime.now().isoformat(),
+                    "purchased_slots": 2,  # Default 2 slots
+                    "email": email,
+                    "package": "cohost_seller"
+                }
+                
+                with open(subscription_file, 'w', encoding='utf-8') as f:
+                    json.dump(sub_data, f, indent=2, ensure_ascii=False)
+                
+                # Show success message
+                QMessageBox.information(
+                    self, "Purchase Successful! 🎉",
+                    f"CoHost Seller package activated successfully!\n\n"
+                    f"✅ Credits deducted: {required_credits:,}\n"
+                    f"✅ Remaining balance: {current_balance - required_credits:,}\n"
+                    f"✅ Product slots: 2 (can upgrade to 10)\n\n"
+                    f"You can now access CoHost Seller features in the main application!"
+                )
+                
+                # Refresh UI
+                self.refresh_credits()
+                
+                # Emit signal to activate CoHost Seller mode
+                self.package_activated.emit("cohost_seller")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Purchase Error", f"Failed to process purchase: {str(e)}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def process_payment(self, email, package_id):
         """Process payment untuk paket yang dipilih."""
@@ -1335,21 +1619,6 @@ class SubscriptionTab(QWidget):
     def start_demo(self):
         """Start demo mode with 30 minutes limit."""
         try:
-            # ❌ DEPRECATED: Pengecekan file lokal di sini menyebabkan bug untuk user baru.
-            # Logika ini salah karena membaca status user sebelumnya.
-            # Pengecekan kredit sekarang dilakukan di dalam alur setelah email teridentifikasi.
-            # subscription_file = Path("config/subscription_status.json")
-            # if subscription_file.exists():
-            #     with open(subscription_file, "r", encoding="utf-8") as f:
-            #         data = json.load(f)
-            #     if data.get('hours_credit', 0) > 50:
-            #         QMessageBox.warning(
-            #             self,
-            #             "Cannot Start Demo",
-            #             "You already have more than 50 credits.\nDemo mode is only available for users with 50 or fewer credits."
-            #         )
-            #         return
-
             self.show_loading("Activating Demo Mode...")
             
             # DEBUG: Tambahkan debugging yang komprehensif
@@ -1994,3 +2263,207 @@ class SubscriptionTab(QWidget):
                 
         except Exception as e:
             print(f"Error updating subscription file: {e}")
+
+    def show_topup_options(self):
+        """Show top-up options dialog"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame, QMessageBox
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("💳 Top-up Credits")
+        dialog.setModal(True)
+        dialog.resize(600, 500)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #F8F9FA;
+            }
+            QLabel {
+                color: #333;
+            }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Header
+        header = QLabel("💰 Choose Top-up Package")
+        header.setStyleSheet("""
+            QLabel {
+                font-size: 24px;
+                font-weight: bold;
+                color: #4CAF50;
+                text-align: center;
+            }
+        """)
+        layout.addWidget(header)
+        
+        # Info
+        info = QLabel("💡 Top-up credits with real money, then use credits to buy feature packages")
+        info.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #666;
+                text-align: center;
+                font-style: italic;
+                margin-bottom: 20px;
+            }
+        """)
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        
+        # Get packages
+        try:
+            from modules_client.credit_wallet_client import get_credit_packages
+            packages = get_credit_packages()
+        except:
+            packages = [
+                {"id": "regular", "name": "🚀 Regular Pack", "price_idr": 100000, "total_credits": 300000, "popular": True},
+                {"id": "premium", "name": "⭐ Premium Pack", "price_idr": 200000, "total_credits": 750000, "popular": False}
+            ]
+        
+        # Package cards
+        for pkg in packages:
+            card = QFrame()
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: white;
+                    border: 2px solid {'#4CAF50' if pkg.get('popular', False) else '#E0E0E0'};
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin: 5px;
+                }}
+            """)
+            
+            card_layout = QVBoxLayout(card)
+            
+            # Package header
+            header_layout = QHBoxLayout()
+            
+            name_label = QLabel(pkg['name'])
+            name_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+            header_layout.addWidget(name_label)
+            
+            if pkg.get('popular', False):
+                popular_label = QLabel("🔥 POPULAR")
+                popular_label.setStyleSheet("""
+                    background-color: #4CAF50;
+                    color: white;
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    font-size: 10px;
+                    font-weight: bold;
+                """)
+                header_layout.addWidget(popular_label)
+            
+            header_layout.addStretch()
+            card_layout.addLayout(header_layout)
+            
+            # Package details
+            price_label = QLabel(f"💵 Rp {pkg['price_idr']:,}")
+            price_label.setStyleSheet("font-size: 14px; color: #2E7D32; font-weight: bold;")
+            card_layout.addWidget(price_label)
+            
+            credits_label = QLabel(f"💰 {pkg['total_credits']:,} Credits")
+            credits_label.setStyleSheet("font-size: 14px; color: #1976D2; font-weight: bold;")
+            card_layout.addWidget(credits_label)
+            
+            # Top-up button
+            topup_btn = QPushButton(f"💳 Top-up {pkg['name']}")
+            topup_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {'#4CAF50' if pkg.get('popular', False) else '#2196F3'};
+                    color: white;
+                    padding: 10px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    margin-top: 10px;
+                }}
+                QPushButton:hover {{
+                    background-color: {'#45A049' if pkg.get('popular', False) else '#1976D2'};
+                }}
+            """)
+            topup_btn.clicked.connect(lambda checked, p=pkg: self.process_topup(p, dialog))
+            card_layout.addWidget(topup_btn)
+            
+            layout.addWidget(card)
+        
+        # Close button
+        close_btn = QPushButton("❌ Close")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #666;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+                margin-top: 10px;
+            }
+            QPushButton:hover {
+                background-color: #555;
+            }
+        """)
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+        
+        dialog.exec()
+
+    def process_topup(self, package, dialog):
+        """Process top-up purchase"""
+        from PyQt6.QtWidgets import QMessageBox
+        
+        try:
+            # Get user email
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                QMessageBox.warning(self, "Login Required", "Please login first to top-up credits")
+                return
+            
+            # In development mode, simulate top-up
+            try:
+                from modules_client.credit_wallet_client import get_credit_wallet_client
+                client = get_credit_wallet_client()
+                
+                if client.local_mode:
+                    # Simulate top-up in development mode
+                    reply = QMessageBox.question(
+                        self, "Confirm Top-up",
+                        f"Top-up {package['name']}?\n\n"
+                        f"💵 Price: Rp {package['price_idr']:,}\n"
+                        f"💰 Credits: {package['total_credits']:,}\n\n"
+                        f"Note: This is a simulation in development mode.",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                    )
+                    
+                    if reply == QMessageBox.StandardButton.Yes:
+                        success, message = client.add_credits(
+                            package['total_credits'], 
+                            f"Top-up: {package['name']}"
+                        )
+                        
+                        if success:
+                            QMessageBox.information(
+                                self, "Top-up Successful! 🎉", 
+                                f"Successfully topped up {package['name']}!\n\n"
+                                f"✅ Credits added: {package['total_credits']:,}\n"
+                                f"✅ {message}\n\n"
+                                f"You can now purchase feature packages!"
+                            )
+                            dialog.close()
+                            self.refresh_credits()
+                        else:
+                            QMessageBox.warning(self, "Top-up Failed", message)
+                else:
+                    # Production mode - redirect to payment
+                    QMessageBox.information(
+                        self, "Payment Required", 
+                        f"Top-up {package['name']} requires real payment.\n\n"
+                        f"💵 Price: Rp {package['price_idr']:,}\n"
+                        f"💰 Credits: {package['total_credits']:,}\n\n"
+                        f"Payment integration coming soon!"
+                    )
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Top-up Error", f"Failed to process top-up: {str(e)}")
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")

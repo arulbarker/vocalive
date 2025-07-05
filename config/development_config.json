@@ -30,5 +30,13 @@
         "new_features_enabled": true,
         "experimental_mode": true,
         "beta_testing": true
+    },
+    "credit_wallet": {
+        "enabled": true,
+        "local_mode": true,
+        "database_path": "data/wallet_dev.db",
+        "default_balance": 100000,
+        "test_mode": true,
+        "auto_topup_for_testing": true
     }
 } 

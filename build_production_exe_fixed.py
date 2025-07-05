@@ -145,7 +145,7 @@ a = Analysis(
         ('config/gcloud_tts_credentials.json', 'config'),  # ✅ CLOUD TTS CREDENTIALS FOR VOICE DIFFERENTIATION
         ('config/google_oauth.json', 'config'),           # ✅ OAUTH CONFIG FOR SERVICES
         # NOTE: Sensitive files with tokens EXCLUDED for security
-        # - google_token.json (contains OAuth tokens - EXCLUDED)  
+        # - google_token.json (contains OAuth tokens - EXCLUDED)
         # - development_config.json (contains admin keys - EXCLUDED)
         # - settings.json (user-specific data - will be created as template)
         # - credit_config.json (may contain sensitive data - EXCLUDED)

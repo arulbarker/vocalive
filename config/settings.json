@@ -8,7 +8,7 @@
     "last_login": "2025-06-19T16:06:03.862929"
   },
   "app_version": "v1.0.0-basic",
-  "last_update_check": 1750351085.8112285,
+  "last_update_check": 1751733870.5984793,
   "trigger_words": [
     "mas"
   ],
@@ -41,7 +41,7 @@
   "enable_topic_blocking": false,
   "cohost_max_queue": 9,
   "tr_api_key": "trapi-dxNc3yHDuVuxU8VSO5PWwVm7",
-  "update_reminder_time": 1750090486.017054,
+  "update_reminder_time": 1751192882.195746,
   "topic_cooldown_minutes": 13,
   "skipped_update_version": ""
 }

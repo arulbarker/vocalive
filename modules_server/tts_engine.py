@@ -243,21 +243,21 @@ def _safe_audio_play(audio_segment):
         # Export to WAV dengan silent mode (sudah silent karena global suppression)
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
             temp_path = Path(temp_file.name)
-        
-        audio_segment.export(str(temp_path), format="wav")
-        
+            
+            audio_segment.export(str(temp_path), format="wav")
+            
         # Use Windows Media.SoundPlayer dengan hidden window (sudah silent karena global suppression)
         if sys.platform == 'win32':
             cmd = ["powershell", "-WindowStyle", "Hidden", "-c", 
                    f"(New-Object Media.SoundPlayer '{temp_path}').PlaySync()"]
             subprocess.call(cmd)  # Global suppression handles silence
-        
-        # Clean up
-        try:
-            temp_path.unlink()
-        except:
-            pass
             
+            # Clean up
+            try:
+                temp_path.unlink()
+            except:
+                pass
+                
         print(f"[AUDIO] ✅ Method 2 successful: Windows SoundPlayer (silent)")
         return True
         
@@ -267,7 +267,12 @@ def _safe_audio_play(audio_segment):
     # ✅ PRIORITY 3: simpleaudio - minimal dependencies, no CMD
     try:
         print(f"[AUDIO] Method 3: Using simpleaudio (silent)")
-        import simpleaudio as sa
+        try:
+            import simpleaudio as sa
+            simpleaudio_available = True
+        except ImportError:
+            print(f"[AUDIO] simpleaudio not available, skipping method 3")
+            raise ImportError("simpleaudio not installed")
         
         # Export to WAV dengan silent mode (sudah silent karena global suppression)
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
@@ -689,12 +694,12 @@ def speak(text: str, language_code: str = None, voice_name: str = None, output_d
         try:
             # Google Cloud credentials sudah di-setup di startup
             print(f"[DEBUG-SPEAK] ✅ Attempting Google Cloud TTS for voice: {voice_name}")
-            
+                
             try:
                 from modules_server.tts_google import speak_with_google_cloud
                 logging.info(f"[TTS] Using Google Cloud with voice: {voice_name}")
                 print(f"[DEBUG-SPEAK] Google Cloud TTS module imported successfully")
-                
+                    
                 # Use Google Cloud TTS with proper voice model
                 speak_with_google_cloud(
                     text, voice_name, language_code, output_device, 
@@ -705,7 +710,7 @@ def speak(text: str, language_code: str = None, voice_name: str = None, output_d
                 logger.info(f"TTS completed (Google Cloud) in {duration:.2f}s")
                 print(f"[DEBUG-SPEAK] ✅ Google Cloud TTS completed successfully")
                 return
-                
+                    
             except ImportError as import_error:
                 logging.error(f"[TTS] Google Cloud import error: {import_error}")
                 print(f"[DEBUG-SPEAK] ❌ Google Cloud import failed: {import_error}")
@@ -763,387 +768,387 @@ def speak(text: str, language_code: str = None, voice_name: str = None, output_d
             voice_gender = _get_voice_gender_from_config(voice_name)
             print(f"[DEBUG] Voice from config: {voice_name} ({voice_gender})")
             
-                    # ✅ ENHANCED: Apply voice-specific parameters berdasarkan gender dan voice name
-        if voice_gender == "FEMALE":
-            # Female voices: Clear, higher pitch characteristics
-            if lang == "en":
-                tts_params["tld"] = "com"  # US English - clear untuk female
-                print(f"[DEBUG-gTTS] Applied FEMALE: US English (com)")
-            elif lang == "id":
-                tts_params["slow"] = False  # Normal speed untuk female
-                print(f"[DEBUG-gTTS] Applied FEMALE: Indonesian (normal speed)")
-                
-        elif voice_gender == "MALE":
-            # Male voices: Deeper, varied accents untuk differentiation
-            if lang == "en":
-                # Enhanced male voice differentiation dengan multiple TLD dan voice-specific mapping
-                voice_lower = voice_name.lower()
-                
-                if "standard-a" in voice_lower or "standard-b" in voice_lower:
-                    tts_params["tld"] = "co.uk"  # UK accent
-                    print(f"[DEBUG-gTTS] Applied MALE: UK English (co.uk) for {voice_name}")
-                elif "standard-d" in voice_lower or "standard-i" in voice_lower:
-                    tts_params["tld"] = "com.au"  # Australian accent
-                    print(f"[DEBUG-gTTS] Applied MALE: Australian English (com.au) for {voice_name}")
-                elif "standard-j" in voice_lower or "chirp" in voice_lower:
-                    tts_params["tld"] = "ca"  # Canadian accent
-                    print(f"[DEBUG-gTTS] Applied MALE: Canadian English (ca) for {voice_name}")
-                else:
-                    # Fallback to Irish or Indian accent untuk male variety
-                    tts_params["tld"] = "ie" if hash(voice_name) % 2 == 0 else "co.in"
-                    print(f"[DEBUG-gTTS] Applied MALE: Varied accent ({tts_params['tld']}) for {voice_name}")
+            # ✅ ENHANCED: Apply voice-specific parameters berdasarkan gender dan voice name
+            if voice_gender == "FEMALE":
+                # Female voices: Clear, higher pitch characteristics
+                if lang == "en":
+                    tts_params["tld"] = "com"  # US English - clear untuk female
+                    print(f"[DEBUG-gTTS] Applied FEMALE: US English (com)")
+                elif lang == "id":
+                    tts_params["slow"] = False  # Normal speed untuk female
+                    print(f"[DEBUG-gTTS] Applied FEMALE: Indonesian (normal speed)")
                     
-            elif lang == "id":
-                # Indonesian male voices: Use slow parameter
-                tts_params["slow"] = True  # Slower untuk male differentiation
-                print(f"[DEBUG-gTTS] Applied MALE: Indonesian (slow) for {voice_name}")
-                
-        else:
-            # No gender info available, use voice name patterns
-            voice_lower = voice_name.lower() if voice_name else ""
-            
-            if lang == "en":
-                # Guess gender dari voice name pattern
-                if any(pattern in voice_lower for pattern in ["standard-a", "standard-c", "standard-e", "standard-f", "standard-g", "standard-h"]):
-                    tts_params["tld"] = "com"  # Female-like pattern
-                    print(f"[DEBUG-gTTS] Guessed FEMALE pattern: US English for {voice_name}")
-                else:
-                    tts_params["tld"] = "co.uk"  # Male-like pattern
-                    print(f"[DEBUG-gTTS] Guessed MALE pattern: UK English for {voice_name}")
-            
-            print(f"[DEBUG-gTTS] No gender info, using pattern detection for: {voice_name}")
-        
-        print(f"[DEBUG] Final gTTS parameters: {tts_params}")
-        
-        # ✅ ENHANCED: Add voice-specific text modification untuk differentiation
-        processed_text = text
-        if voice_name and voice_gender:
-            # Add subtle text processing untuk voice differentiation
-            if voice_gender == "MALE":
-                # Untuk male voice, tambah slight modification yang tidak terdengar tapi mempengaruhi TTS
-                processed_text = text.strip()
-                print(f"[DEBUG] Processing male voice text: '{processed_text}'")
-            elif voice_gender == "FEMALE": 
-                # Untuk female voice, keep original processing
-                processed_text = text.strip()
-                print(f"[DEBUG] Processing female voice text: '{processed_text}'")
-        
-        # Update parameters dengan processed text
-        tts_params["text"] = processed_text
-        print(f"[DEBUG] Final processed parameters: {tts_params}")
-        
-        # Buat TTS object dengan parameter yang sudah disesuaikan
-        try:
-            tts = gTTS(**tts_params)
-            print(f"[DEBUG] ✅ gTTS object created successfully with voice: {voice_name} ({voice_gender})")
-        except Exception as gtts_error:
-            print(f"[DEBUG] ❌ gTTS creation failed: {gtts_error}")
-            # Fallback dengan parameter minimal
-            tts = gTTS(text=processed_text, lang=lang)
-            print(f"[DEBUG] Using fallback gTTS with minimal parameters")
-        
-        # Buat safe temp path dengan improved error handling
-        print(f"[DEBUG] Creating safe temp path...")
-        try:
-            temp_path = _create_safe_temp_path(".mp3")
-        except Exception as temp_error:
-            print(f"[DEBUG] Safe temp path failed: {temp_error}")
-            # Fallback ke sistem temp sederhana
-            import tempfile
-            temp_path = tempfile.mktemp(suffix=".mp3", prefix="streammate_")
-        
-        # Save TTS dengan retry mechanism
-        print(f"[DEBUG] Saving TTS to: {temp_path}")
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                tts.save(str(temp_path))
-                break
-            except Exception as save_error:
-                print(f"[DEBUG] TTS save attempt {attempt + 1} failed: {save_error}")
-                if attempt == max_retries - 1:
-                    raise save_error
-                time.sleep(0.5)  # Wait before retry
-        
-        # Verify file exists dan readable
-        from pathlib import Path as PathlibPath
-        temp_path_obj = PathlibPath(temp_path)
-        if not temp_path_obj.exists():
-            raise FileNotFoundError(f"TTS file not created: {temp_path}")
-        
-        if temp_path_obj.stat().st_size == 0:
-            raise ValueError(f"TTS file is empty: {temp_path}")
-        
-        print(f"[DEBUG] TTS file created: {temp_path_obj.stat().st_size} bytes")
-        
-        # ✅ PERBAIKAN: Load audio TANPA FFmpeg subprocess (ROOT CAUSE FIX!)
-        print(f"[DEBUG] Loading audio WITHOUT ffmpeg subprocess...")
-        try:
-            # METODE 1: Convert MP3 ke WAV dengan hidden FFmpeg, lalu load langsung
-            import subprocess
-            import wave
-            
-            temp_wav = temp_path.with_suffix('.wav')
-            
-            # FFmpeg conversion dengan HIDDEN window
-            ffmpeg_cmd = [
-                'ffmpeg', '-i', str(temp_path), 
-                '-y', str(temp_wav)
-            ]
-            
-            # CRITICAL: Hidden window setup untuk Windows
-            startupinfo = None
-            creation_flags = 0
-            
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = subprocess.SW_HIDE
-                creation_flags = subprocess.CREATE_NO_WINDOW
-            
-            result = subprocess.run(
-                ffmpeg_cmd,
-                capture_output=True,
-                text=True,
-                startupinfo=startupinfo,
-                creationflags=creation_flags
-            )
-            
-            if result.returncode == 0:
-                # Load WAV file dengan native Python wave library (NO FFmpeg!)
-                with wave.open(str(temp_wav), 'rb') as wav_file:
-                    frames = wav_file.readframes(wav_file.getnframes())
-                    sample_rate = wav_file.getframerate()
-                    channels = wav_file.getnchannels()
-                    sample_width = wav_file.getsampwidth()
-                
-                # Create AudioSegment dari raw WAV data (NO FFmpeg subprocess!)  
-                audio = AudioSegment(
-                    data=frames,
-                    sample_width=sample_width,
-                    frame_rate=sample_rate,
-                    channels=channels
-                )
-                print(f"[DEBUG] ✅ Audio loaded WITHOUT pydub.from_file: {len(audio)}ms, {audio.frame_rate}Hz")
-                
-                # ✅ ENHANCED: Apply voice-specific audio effects untuk differentiation
-                if voice_name and voice_gender:
-                    try:
-                        if voice_gender == "MALE":
-                            # Apply male voice effects: slightly lower pitch, less bright
-                            print(f"[DEBUG] Applying MALE voice effects...")
-                            
-                            # Method 1: Lower the overall level slightly dan add bass
-                            audio = audio - 2  # Slightly quieter
-                            
-                            # Method 2: Panning atau stereo effects (optional)
-                            if audio.channels == 2:
-                                # Slight pan untuk male voice differentiation
-                                audio = audio.pan(-0.1)  # Very slight left pan
-                                print(f"[DEBUG] Applied male stereo effects")
-                                
-                        elif voice_gender == "FEMALE":
-                            # Apply female voice effects: slightly brighter, clearer
-                            print(f"[DEBUG] Applying FEMALE voice effects...")
-                            
-                            # Method 1: Boost clarity dan presence
-                            audio = audio + 1  # Slightly louder untuk clarity
-                            
-                            # Method 2: Panning atau stereo effects (optional)
-                            if audio.channels == 2:
-                                # Slight pan untuk female voice differentiation  
-                                audio = audio.pan(0.1)  # Very slight right pan
-                                print(f"[DEBUG] Applied female stereo effects")
-                                
-                        print(f"[DEBUG] ✅ Voice-specific audio effects applied for {voice_gender}")
+            elif voice_gender == "MALE":
+                # Male voices: Deeper, varied accents untuk differentiation
+                if lang == "en":
+                    # Enhanced male voice differentiation dengan multiple TLD dan voice-specific mapping
+                    voice_lower = voice_name.lower()
+                    
+                    if "standard-a" in voice_lower or "standard-b" in voice_lower:
+                        tts_params["tld"] = "co.uk"  # UK accent
+                        print(f"[DEBUG-gTTS] Applied MALE: UK English (co.uk) for {voice_name}")
+                    elif "standard-d" in voice_lower or "standard-i" in voice_lower:
+                        tts_params["tld"] = "com.au"  # Australian accent
+                        print(f"[DEBUG-gTTS] Applied MALE: Australian English (com.au) for {voice_name}")
+                    elif "standard-j" in voice_lower or "chirp" in voice_lower:
+                        tts_params["tld"] = "ca"  # Canadian accent
+                        print(f"[DEBUG-gTTS] Applied MALE: Canadian English (ca) for {voice_name}")
+                    else:
+                        # Fallback to Irish or Indian accent untuk male variety
+                        tts_params["tld"] = "ie" if hash(voice_name) % 2 == 0 else "co.in"
+                        print(f"[DEBUG-gTTS] Applied MALE: Varied accent ({tts_params['tld']}) for {voice_name}")
                         
-                    except Exception as effect_error:
-                        print(f"[DEBUG] ⚠️ Audio effects failed: {effect_error}, using original audio")
-                        # Continue dengan original audio jika effects gagal
-                
-                # Cleanup converted WAV
-                try:
-                    temp_wav.unlink()
-                except:
-                    pass
+                elif lang == "id":
+                    # Indonesian male voices: Use slow parameter
+                    tts_params["slow"] = True  # Slower untuk male differentiation
+                    print(f"[DEBUG-gTTS] Applied MALE: Indonesian (slow) for {voice_name}")
                     
             else:
-                raise Exception(f"Hidden FFmpeg conversion failed: {result.stderr}")
+                # No gender info available, use voice name patterns
+                voice_lower = voice_name.lower() if voice_name else ""
                 
-        except Exception as load_error:
-            print(f"[DEBUG] ❌ Hidden FFmpeg method failed: {load_error}")
+                if lang == "en":
+                    # Guess gender dari voice name pattern
+                    if any(pattern in voice_lower for pattern in ["standard-a", "standard-c", "standard-e", "standard-f", "standard-g", "standard-h"]):
+                        tts_params["tld"] = "com"  # Female-like pattern
+                        print(f"[DEBUG-gTTS] Guessed FEMALE pattern: US English for {voice_name}")
+                    else:
+                        tts_params["tld"] = "co.uk"  # Male-like pattern
+                        print(f"[DEBUG-gTTS] Guessed MALE pattern: UK English for {voice_name}")
+                
+                print(f"[DEBUG-gTTS] No gender info, using pattern detection for: {voice_name}")
+        
+            print(f"[DEBUG] Final gTTS parameters: {tts_params}")
             
-            # FALLBACK: Try direct AudioSegment load (sudah silent karena global suppression)
+            # ✅ ENHANCED: Add voice-specific text modification untuk differentiation
+            processed_text = text
+            if voice_name and voice_gender:
+                # Add subtle text processing untuk voice differentiation
+                if voice_gender == "MALE":
+                    # Untuk male voice, tambah slight modification yang tidak terdengar tapi mempengaruhi TTS
+                    processed_text = text.strip()
+                    print(f"[DEBUG] Processing male voice text: '{processed_text}'")
+                elif voice_gender == "FEMALE": 
+                    # Untuk female voice, keep original processing
+                    processed_text = text.strip()
+                    print(f"[DEBUG] Processing female voice text: '{processed_text}'")
+            
+            # Update parameters dengan processed text
+            tts_params["text"] = processed_text
+            print(f"[DEBUG] Final processed parameters: {tts_params}")
+            
+            # Buat TTS object dengan parameter yang sudah disesuaikan
             try:
-                print(f"[DEBUG] Trying fallback AudioSegment.from_file...")
-                
-                # Load audio file (global suppression handles silence)
-                audio = AudioSegment.from_file(str(temp_path), format="mp3")
-                print(f"[DEBUG] ✅ Fallback load successful: {len(audio)}ms")
-                    
-            except Exception as load_error2:
-                print(f"[DEBUG] ❌ All loading methods failed: {load_error2}")
-                # Create dummy audio untuk prevent crash
-                audio = AudioSegment.silent(duration=1000)  # 1 second silence
-                print(f"[DEBUG] Created fallback silence audio")
-        
-        # ✅ PERBAIKAN: Voice processing untuk memberikan variasi yang terdengar
-        if voice_name:
+                tts = gTTS(**tts_params)
+                print(f"[DEBUG] ✅ gTTS object created successfully with voice: {voice_name} ({voice_gender})")
+            except Exception as gtts_error:
+                print(f"[DEBUG] ❌ gTTS creation failed: {gtts_error}")
+                # Fallback dengan parameter minimal
+                tts = gTTS(text=processed_text, lang=lang)
+                print(f"[DEBUG] Using fallback gTTS with minimal parameters")
+            
+            # Buat safe temp path dengan improved error handling
+            print(f"[DEBUG] Creating safe temp path...")
             try:
-                voice_gender = _get_voice_gender_from_config(voice_name)
-                
-                if "standard-a" in voice_name.lower() or voice_gender == "FEMALE":
-                    # Standard A: Female voice processing
-                    try:
-                        # Increase pitch slightly untuk female characteristics
-                        audio = audio.speedup(playback_speed=1.05)  # 5% faster (higher pitch)
-                        audio = audio + 1  # Slight volume boost
-                        print(f"[DEBUG] Applied female voice processing to {voice_name}")
-                    except:
-                        audio = audio + 1  # Volume only jika speedup gagal
-                        print(f"[DEBUG] Applied female volume to {voice_name}")
-                        
-                elif "standard-b" in voice_name.lower() or voice_gender == "MALE":
-                    # Standard B: Male voice processing
-                    try:
-                        # Decrease pitch slightly untuk male characteristics
-                        audio = audio.speedup(playback_speed=0.96)  # 4% slower (lower pitch)
-                        audio = audio + 0.5  # Different volume level
-                        print(f"[DEBUG] Applied male voice processing to {voice_name}")
-                    except:
-                        audio = audio + 0.5  # Volume only jika speedup gagal
-                        print(f"[DEBUG] Applied male volume to {voice_name}")
-                        
-                elif "standard-c" in voice_name.lower():
-                    # Standard C: Alternative processing
-                    try:
-                        audio = audio.speedup(playback_speed=1.02)  # Slightly faster
-                        audio = audio + 0.8  # Different volume
-                        print(f"[DEBUG] Applied Standard-C processing to {voice_name}")
-                    except:
-                        audio = audio + 0.8
-                        print(f"[DEBUG] Applied Standard-C volume to {voice_name}")
-                        
-                elif "standard-d" in voice_name.lower():
-                    # Standard D: Alternative processing
-                    try:
-                        audio = audio.speedup(playback_speed=0.98)  # Slightly slower
-                        audio = audio + 1.2  # Different volume
-                        print(f"[DEBUG] Applied Standard-D processing to {voice_name}")
-                    except:
-                        audio = audio + 1.2
-                        print(f"[DEBUG] Applied Standard-D volume to {voice_name}")
-                        
-                else:
-                    print(f"[DEBUG] Using default processing for {voice_name}")
-                    
-            except Exception as processing_error:
-                print(f"[DEBUG] Voice processing failed: {processing_error}, using original")
-        
-        # Load VM config
-        use_dual_output = True
-        boost_vm = False
-        
-        try:
-            vm_config_path = Path("config/live_state.json")
-            if vm_config_path.exists():
-                vm_config = json.loads(vm_config_path.read_text(encoding="utf-8"))
-                vm_active = vm_config.get("virtual_mic_active", False)
-                dual_output = vm_config.get("dual_output", True)
-                boost_vm = vm_config.get("boost_virtual_mic", False)
-                
-                if vm_active and output_device is None:
-                    output_device = vm_config.get("virtual_mic_device_index")
-                    print(f"[DEBUG] Using VM device from config: {output_device}")
-                
-                use_dual_output = dual_output if output_device is not None else False
-        except Exception as e:
-            print(f"[DEBUG] VM config error: {e}")
-        
-        # Audio output processing dengan improved fallback
-        print(f"[DEBUG] Processing audio output...")
-        
-        if output_device is not None:
+                temp_path = _create_safe_temp_path(".mp3")
+            except Exception as temp_error:
+                print(f"[DEBUG] Safe temp path failed: {temp_error}")
+                # Fallback ke sistem temp sederhana
+                import tempfile
+                temp_path = tempfile.mktemp(suffix=".mp3", prefix="streammate_")
+            
+            # Save TTS dengan retry mechanism
+            print(f"[DEBUG] Saving TTS to: {temp_path}")
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    tts.save(str(temp_path))
+                    break
+                except Exception as save_error:
+                    print(f"[DEBUG] TTS save attempt {attempt + 1} failed: {save_error}")
+                    if attempt == max_retries - 1:
+                        raise save_error
+                    time.sleep(0.5)  # Wait before retry
+            
+            # Verify file exists dan readable
+            from pathlib import Path as PathlibPath
+            temp_path_obj = PathlibPath(temp_path)
+            if not temp_path_obj.exists():
+                raise FileNotFoundError(f"TTS file not created: {temp_path}")
+            
+            if temp_path_obj.stat().st_size == 0:
+                raise ValueError(f"TTS file is empty: {temp_path}")
+            
+            print(f"[DEBUG] TTS file created: {temp_path_obj.stat().st_size} bytes")
+            
+            # ✅ PERBAIKAN: Load audio TANPA FFmpeg subprocess (ROOT CAUSE FIX!)
+            print(f"[DEBUG] Loading audio WITHOUT ffmpeg subprocess...")
             try:
-                import sounddevice as sd
+                # METODE 1: Convert MP3 ke WAV dengan hidden FFmpeg, lalu load langsung
+                import subprocess
+                import wave
                 
-                samples = audio.get_array_of_samples()
-                arr = np.array(samples)
+                temp_wav = temp_path.with_suffix('.wav')
                 
-                # Boost untuk virtual mic jika diminta
-                if boost_vm:
-                    vm_arr = arr * 1.4
-                    vm_arr = np.clip(vm_arr, np.iinfo(arr.dtype).min, np.iinfo(arr.dtype).max).astype(arr.dtype)
-                else:
-                    vm_arr = arr
+                # FFmpeg conversion dengan HIDDEN window
+                ffmpeg_cmd = [
+                    'ffmpeg', '-i', str(temp_path), 
+                    '-y', str(temp_wav)
+                ]
                 
-                if use_dual_output:
-                    # DUAL OUTPUT MODE
-                    print(f"[DEBUG] Using dual output mode")
+                # CRITICAL: Hidden window setup untuk Windows
+                startupinfo = None
+                creation_flags = 0
+                
+                if os.name == 'nt':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = subprocess.SW_HIDE
+                    creation_flags = subprocess.CREATE_NO_WINDOW
+                
+                result = subprocess.run(
+                    ffmpeg_cmd,
+                    capture_output=True,
+                    text=True,
+                    startupinfo=startupinfo,
+                    creationflags=creation_flags
+                )
+                
+                if result.returncode == 0:
+                    # Load WAV file dengan native Python wave library (NO FFmpeg!)
+                    with wave.open(str(temp_wav), 'rb') as wav_file:
+                        frames = wav_file.readframes(wav_file.getnframes())
+                        sample_rate = wav_file.getframerate()
+                        channels = wav_file.getnchannels()
+                        sample_width = wav_file.getsampwidth()
                     
-                    vm_completed = threading.Event()
+                    # Create AudioSegment dari raw WAV data (NO FFmpeg subprocess!)  
+                    audio = AudioSegment(
+                        data=frames,
+                        sample_width=sample_width,
+                        frame_rate=sample_rate,
+                        channels=channels
+                    )
+                    print(f"[DEBUG] ✅ Audio loaded WITHOUT pydub.from_file: {len(audio)}ms, {audio.frame_rate}Hz")
                     
-                    def vm_thread_func():
+                    # ✅ ENHANCED: Apply voice-specific audio effects untuk differentiation
+                    if voice_name and voice_gender:
                         try:
-                            sd.play(vm_arr, audio.frame_rate, device=output_device)
-                            sd.wait()
-                            print(f"[DEBUG] VM playback completed")
-                        except Exception as e:
-                            print(f"[DEBUG] VM thread error: {e}")
-                        finally:
-                            vm_completed.set()
+                            if voice_gender == "MALE":
+                                # Apply male voice effects: slightly lower pitch, less bright
+                                print(f"[DEBUG] Applying MALE voice effects...")
+                                
+                                # Method 1: Lower the overall level slightly dan add bass
+                                audio = audio - 2  # Slightly quieter
+                                
+                                # Method 2: Panning atau stereo effects (optional)
+                                if audio.channels == 2:
+                                    # Slight pan untuk male voice differentiation
+                                    audio = audio.pan(-0.1)  # Very slight left pan
+                                    print(f"[DEBUG] Applied male stereo effects")
+                                    
+                            elif voice_gender == "FEMALE":
+                                # Apply female voice effects: slightly brighter, clearer
+                                print(f"[DEBUG] Applying FEMALE voice effects...")
+                                
+                                # Method 1: Boost clarity dan presence
+                                audio = audio + 1  # Slightly louder untuk clarity
+                                
+                                # Method 2: Panning atau stereo effects (optional)
+                                if audio.channels == 2:
+                                    # Slight pan untuk female voice differentiation  
+                                    audio = audio.pan(0.1)  # Very slight right pan
+                                    print(f"[DEBUG] Applied female stereo effects")
+                                    
+                            print(f"[DEBUG] ✅ Voice-specific audio effects applied for {voice_gender}")
+                            
+                        except Exception as effect_error:
+                            print(f"[DEBUG] ⚠️ Audio effects failed: {effect_error}, using original audio")
+                            # Continue dengan original audio jika effects gagal
                     
-                    # Start VM thread
-                    vm_thread = threading.Thread(target=vm_thread_func, daemon=True)
-                    vm_thread.start()
+                    # Cleanup converted WAV
+                    try:
+                        temp_wav.unlink()
+                    except:
+                        pass
+                        
+                else:
+                    raise Exception(f"Hidden FFmpeg conversion failed: {result.stderr}")
                     
-                    # OPTIMAL: Standard audio playback
-                    print(f"[DEBUG] Standard audio playback...")
+            except Exception as load_error:
+                print(f"[DEBUG] ❌ Hidden FFmpeg method failed: {load_error}")
+                
+                # FALLBACK: Try direct AudioSegment load (sudah silent karena global suppression)
+                try:
+                    print(f"[DEBUG] Trying fallback AudioSegment.from_file...")
+                    
+                    # Load audio file (global suppression handles silence)
+                    audio = AudioSegment.from_file(str(temp_path), format="mp3")
+                    print(f"[DEBUG] ✅ Fallback load successful: {len(audio)}ms")
+                    
+                except Exception as load_error2:
+                    print(f"[DEBUG] ❌ All loading methods failed: {load_error2}")
+                    # Create dummy audio untuk prevent crash
+                    audio = AudioSegment.silent(duration=1000)  # 1 second silence
+                    print(f"[DEBUG] Created fallback silence audio")
+            
+            # ✅ PERBAIKAN: Voice processing untuk memberikan variasi yang terdengar
+            if voice_name:
+                try:
+                    voice_gender = _get_voice_gender_from_config(voice_name)
+                    
+                    if "standard-a" in voice_name.lower() or voice_gender == "FEMALE":
+                        # Standard A: Female voice processing
+                        try:
+                            # Increase pitch slightly untuk female characteristics
+                            audio = audio.speedup(playback_speed=1.05)  # 5% faster (higher pitch)
+                            audio = audio + 1  # Slight volume boost
+                            print(f"[DEBUG] Applied female voice processing to {voice_name}")
+                        except:
+                            audio = audio + 1  # Volume only jika speedup gagal
+                            print(f"[DEBUG] Applied female volume to {voice_name}")
+                            
+                    elif "standard-b" in voice_name.lower() or voice_gender == "MALE":
+                        # Standard B: Male voice processing
+                        try:
+                            # Decrease pitch slightly untuk male characteristics
+                            audio = audio.speedup(playback_speed=0.96)  # 4% slower (lower pitch)
+                            audio = audio + 0.5  # Different volume level
+                            print(f"[DEBUG] Applied male voice processing to {voice_name}")
+                        except:
+                            audio = audio + 0.5  # Volume only jika speedup gagal
+                            print(f"[DEBUG] Applied male volume to {voice_name}")
+                            
+                    elif "standard-c" in voice_name.lower():
+                        # Standard C: Alternative processing
+                        try:
+                            audio = audio.speedup(playback_speed=1.02)  # Slightly faster
+                            audio = audio + 0.8  # Different volume
+                            print(f"[DEBUG] Applied Standard-C processing to {voice_name}")
+                        except:
+                            audio = audio + 0.8
+                            print(f"[DEBUG] Applied Standard-C volume to {voice_name}")
+                            
+                    elif "standard-d" in voice_name.lower():
+                        # Standard D: Alternative processing
+                        try:
+                            audio = audio.speedup(playback_speed=0.98)  # Slightly slower
+                            audio = audio + 1.2  # Different volume
+                            print(f"[DEBUG] Applied Standard-D processing to {voice_name}")
+                        except:
+                            audio = audio + 1.2
+                            print(f"[DEBUG] Applied Standard-D volume to {voice_name}")
+                            
+                    else:
+                        print(f"[DEBUG] Using default processing for {voice_name}")
+                        
+                except Exception as processing_error:
+                    print(f"[DEBUG] Voice processing failed: {processing_error}, using original")
+            
+            # Load VM config
+            use_dual_output = True
+            boost_vm = False
+            
+            try:
+                vm_config_path = Path("config/live_state.json")
+                if vm_config_path.exists():
+                    vm_config = json.loads(vm_config_path.read_text(encoding="utf-8"))
+                    vm_active = vm_config.get("virtual_mic_active", False)
+                    dual_output = vm_config.get("dual_output", True)
+                    boost_vm = vm_config.get("boost_virtual_mic", False)
+                    
+                    if vm_active and output_device is None:
+                        output_device = vm_config.get("virtual_mic_device_index")
+                        print(f"[DEBUG] Using VM device from config: {output_device}")
+                    
+                    use_dual_output = dual_output if output_device is not None else False
+            except Exception as e:
+                print(f"[DEBUG] VM config error: {e}")
+            
+            # Audio output processing dengan improved fallback
+            print(f"[DEBUG] Processing audio output...")
+            
+            if output_device is not None:
+                try:
+                    import sounddevice as sd
+                    
+                    samples = audio.get_array_of_samples()
+                    arr = np.array(samples)
+                    
+                    # Boost untuk virtual mic jika diminta
+                    if boost_vm:
+                        vm_arr = arr * 1.4
+                        vm_arr = np.clip(vm_arr, np.iinfo(arr.dtype).min, np.iinfo(arr.dtype).max).astype(arr.dtype)
+                    else:
+                        vm_arr = arr
+                    
+                    if use_dual_output:
+                        # DUAL OUTPUT MODE
+                        print(f"[DEBUG] Using dual output mode")
+                        
+                        vm_completed = threading.Event()
+                        
+                        def vm_thread_func():
+                            try:
+                                sd.play(vm_arr, audio.frame_rate, device=output_device)
+                                sd.wait()
+                                print(f"[DEBUG] VM playback completed")
+                            except Exception as e:
+                                print(f"[DEBUG] VM thread error: {e}")
+                            finally:
+                                vm_completed.set()
+                        
+                        # Start VM thread
+                        vm_thread = threading.Thread(target=vm_thread_func, daemon=True)
+                        vm_thread.start()
+                        
+                        # OPTIMAL: Standard audio playback
+                        print(f"[DEBUG] Standard audio playback...")
+                        success = _safe_audio_play(audio)
+                        if not success:
+                            print(f"[AUDIO] ⚠️ Audio playback failed, but continuing...")
+                        
+                        # Wait for VM thread
+                        vm_completed.wait(timeout=15.0)
+                        
+                    else:
+                        # VM ONLY MODE  
+                        print(f"[DEBUG] VM only mode (device {output_device})")
+                        sd.play(vm_arr, audio.frame_rate, device=output_device)
+                        sd.wait()
+                    
+                except Exception as e:
+                    logging.error(f"[TTS] Sounddevice error: {e}")
+                    print(f"[DEBUG] Sounddevice failed: {e}, fallback to Windows-native")
+                    
+                    # Standard fallback audio playback
                     success = _safe_audio_play(audio)
                     if not success:
                         print(f"[AUDIO] ⚠️ Audio playback failed, but continuing...")
-                    
-                    # Wait for VM thread
-                    vm_completed.wait(timeout=15.0)
-                    
-                else:
-                    # VM ONLY MODE  
-                    print(f"[DEBUG] VM only mode (device {output_device})")
-                    sd.play(vm_arr, audio.frame_rate, device=output_device)
-                    sd.wait()
+            else:
+                # OPTIMAL: Standard playback - SIMPLE & RELIABLE
+                print(f"[DEBUG] Standard audio playback")
                 
-            except Exception as e:
-                logging.error(f"[TTS] Sounddevice error: {e}")
-                print(f"[DEBUG] Sounddevice failed: {e}, fallback to Windows-native")
-                
-                # Standard fallback audio playback
-                success = _safe_audio_play(audio)
-                if not success:
-                    print(f"[AUDIO] ⚠️ Audio playback failed, but continuing...")
-        else:
-            # OPTIMAL: Standard playback - SIMPLE & RELIABLE
-            print(f"[DEBUG] Standard audio playback")
+                try:
+                    # Main playback method
+                    success = _safe_audio_play(audio)
+                    if success:
+                        print(f"[DEBUG] ✅ Audio playback successful")
+                    else:
+                        print(f"[DEBUG] ⚠️ Audio playback failed, but TTS completed")
+                        
+                except Exception as e:
+                    print(f"[DEBUG] Audio playback error: {e}, but TTS completed")
             
-            try:
-                # Main playback method
-                success = _safe_audio_play(audio)
-                if success:
-                    print(f"[DEBUG] ✅ Audio playback successful")
-                else:
-                    print(f"[DEBUG] ⚠️ Audio playback failed, but TTS completed")
-                    
-            except Exception as e:
-                print(f"[DEBUG] Audio playback error: {e}, but TTS completed")
-        
-        print(f"[DEBUG] Audio processing completed")
-        
-        # Success callback
-        safe_callback()
-        
-        # Success logging
-        duration = time.time() - start_time
-        logger.info(f"TTS completed (gTTS) in {duration:.2f}s")
-        
+            print(f"[DEBUG] Audio processing completed")
+            
+            # Success callback
+            safe_callback()
+            
+            # Success logging
+            duration = time.time() - start_time
+            logger.info(f"TTS completed (gTTS) in {duration:.2f}s")
+            
     except Exception as e:
         # Error logging
         error_msg = f"gTTS failed: {str(e)}"

@@ -1,0 +1,263 @@
+# .cursorrules - StreamMate AI Development Rules
+# ATURAN DEVELOPMENT YANG SANGAT KETAT DAN EFEKTIF
+
+## 🔒 CRITICAL PROTECTION RULES - JANGAN PERNAH DILANGGAR ##
+
+### PROTECTED FILES - JANGAN DIUBAH TANPA KONFIRMASI ###
+- auth/login.js (sistem autentikasi berjalan sempurna)
+- payment/stripe.js (pemrosesan pembayaran stabil)
+- api/users.js (manajemen user berfungsi baik)
+- config/database.js (koneksi DB stabil)
+- modules_server/license_manager.py (lisensi system working)
+- modules_server/credit_wallet.py (sistem kredit berjalan baik)
+- modules_server/tts_engine.py (TTS engine stabil)
+- modules_client/pytchat_listener.py (listener YouTube berjalan)
+
+### PROTECTED FUNCTIONS - JANGAN DIUBAH ###
+- handleUserLogin()
+- processPayment()
+- saveUserData()
+- connectDatabase()
+- validate_license()
+- process_credit_transaction()
+- generate_tts_audio()
+- handle_chat_message()
+
+## 🎯 PRINSIP DEVELOPMENT UTAMA ##
+
+### 1. FOKUS PADA SATU MASALAH PER SESI ###
+- Identifikasi masalah utama dengan jelas
+- Selesaikan satu bug/fitur sebelum lanjut ke yang lain
+- Jangan mencampur multiple issues dalam satu perubahan
+- Dokumentasikan setiap langkah penyelesaian
+
+### 2. MINIMAL CHANGES ONLY ###
+- Ubah HANYA kode yang diperlukan untuk menyelesaikan masalah
+- Jangan refactor kode yang sudah berfungsi
+- Pertahankan struktur dan naming convention yang ada
+- Preserve semua comment dan formatting yang ada
+
+### 3. PEMAHAMAN KONTEKS MENDALAM ###
+- Selalu baca dan pahami konteks yang diberikan user
+- Analisis error log dengan teliti
+- Understand dependency dan impact dari setiap perubahan
+- Trace root cause dari setiap masalah
+
+## 📋 WORKFLOW SISTEMATIS ##
+
+### SEBELUM MEMBUAT PERUBAHAN ###
+```
+1. ANALISIS MASALAH
+   - Baca error message dengan teliti
+   - Identifikasi file dan fungsi yang terkait
+   - Understand flow dari masalah tersebut
+
+2. PLANNING SOLUSI
+   - Buat rencana step-by-step
+   - Identifikasi file yang perlu diubah
+   - Tentukan approach yang paling minimal
+
+3. KONFIRMASI DENGAN USER
+   - Jelaskan masalah yang ditemukan
+   - Proposal solusi yang akan diterapkan
+   - Minta konfirmasi sebelum melakukan perubahan penting
+```
+
+### SAAT MEMBUAT PERUBAHAN ###
+```
+1. BACKUP CONSIDERATION
+   - Pastikan ada backup dari file yang akan diubah
+   - Catat perubahan yang akan dilakukan
+
+2. IMPLEMENT SOLUTION
+   - Buat perubahan minimal dan targeted
+   - Test setiap perubahan secara bertahap
+   - Validate bahwa fix tidak break hal lain
+
+3. VERIFICATION
+   - Test fungsi yang diubah
+   - Verify fungsi lain masih berjalan
+   - Check untuk side effects
+```
+
+## 🗣️ KOMUNIKASI DENGAN USER ##
+
+### SEBELUM PERUBAHAN ###
+```
+"Saya akan menyelesaikan masalah [MASALAH] dengan cara:
+1. Mengubah file: [FILE_LIST]
+2. Modifikasi fungsi: [FUNCTION_LIST] 
+3. Yang TIDAK akan diubah: [PROTECTED_ITEMS]
+4. Potensi side effects: [EFFECTS]
+
+Apakah Anda setuju dengan pendekatan ini?"
+```
+
+### SETELAH PERUBAHAN ###
+```
+"Perubahan telah diselesaikan:
+✅ Yang diubah: [CHANGES_MADE]
+✅ Yang tetap aman: [PROTECTED_ITEMS]
+🔍 Testing diperlukan: [TEST_STEPS]
+⚠️ Rollback jika ada masalah: [ROLLBACK_STEPS]
+```
+
+## 🚫 FORBIDDEN ACTIONS ##
+
+### JANGAN PERNAH LAKUKAN ###
+- Suggest "improvement" untuk kode yang sudah berfungsi
+- Refactor tanpa alasan critical bug
+- Ubah struktur file tanpa permintaan eksplisit
+- Modifikasi CSS/styling yang sudah berfungsi
+- Update dependencies tanpa kebutuhan mendesak
+- Hapus comment atau documentation yang ada
+- Ubah naming convention yang sudah established
+
+### HINDARI PERUBAHAN BERISIKO ###
+- Jangan ubah core authentication flow
+- Jangan modifikasi payment processing logic
+- Jangan alter database schema tanpa backup
+- Jangan update production config tanpa testing
+- Jangan change API endpoints yang sudah digunakan
+
+## 🧪 TESTING REQUIREMENTS ##
+
+### SETIAP PERUBAHAN HARUS DISERTAI ###
+```
+1. TESTING CHECKLIST
+   - Fungsi yang diubah bekerja dengan baik
+   - Fungsi existing masih berfungsi normal
+   - Tidak ada regression di fitur lain
+   - Performance tidak terdegradasi
+
+2. VERIFICATION STEPS
+   - Manual testing untuk happy path
+   - Edge case testing
+   - Error handling verification
+   - Integration testing dengan komponen lain
+```
+
+### ROLLBACK PLAN ###
+```
+Jika ada masalah setelah perubahan:
+1. Immediately suggest: git checkout [FILE] atau git revert [COMMIT]
+2. Provide specific rollback commands
+3. Explain how to verify rollback successful
+4. Offer alternative solution approach
+```
+
+## 🏗️ PROBLEM SOLVING METHODOLOGY ##
+
+### SYSTEMATIC APPROACH ###
+```
+1. PROBLEM IDENTIFICATION
+   - Exact error message analysis
+   - Affected components identification
+   - User impact assessment
+   - Root cause analysis
+
+2. SOLUTION DESIGN
+   - Multiple solution options
+   - Risk assessment for each option
+   - Minimal change approach selection
+   - Implementation plan creation
+
+3. EXECUTION
+   - Step-by-step implementation
+   - Continuous validation
+   - Progress communication
+   - Issue tracking
+
+4. VERIFICATION
+   - Comprehensive testing
+   - Performance validation
+   - User acceptance confirmation
+   - Documentation update
+```
+
+## 📊 MONITORING & FEEDBACK ##
+
+### SETELAH SETIAP PERUBAHAN ###
+```
+1. IMMEDIATE MONITORING
+   - Check logs for new errors
+   - Monitor system performance
+   - Verify user functionality
+   - Track any anomalies
+
+2. FEEDBACK COLLECTION
+   - User experience validation
+   - Performance impact assessment
+   - Bug report monitoring
+   - System stability check
+```
+
+## 🔧 EMERGENCY PROTOCOL ##
+
+### JIKA USER MELAPORKAN SISTEM RUSAK ###
+```
+1. IMMEDIATE RESPONSE
+   - Stop all development activities
+   - Assess damage scope
+   - Provide immediate rollback solution
+   - Communicate clearly with user
+
+2. RECOVERY ACTIONS
+   - git rollback to last working state
+   - Restore from backup if needed
+   - Verify system functionality
+   - Document incident for future prevention
+
+3. ROOT CAUSE ANALYSIS
+   - Identify what went wrong
+   - Understand why protection failed
+   - Update rules to prevent recurrence
+   - Improve testing procedures
+```
+
+## 🎯 QUALITY ASSURANCE ##
+
+### SETIAP SOLUSI HARUS ###
+- Menyelesaikan masalah utama 100%
+- Tidak menimbulkan masalah baru
+- Maintainable dan readable
+- Documented dengan baik
+- Tested secara menyeluruh
+- Approved oleh user untuk perubahan penting
+
+### CODE QUALITY STANDARDS ###
+- Consistent dengan style yang ada
+- Proper error handling
+- Logging yang adequate
+- Performance optimized
+- Security considerations
+- Backward compatibility maintained
+
+## 📝 DOCUMENTATION REQUIREMENTS ##
+
+### SETIAP PERUBAHAN HARUS DIDOKUMENTASIKAN ###
+```
+1. CHANGE LOG
+   - What was changed
+   - Why it was changed
+   - How it was implemented
+   - Impact assessment
+
+2. USER COMMUNICATION
+   - Clear explanation in Indonesian
+   - Step-by-step process
+   - Before/after comparison
+   - Next steps recommendation
+```
+
+---
+
+## 🎪 SUMMARY RULES ##
+
+**REMEMBER: STABILITY > FEATURES**
+**MINIMAL CHANGES > EXTENSIVE REFACTORING**
+**USER CONFIRMATION > ASSUMPTIONS**
+**SYSTEMATIC APPROACH > QUICK FIXES**
+**CLEAR COMMUNICATION > TECHNICAL JARGON**
+
+*Setiap perubahan harus membuat sistem lebih stabil, bukan sebaliknya.* 
