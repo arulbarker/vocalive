@@ -1,0 +1,114 @@
+# StreamMate AI - Git Attributes Configuration
+# Prevents Git errors and handles file types properly
+
+# =============================================================================
+# LINE ENDING HANDLING - Prevents LF/CRLF warnings
+# =============================================================================
+
+# Text files - auto normalize line endings
+*.py text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+
+# Windows specific files - keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Configuration files
+*.ini text eol=lf
+*.cfg text eol=lf
+*.conf text eol=lf
+.cursorrules text eol=lf
+requirements.txt text eol=lf
+
+# =============================================================================
+# BINARY FILES - Prevents Git from trying to merge/diff
+# =============================================================================
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.webp binary
+
+# Audio/Video
+*.mp3 binary
+*.wav binary
+*.mp4 binary
+*.avi binary
+*.mov binary
+
+# Documents
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.zip binary
+*.rar binary
+*.7z binary
+
+# Executables
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+
+# Python compiled
+*.pyc binary
+*.pyo binary
+*.pyd binary
+
+# Database files
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Archives
+*.gz binary
+*.tar binary
+*.tgz binary
+
+# =============================================================================
+# SPECIAL HANDLING - Prevents specific Git issues
+# =============================================================================
+
+# Large files (use Git LFS if needed)
+*.exe filter=lfs diff=lfs merge=lfs -text
+*.msi filter=lfs diff=lfs merge=lfs -text
+*.dmg filter=lfs diff=lfs merge=lfs -text
+
+# Temp and cache files - Git should ignore but if tracked, handle as binary
+*.tmp binary
+*.cache binary
+*.log binary
+
+# IDE files
+.vscode/* text eol=lf
+*.code-workspace text eol=lf
+
+# =============================================================================
+# DIFF AND MERGE STRATEGIES
+# =============================================================================
+
+# Python files - use Python-aware diff
+*.py diff=python
+
+# JSON files - pretty print in diffs
+*.json diff=json
+
+# Markdown files - use text diff
+*.md diff=text 

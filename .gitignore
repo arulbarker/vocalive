@@ -59,4 +59,119 @@ __pycache__/
 
 # System files
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# =============================================================================
+# ADDITIONAL ENTRIES TO PREVENT GIT ERRORS
+# =============================================================================
+
+# Git-specific files that can cause conflicts
+*.orig
+*.rej
+*.patch
+.git/rebase-apply/
+.git/rebase-merge/
+
+# Backup files that editors create
+*~
+*.bak
+*.backup
+*.swp
+*.swo
+
+# Node.js (if any JS components added)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python specific
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE specific
+*.suo
+*.user
+*.ncb
+*.aps
+*.iml
+.project
+.classpath
+
+# Windows specific
+desktop.ini
+ehthumbs.db
+*.stackdump
+
+# Mac specific
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Test coverage
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.pytest_cache/
+
+# Environment files that can cause config conflicts
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Local configuration overrides
+*local.json
+*local.conf
+*local.ini
+*local.yaml
+*local.yml
+
+# Audio/Video files that are too large
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+*.mp3
+*.wav
+*.flac
+
+# Database backups (can be very large)
+*.sql
+*.dump
+*.backup
+
+# Compiled extensions
+*.so
+*.dll
+*.dylib
+
+# Lock files that can cause dependency conflicts
+poetry.lock
+Pipfile.lock
+yarn.lock
+package-lock.json
+
+# Error logs and crash dumps
+error.log
+crash.log
+*.dmp
+
+# Temporary Git files
+*.git-rewrite-backup
+.git/COMMIT_EDITMSG
+.git/MERGE_HEAD
+.git/MERGE_MSG
+.git/FETCH_HEAD
+
+# User-specific config files that shouldn't be shared
+user_config.json
+personal_settings.json
+local_settings.py 
