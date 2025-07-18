@@ -1,0 +1,41 @@
+{
+  "video_id": "619DulHIi5g",
+  "reply_mode": "Trigger",
+  "paket": "basic",
+  "user_data": {
+    "email": "asrulmursalin007@gmail.com",
+    "last_login": "2025-06-10T18:16:02.466890"
+  },
+  "app_version": "v1.0.0-basic",
+  "last_update_check": 1749484960.7826166,
+  "trigger_words": [
+    "bang"
+  ],
+  "trigger_word": "",
+  "platform": "YouTube",
+  "cohost_cooldown": 6,
+  "viewer_cooldown_minutes": 1,
+  "overlay_settings": {
+    "bg_rgba": [
+      0,
+      0,
+      0,
+      128
+    ],
+    "text_color": "#FFFFFF",
+    "font_size": 14,
+    "position": "bottom-right",
+    "duration": 5,
+    "animation": "slide-left",
+    "display_mode": "normal",
+    "width": 400,
+    "height": 100,
+    "auto_size": true,
+    "show_overlay": false
+  },
+  "tiktok_nickname": "@undeadbaron",
+  "selected_mic_index": 1,
+  "cohost_hotkey": "Ctrl+Shift+X",
+  "custom_context": "kamu adaalh streamer sedang bermain game the sims dan saat ini akan membuat rumah casual ala eropa jawab penonton sesuai konteks abaikan jika membahas game lain",
+  "enable_topic_blocking": false
+}

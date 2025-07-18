@@ -1,0 +1,13 @@
+{
+  "backup_time": "2025-06-18T17:31:40.530390",
+  "backup_type": "startup",
+  "original_size": 24576,
+  "compressed_size": 970,
+  "database_stats": {
+    "licenses_count": 1,
+    "transaction_history_count": 1,
+    "credit_usage_history_count": 3,
+    "total_credits": 927.6,
+    "active_users": 1
+  }
+}

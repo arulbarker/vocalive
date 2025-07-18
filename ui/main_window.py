@@ -488,8 +488,8 @@ class MainWindow(QMainWindow):
                     logger.info(f"Subscription status: {status}, Hours: {hours_credit}")
                     
                     # CASE 1: User berbayar dengan kredit cukup
-                    if status == "paid" and hours_credit >= 1.0:  # Minimal 1 kredit
-                        logger.info("User has sufficient credit, going to basic mode")
+                    if status in ["paid", "active"] and hours_credit >= 1.0:  # Minimal 1 kredit
+                        logger.info(f"User has sufficient credit ({hours_credit}), going to basic mode")
                         self.pilih_paket("basic")
                         return
                         
@@ -667,11 +667,24 @@ class MainWindow(QMainWindow):
             self.update_license_status()
             
             # PERBAIKAN: Cek apakah user sudah memiliki langganan valid
-            if license_data.get("is_valid", False):
-                tier = license_data.get("tier", "basic")
-                # PERBAIKAN: Gunakan credit_balance dengan fallback ke hours_credit
-                credit_balance = float(license_data.get("credit_balance", license_data.get("hours_credit", 0)))
-                source = license_data.get("source", "unknown")
+            # Support both direct is_valid and Supabase response format
+            is_valid = (license_data.get("is_valid", False) or 
+                       (license_data.get("status") == "success" and 
+                        license_data.get("data", {}).get("is_valid", False)))
+            
+            if is_valid:
+                # Extract data from either direct format or Supabase response
+                if license_data.get("status") == "success" and "data" in license_data:
+                    # Supabase response format
+                    data = license_data["data"]
+                    tier = data.get("tier", "basic")
+                    credit_balance = float(data.get("credit_balance", data.get("hours_credit", 0)))
+                    source = "supabase"
+                else:
+                    # Direct format
+                    tier = license_data.get("tier", "basic")
+                    credit_balance = float(license_data.get("credit_balance", license_data.get("hours_credit", 0)))
+                    source = license_data.get("source", "unknown")
                 
                 # Tambahkan debug print untuk memahami alur program
                 print(f"[DEBUG_STARTUP] Valid license found. Tier: {tier}, Credits: {credit_balance}, Source: {source}")
@@ -699,15 +712,11 @@ class MainWindow(QMainWindow):
                     except Exception as e:
                         print(f"[DEBUG_STARTUP] Error reading local credit: {e}")
                 
-                # JIKA KREDIT >= 50, JANGAN TAMPILKAN NOTIFIKASI APAPUN
-                if credit_balance >= 50:
-                    print(f"[DEBUG_STARTUP] User has sufficient credits ({credit_balance}). Activating {tier} mode without notifications.")
+                # PERBAIKAN: Jika user memiliki kredit yang cukup, langsung aktifkan mode basic
+                if credit_balance >= 1.0:  # Minimal 1 kredit untuk basic mode
+                    print(f"[DEBUG_STARTUP] User has sufficient credits ({credit_balance}). Activating {tier} mode.")
                     # Auto-activate jika sudah ada subscription
                     QTimer.singleShot(1500, lambda: self.pilih_paket(tier))
-                    return
-                elif credit_balance > 0:
-                    print(f"[DEBUG_STARTUP] User has low credits ({credit_balance} < 50). Showing subscription tab.")
-                    # Jangan tampilkan notifikasi, biarkan user lihat subscription tab
                     return
                     
                 # Jika kredit habis, tampilkan notifikasi khusus
@@ -720,7 +729,7 @@ class MainWindow(QMainWindow):
                 return
                 
             # Jika lisensi tidak valid atau tidak ada subscription
-            print(f"[DEBUG_STARTUP] No valid license. Reason: {license_data.get('reason')}, Message: {license_data.get('message')}")
+            print(f"[DEBUG_STARTUP] License validation result: Valid={license_data.get('is_valid', False)}, Message: {license_data.get('message')}")
             QTimer.singleShot(2000, lambda: QMessageBox.information(
                 self,
                 "Subscription Status",
@@ -796,10 +805,46 @@ class MainWindow(QMainWindow):
             with open(subscription_file, 'r', encoding='utf-8') as f:
                 sub_data = json.load(f)
             
-            return {
-                "basic": sub_data.get("basic", {}).get("active", False),
-                "cohost_seller": sub_data.get("cohost_seller", {}).get("active", False)
+            # PERBAIKAN: Support both old and new subscription structures
+            basic_active = False
+            cohost_seller_active = False
+            
+            # Method 1: Check new structure (specific package purchases)
+            if "basic" in sub_data and isinstance(sub_data["basic"], dict):
+                basic_active = sub_data["basic"].get("active", False)
+            
+            if "cohost_seller" in sub_data and isinstance(sub_data["cohost_seller"], dict):
+                cohost_seller_active = sub_data["cohost_seller"].get("active", False)
+            
+            # Method 2: Check old structure (general status + package + credits)
+            if not basic_active and not cohost_seller_active:
+                status = sub_data.get("status", "")
+                package = sub_data.get("package", "")
+                tier = sub_data.get("tier", "")
+                credit_balance = float(sub_data.get("credit_balance", sub_data.get("hours_credit", 0)))
+                is_valid = sub_data.get("is_valid", False)
+                
+                # User has active subscription with credits = basic access
+                if (status in ["active", "paid"] and 
+                    (package == "basic" or tier == "basic") and 
+                    credit_balance > 0 and 
+                    is_valid):
+                    basic_active = True
+                    print(f"[DEBUG] PACKAGE_CHECK: Detected basic access via old structure - Status: {status}, Credits: {credit_balance}")
+                
+                # Check for cohost_seller package
+                if package == "cohost_seller" or tier == "cohost_seller":
+                    cohost_seller_active = True
+                    print(f"[DEBUG] PACKAGE_CHECK: Detected cohost_seller access via old structure")
+            
+            result = {
+                "basic": basic_active,
+                "cohost_seller": cohost_seller_active
             }
+            
+            print(f"[DEBUG] PACKAGE_CHECK: Final result: {result}")
+            return result
+            
         except Exception as e:
             logger.error(f"Error checking purchased packages: {e}")
             return {"basic": False, "cohost_seller": False}
