@@ -269,6 +269,42 @@ except ImportError:
         COHOST_SELLER_AVAILABLE = False
         print("[WARNING] CohostSellerTab not available")
 
+# Import CoHost Pro tab
+try:
+    from ui.cohost_tab_pro import CohostTabPro
+    COHOST_PRO_AVAILABLE = True
+except ImportError:
+    try:
+        from cohost_tab_pro import CohostTabPro
+        COHOST_PRO_AVAILABLE = True
+    except ImportError:
+        COHOST_PRO_AVAILABLE = False
+        print("[WARNING] CohostTabPro not available")
+
+# Import Viewers tab
+try:
+    from ui.viewers_tab import ViewersTab
+    VIEWERS_AVAILABLE = True
+except ImportError:
+    try:
+        from viewers_tab import ViewersTab
+        VIEWERS_AVAILABLE = True
+    except ImportError:
+        VIEWERS_AVAILABLE = False
+        print("[WARNING] ViewersTab not available")
+
+# Import Virtual Mic tab
+try:
+    from ui.virtual_mic_tab import VirtualMicTab
+    VIRTUAL_MIC_AVAILABLE = True
+except ImportError:
+    try:
+        from virtual_mic_tab import VirtualMicTab
+        VIRTUAL_MIC_AVAILABLE = True
+    except ImportError:
+        VIRTUAL_MIC_AVAILABLE = False
+        print("[WARNING] VirtualMicTab not available")
+
 # Import Credit Wallet tab
 try:
     from ui.credit_wallet_tab import CreditWalletTab
@@ -808,6 +844,7 @@ class MainWindow(QMainWindow):
             # PERBAIKAN: Support both old and new subscription structures
             basic_active = False
             cohost_seller_active = False
+            pro_active = False
             
             # Method 1: Check new structure (specific package purchases)
             if "basic" in sub_data and isinstance(sub_data["basic"], dict):
@@ -816,8 +853,11 @@ class MainWindow(QMainWindow):
             if "cohost_seller" in sub_data and isinstance(sub_data["cohost_seller"], dict):
                 cohost_seller_active = sub_data["cohost_seller"].get("active", False)
             
+            if "pro" in sub_data and isinstance(sub_data["pro"], dict):
+                pro_active = sub_data["pro"].get("active", False)
+            
             # Method 2: Check old structure (general status + package + credits)
-            if not basic_active and not cohost_seller_active:
+            if not basic_active and not cohost_seller_active and not pro_active:
                 status = sub_data.get("status", "")
                 package = sub_data.get("package", "")
                 tier = sub_data.get("tier", "")
@@ -836,10 +876,16 @@ class MainWindow(QMainWindow):
                 if package == "cohost_seller" or tier == "cohost_seller":
                     cohost_seller_active = True
                     print(f"[DEBUG] PACKAGE_CHECK: Detected cohost_seller access via old structure")
+                
+                # Check for pro package
+                if package == "pro" or tier == "pro":
+                    pro_active = True
+                    print(f"[DEBUG] PACKAGE_CHECK: Detected pro access via old structure")
             
             result = {
                 "basic": basic_active,
-                "cohost_seller": cohost_seller_active
+                "cohost_seller": cohost_seller_active,
+                "pro": pro_active
             }
             
             print(f"[DEBUG] PACKAGE_CHECK: Final result: {result}")
@@ -847,7 +893,7 @@ class MainWindow(QMainWindow):
             
         except Exception as e:
             logger.error(f"Error checking purchased packages: {e}")
-            return {"basic": False, "cohost_seller": False}
+            return {"basic": False, "cohost_seller": False, "pro": False}
 
     def pilih_paket(self, paket):
         """Initialize main UI based on actually purchased packages."""
@@ -861,7 +907,9 @@ class MainWindow(QMainWindow):
             print(f"[DEBUG] PILIH_PAKET: Purchased packages: {purchased}")
 
             # Determine which mode to use based on purchases
-            if purchased["cohost_seller"]:
+            if purchased["pro"]:
+                actual_mode = "pro"
+            elif purchased["cohost_seller"]:
                 actual_mode = "cohost_seller"
             elif purchased["basic"]:
                 actual_mode = "basic"
@@ -889,7 +937,9 @@ class MainWindow(QMainWindow):
             print(f"[DEBUG] PILIH_PAKET: Main tabs added to stack and set as current")
 
             # Update status
-            if purchased["cohost_seller"]:
+            if purchased["pro"]:
+                self.status_bar.showMessage(f"StreamMate Pro activated", 5000)
+            elif purchased["cohost_seller"]:
                 self.status_bar.showMessage(f"StreamMate CoHost Seller activated", 5000)
             else:
                 self.status_bar.showMessage(f"StreamMate Basic activated", 5000)
@@ -976,6 +1026,44 @@ class MainWindow(QMainWindow):
                 layout.addWidget(label)
                 tabs.addTab(placeholder, "🔒 Basic Features")
                 print("[INFO] Basic features locked - user needs to purchase")
+
+            # Only show CoHost Pro if that package is purchased
+            if purchased["pro"]:
+                if COHOST_PRO_AVAILABLE:
+                    self.cohost_pro_tab = CohostTabPro()
+                    tabs.addTab(self.cohost_pro_tab, "🚀 CoHost Pro")
+                    print("[INFO] CoHost Pro tab added (Pro purchased)")
+                else:
+                    placeholder = QWidget()
+                    layout = QVBoxLayout(placeholder)
+                    label = QLabel("🚀 CoHost Pro\n\n(Under development)")
+                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    label.setStyleSheet("font-size: 16px; color: #888;")
+                    layout.addWidget(label)
+                    tabs.addTab(placeholder, "🚀 CoHost Pro")
+                    print("[WARNING] CoHost Pro tab not available - using placeholder")
+                
+                # Add Virtual Mic tab for Pro users
+                if VIRTUAL_MIC_AVAILABLE:
+                    self.virtual_mic_tab = VirtualMicTab()
+                    tabs.addTab(self.virtual_mic_tab, "🎚️ Virtual Mic")
+                    print("[INFO] Virtual Mic tab added (Pro purchased)")
+                
+                # Add Viewers tab for Pro users
+                if VIEWERS_AVAILABLE:
+                    self.viewers_tab = ViewersTab()
+                    tabs.addTab(self.viewers_tab, "👥 Viewers")
+                    print("[INFO] Viewers tab added (Pro purchased)")
+            else:
+                # Show locked placeholder for CoHost Pro
+                placeholder = QWidget()
+                layout = QVBoxLayout(placeholder)
+                label = QLabel("🔒 CoHost Pro Locked\n\nPurchase CoHost Pro package\nwith credits to unlock")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                label.setStyleSheet("font-size: 16px; color: #888;")
+                layout.addWidget(label)
+                tabs.addTab(placeholder, "🔒 CoHost Pro")
+                print("[INFO] CoHost Pro locked - user needs to purchase")
 
             # Only show CoHost Seller if that package is purchased
             if purchased["cohost_seller"]:
@@ -1514,6 +1602,33 @@ class MainWindow(QMainWindow):
         """Aktifkan mode dari subscription tab."""
         try:
             logger.info(f"Activating {package} mode from subscription tab")
+            
+            if package == "pro":
+                # Handle Pro activation
+                QMessageBox.information(
+                    self, "CoHost Pro Activated! 🚀",
+                    "CoHost Pro package has been activated!\n\n"
+                    "✅ All Basic features\n"
+                    "✅ Sequential & Delay Mode\n"
+                    "✅ Premium Google Chirp3 TTS\n"
+                    "✅ Virtual Microphone\n"
+                    "✅ Viewer Management\n"
+                    "✅ Advanced Analytics\n\n"
+                    "You can now access CoHost Pro features in the main tabs!"
+                )
+                
+                # Navigate to CoHost Pro tab if available
+                if hasattr(self, 'main_tabs') and self.main_tabs:
+                    for i in range(self.main_tabs.count()):
+                        tab_text = self.main_tabs.tabText(i)
+                        if "cohost pro" in tab_text.lower():
+                            self.main_tabs.setCurrentIndex(i)
+                            break
+                else:
+                    # Create main tabs if not exists
+                    self.pilih_paket("pro")
+                
+                return
             
             if package == "cohost_seller":
                 # Handle CoHost Seller activation

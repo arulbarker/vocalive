@@ -145,12 +145,17 @@ class ConfigManager:
         """Paksa aplikasi ke production mode"""
         self.set("debug_mode", False)
         self.set("testing_mode", False)
+        self.set("development_mode", False)
         
         # Hapus flag developer
         user_data = self.get("user_data", {})
         if "dev_mode" in user_data:
             del user_data["dev_mode"]
-            self.set("user_data", user_data)
+        if "developer" in user_data:
+            del user_data["developer"]
+        if "is_dev" in user_data:
+            del user_data["is_dev"]
+        self.set("user_data", user_data)
         
         print("[CONFIG] Forced production mode settings")
 

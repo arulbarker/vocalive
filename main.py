@@ -108,44 +108,10 @@ logger.info(f"Root directory: {ROOT}")
 logger.info(f"Platform: {sys.platform}")
 logger.info("=" * 60)
 
-# ========== AUTO-DETECT MODE ==========
+# ========== FORCE PRODUCTION MODE ==========
 def detect_application_mode():
-    """Auto-detect mode dengan prioritas environment variable"""
-    
-    # 1. PRIORITAS UTAMA: Environment variable
-    env_dev = os.getenv("STREAMMATE_DEV", "").lower()
-    if env_dev == "true":
-        print("[DEV] MODE: Development (Environment Variable)")
-        return "development"
-    elif env_dev == "false":
-        print("[PROD] MODE: Production (Environment Variable)")
-        return "production"
-    
-    # 2. Cek file dev_users.json HANYA jika env tidak eksplisit
-    dev_users_file = Path("config/dev_users.json")
-    if dev_users_file.exists():
-        try:
-            with open(dev_users_file, 'r', encoding='utf-8') as f:
-                dev_data = json.load(f)
-                # Hanya masuk dev mode jika ada email user saat ini
-                current_email = ""
-                settings_file = Path("config/settings.json")
-                if settings_file.exists():
-                    try:
-                        with open(settings_file, 'r', encoding='utf-8') as sf:
-                            settings_data = json.load(sf)
-                            current_email = settings_data.get("user_data", {}).get("email", "")
-                    except:
-                        pass
-                
-                if current_email and current_email in dev_data.get("emails", []):
-                    print("[DEV] MODE: Development (User in Dev List)")
-                    return "development"
-        except Exception as e:
-            print(f"Error checking dev_users.json: {e}")
-    
-    # 3. Default: Production
-    print("[PROD] MODE: Production (Default)")
+    """Force production mode - no development mode allowed"""
+    print("[PROD] MODE: Production (FORCED)")
     return "production"
 
 # Panggil detection

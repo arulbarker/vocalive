@@ -20,31 +20,15 @@ load_dotenv()
 class APIClient:
     def __init__(self):
         self.cfg = ConfigManager()
-        # Debug environment
-        print(f"[DEBUG] Environment STREAMMATE_DEV: {os.getenv('STREAMMATE_DEV', 'not set')}")
-        print(f"[DEBUG] Environment STREAMMATE_SERVER_URL: {os.getenv('STREAMMATE_SERVER_URL', 'not set')}")
-        
-        # Base URL dengan prioritas environment variable - PERBAIKAN: Port 8000 untuk VPS
-        env_url = os.getenv("STREAMMATE_SERVER_URL")
-        if env_url:
-            self.base_url = env_url
-            print(f"[API] Using server URL from environment: {env_url}")
-        else:
-            self.base_url = "http://69.62.79.238:8000"  # PERBAIKAN: VPS di port 8000
-            print(f"[API] Using default server URL: {self.base_url}")
+        # FORCE PRODUCTION MODE - Always use VPS server
+        self.base_url = "http://69.62.79.238:8000"
+        print(f"[API] PRODUCTION MODE: Using VPS server: {self.base_url}")
         
         self.timeout = 30
         
     def _get_server_url(self):
-        """Tentukan server URL berdasarkan mode"""
-        # 1. Cek environment variable dari .env
-        env_url = self.cfg.get_env('API_BASE_URL')
-        if env_url:
-            return env_url
-            
-        # 2. Cek environment variable dulu (developer override) - PERBAIKAN: Port 8000
-        if os.getenv("STREAMMATE_DEV", "").lower() == "true":
-            return "http://localhost:8888"  # Dev mode gunakan localhost
+        """PRODUCTION MODE: Always use VPS server"""
+        return "http://69.62.79.238:8000"
     
     def _make_request(self, endpoint, data, timeout=None):
         """Make request dengan error handling"""

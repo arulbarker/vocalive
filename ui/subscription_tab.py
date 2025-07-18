@@ -165,9 +165,9 @@ class SubscriptionTab(QWidget):
         quick_actions = self.create_quick_actions()
         content_layout.addWidget(quick_actions)
         
-        # ========== PACKAGE CARDS ==========
-        packages_widget = self.create_packages_section()
-        content_layout.addWidget(packages_widget)
+        # ========== COHOST PRO SECTION ==========
+        pro_widget = self.create_pro_section()
+        content_layout.addWidget(pro_widget)
         
         # ========== INFO SECTION ==========
         info_widget = self.create_info_section()
@@ -416,10 +416,10 @@ class SubscriptionTab(QWidget):
         
         return widget
         
-    def create_packages_section(self):
-        """Create package cards yang dibeli dengan kredit"""
-        packages_frame = QFrame()
-        packages_frame.setStyleSheet("""
+    def create_pro_section(self):
+        """Create simple pro mode section"""
+        pro_frame = QFrame()
+        pro_frame.setStyleSheet("""
             QFrame {
                 background-color: #F8F9FA;
                 border-radius: 12px;
@@ -427,10 +427,10 @@ class SubscriptionTab(QWidget):
             }
         """)
         
-        main_layout = QVBoxLayout(packages_frame)
+        main_layout = QVBoxLayout(pro_frame)
         
         # Section title
-        title = QLabel("📦 Choose Features Package (Paid with Credits)")
+        title = QLabel("🚀 CoHost Pro Mode (Premium Features)")
         title.setStyleSheet("""
             QLabel {
                 font-size: 20px;
@@ -462,119 +462,28 @@ class SubscriptionTab(QWidget):
         except:
             pass
         
-        # Info label about credit purchases with top-up button
-        info_widget = QFrame()
-        info_widget.setStyleSheet("""
-            QFrame {
-                background-color: #E3F2FD;
-                border-radius: 8px;
-                border-left: 4px solid #2196F3;
-                padding: 15px;
-                margin-bottom: 20px;
-            }
-        """)
-        info_layout = QHBoxLayout(info_widget)
-        
-        info_label = QLabel("💡 Need more credits? Top-up first, then purchase packages below")
-        info_label.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #666;
-                font-style: italic;
-            }
-        """)
-        info_label.setWordWrap(True)
-        info_layout.addWidget(info_label)
-        
-        # Quick top-up button in info section
-        quick_topup_btn = QPushButton("💳 Quick Top-up")
-        quick_topup_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #45A049;
-            }
-        """)
-        quick_topup_btn.clicked.connect(self.show_topup_options)
-        info_layout.addWidget(quick_topup_btn)
-        
-        main_layout.addWidget(info_widget)
-        
-        # Cards container
-        cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(20)
-        
-        # BASIC PACKAGE CARD - Updated for credit purchase
-        basic_card = self.create_package_card(
-            title="BASIC",
-            price="100,000 Credits",  # Changed from money to credits
-            credits="One-time purchase",
-            features=[
-                "✅ Auto-Reply AI (Trigger Mode)",
-                "⏳ Voice Translation (Coming Soon)",
-                "✅ YouTube & TikTok Support",
-                "✅ Basic TTS Voices",
-                "✅ Chat Overlay",
-                "✅ 24/7 Support"
-            ],
-            color="#4CAF50",
-            package_id="basic",
-            is_available=True,
-            is_popular=True
-        )
-        cards_layout.addWidget(basic_card)
-        
-        # COHOST SELLER PACKAGE CARD - Updated for credit purchase
-        seller_card = self.create_package_card(
-            title="COHOST SELLER",
-            price="300,000 Credits",  # Changed from money to credits
-            credits="One-time purchase",
-            features=[
-                "✅ All Basic features",
-                "🛍️ Product Management (2 slots)",
-                "🎯 Smart Trigger System",
-                "📺 Auto OBS Scene Switch",
-                "📊 Sales Analytics",
-                "🔥 Live Selling AI",
-                "💰 +8 slots (100k each)"
-            ],
-            color="#E91E63",
-            package_id="cohost_seller",
-            is_available=True,
-            is_popular=False
-        )
-        cards_layout.addWidget(seller_card)
-        
-        # PRO PACKAGE CARD (LOCKED)
+        # Pro package card
         pro_card = self.create_package_card(
-            title="PRO",
-            price="Coming Soon",
-            credits="TBA Credits",
+            title="COHOST PRO",
+            price="300,000 Credits",
+            credits="One-time purchase",
             features=[
                 "✅ All Basic features",
                 "✅ Sequential & Delay Mode",
-                "✅ Premium TTS Voices",
+                "✅ Premium Google Chirp3 TTS",
                 "✅ Virtual Microphone",
-                "✅ OCR Screen Translator",
-                "✅ RAG Knowledge System",
+                "✅ Viewer Management",
+                "✅ Advanced Analytics",
                 "✅ Priority Support"
             ],
             color="#FF9800",
             package_id="pro",
-            is_available=False,
-            is_coming_soon=True
+            is_available=True,
+            is_popular=True
         )
-        cards_layout.addWidget(pro_card)
+        main_layout.addWidget(pro_card)
         
-        main_layout.addLayout(cards_layout)
-        
-        return packages_frame
+        return pro_frame
         
     def create_package_card(self, title, price, credits, features, color, 
                             package_id, is_available=True, is_popular=False, 
@@ -1039,15 +948,15 @@ class SubscriptionTab(QWidget):
         
         <h3>ℹ️ Important Information</h3>
         <ul>
-            <li><b>Demo Mode:</b> 30 minutes free to try Basic features (one-time use)</li>
-            <li><b>Payment:</b> Via iPaymu - Bank Transfer, E-Wallet, QRIS</li>
-            <li><b>Activation:</b> Automatic after successful payment</li>
-            <li><b>Credits:</b> Valid for 30 days from purchase</li>
+            <li style="color: black;"><b>Demo Mode:</b> 30 minutes free to try Basic features (one-time use)</li>
+            <li style="color: black;"><b>Payment:</b> Via iPaymu - Bank Transfer, E-Wallet, QRIS</li>
+            <li style="color: black;"><b>Activation:</b> Automatic after successful payment</li>
+            <li style="color: black;"><b>Credits:</b> Valid for 30 days from purchase</li>
         </ul>
         
         <h3>📞 Need Help?</h3>
-        <p>Email: support@streammateai.com<br>
-        WhatsApp: +62 812-3456-7890</p>
+        <p style="color: black;">Email: mursalinasrul@gmail.com<br>
+        WhatsApp: +62 895-1642-5913</p>
         """
         
         info_widget = QTextEdit()
@@ -1338,12 +1247,130 @@ class SubscriptionTab(QWidget):
             self.buy_basic_package_with_credits()
             return
             
-        # For other packages (like PRO), show coming soon
+        # Handle Pro package purchase with credits
+        if package_name == "pro":
+            self.buy_pro_package_with_credits()
+            return
+            
+        # For other packages, show coming soon
         QMessageBox.information(
             self, "Coming Soon", 
             f"{package_name.capitalize()} package will be available soon!"
         )
         print("=== DEBUG CREDIT PURCHASE END ===\n")
+        
+    def buy_pro_package_with_credits(self):
+        """Handle Pro package purchase with credits"""
+        try:
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                QMessageBox.warning(self, "Login Required", "Please login first to purchase Pro package")
+                return
+            
+            # Check current credit balance
+            try:
+                from modules_server.real_credit_tracker import get_current_credit_balance
+                current_balance = get_current_credit_balance()
+                required_credits = 300000  # 300,000 credits for Pro
+                
+                if current_balance < required_credits:
+                    QMessageBox.warning(
+                        self, "Insufficient Credits",
+                        f"Pro package requires {required_credits:,} credits.\n"
+                        f"Your current balance: {current_balance:,} credits\n\n"
+                        "Please top-up more credits first."
+                    )
+                    return
+                
+                # Check if already has Pro package
+                subscription_file = Path("config/subscription_status.json")
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                        if sub_data.get("pro", {}).get("active", False):
+                            QMessageBox.information(
+                                self, "Already Purchased",
+                                "You already have the Pro package active!"
+                            )
+                            return
+                
+                # Confirm purchase
+                reply = QMessageBox.question(
+                    self, "Confirm Purchase",
+                    f"🚀 CoHost Pro Package\n\n"
+                    f"Price: {required_credits:,} credits\n"
+                    f"Includes:\n"
+                    f"• All Basic features\n"
+                    f"• Sequential & Delay Mode\n"
+                    f"• Premium Google Chirp3 TTS\n"
+                    f"• Virtual Microphone\n"
+                    f"• Viewer Management\n"
+                    f"• Advanced Analytics\n"
+                    f"• Priority Support\n\n"
+                    f"Your balance after purchase: {current_balance - required_credits:,} credits\n\n"
+                    f"Proceed with purchase?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+                
+                # Deduct credits
+                from modules_server.real_credit_tracker import force_credit_deduction
+                deduction_success = force_credit_deduction(
+                    required_credits, 
+                    "pro_package_purchase", 
+                    "Pro Package Purchase"
+                )
+                
+                if not deduction_success:
+                    QMessageBox.critical(self, "Purchase Failed", "Credit deduction failed. Please try again.")
+                    return
+                
+                # Update subscription data
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                else:
+                    sub_data = {}
+                
+                # Add Pro package data
+                sub_data["pro"] = {
+                    "active": True,
+                    "purchased_at": datetime.now().isoformat(),
+                    "email": email,
+                    "package": "pro"
+                }
+                
+                # Save updated subscription data
+                with open(subscription_file, 'w', encoding='utf-8') as f:
+                    json.dump(sub_data, f, indent=2, ensure_ascii=False)
+                
+                # Success message
+                QMessageBox.information(
+                    self, "Purchase Successful! 🎉",
+                    f"Pro package purchased successfully!\n\n"
+                    f"✅ Credits deducted: {required_credits:,}\n"
+                    f"✅ Pro mode is now available\n\n"
+                    f"You can now access Pro features!"
+                )
+                
+                # Refresh UI
+                self.refresh_credits()
+                
+                # Activate Pro mode if parent available
+                if self.parent and hasattr(self.parent, 'pilih_paket'):
+                    self.parent.pilih_paket("pro")
+                else:
+                    self.package_activated.emit("pro")
+                    
+            except Exception as e:
+                logger.error(f"Error purchasing pro package: {e}")
+                QMessageBox.critical(self, "Purchase Error", f"Failed to purchase Pro package: {str(e)}")
+                
+        except Exception as e:
+            logger.error(f"Error in buy_pro_package_with_credits: {e}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def buy_basic_package_with_credits(self):
         """Handle Basic package purchase with credits"""
@@ -1614,8 +1641,7 @@ class SubscriptionTab(QWidget):
             self.parent.logout()
         else:
             QMessageBox.information(self, "Logout", "Logout feature not available")
-        self.log_queue.put(("INFO", "User logged out successfully"))
-        
+
     def start_demo(self):
         """Start demo mode with 30 minutes limit."""
         try:

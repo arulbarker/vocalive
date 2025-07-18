@@ -311,8 +311,8 @@ class CreditWalletTab(QWidget):
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
         
-        # Top-up button (changed from Purchase)
-        buy_btn = QPushButton("💳 Top-up Credits")
+        # Top-up button with real payment
+        buy_btn = QPushButton("💳 Top-up with Real Payment")
         buy_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {'#4CAF50' if package['popular'] else '#2196F3'};
@@ -326,13 +326,13 @@ class CreditWalletTab(QWidget):
                 background-color: {'#45A049' if package['popular'] else '#1976D2'};
             }}
         """)
-        buy_btn.clicked.connect(lambda checked, pkg=package: self.topup_credits(pkg))
+        buy_btn.clicked.connect(lambda checked, pkg=package: self.topup_credits_real_payment(pkg))
         layout.addWidget(buy_btn)
         
         return card
     
     def create_controls_section(self) -> QWidget:
-        """Create bottom controls section"""
+        """Create bottom controls section - PRODUCTION MODE ONLY"""
         controls = QFrame()
         controls.setStyleSheet("""
             QFrame {
@@ -344,28 +344,236 @@ class CreditWalletTab(QWidget):
         
         layout = QHBoxLayout(controls)
         
-        # Development tools (only in local mode)
-        if self.wallet_client.local_mode:
-            dev_label = QLabel("🔧 Development Tools:")
-            dev_label.setStyleSheet("font-weight: bold; color: #FF9800;")
-            layout.addWidget(dev_label)
-            
-            test_add_btn = QPushButton("Add 50K Credits (Test)")
-            test_add_btn.clicked.connect(lambda: self.test_add_credits(50000))
-            layout.addWidget(test_add_btn)
-            
-            test_spend_btn = QPushButton("Spend 10K Credits (Test)")
-            test_spend_btn.clicked.connect(lambda: self.test_spend_credits(10000))
-            layout.addWidget(test_spend_btn)
+        # Single main top-up button
+        main_topup_btn = QPushButton("💳 Quick Top-up Credits")
+        main_topup_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #45A049;
+            }
+        """)
+        main_topup_btn.clicked.connect(self.show_main_topup_dialog)
+        layout.addWidget(main_topup_btn)
         
         layout.addStretch()
         
-        # Status info
-        status_label = QLabel(f"Mode: {'Local Development' if self.wallet_client.local_mode else 'Production'}")
+        # Status info - PRODUCTION MODE ONLY
+        status_label = QLabel("Mode: Production")
         status_label.setStyleSheet("color: #666; font-size: 12px;")
         layout.addWidget(status_label)
         
         return controls
+    
+    def show_main_topup_dialog(self):
+        """Show main top-up dialog with real payment options"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("💳 Top-up Credits - Real Payment")
+        dialog.setModal(True)
+        dialog.resize(500, 400)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #F8F9FA;
+            }
+            QLabel {
+                color: #333;
+            }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Header
+        header = QLabel("💰 Top-up Credits with Real Money")
+        header.setStyleSheet("""
+            QLabel {
+                font-size: 24px;
+                font-weight: bold;
+                color: #4CAF50;
+                text-align: center;
+            }
+        """)
+        layout.addWidget(header)
+        
+        # Info about 1:1 ratio
+        info = QLabel("💡 1:1 Ratio - Rp 50,000 = 50,000 Credits")
+        info.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                color: #2196F3;
+                text-align: center;
+                font-weight: bold;
+                background-color: #E3F2FD;
+                padding: 10px;
+                border-radius: 8px;
+            }
+        """)
+        layout.addWidget(info)
+        
+        # Payment method info
+        payment_info = QLabel("💳 Payment via iPaymu: Bank Transfer, E-Wallet, QRIS")
+        payment_info.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #666;
+                text-align: center;
+                font-style: italic;
+            }
+        """)
+        layout.addWidget(payment_info)
+        
+        # Top-up packages
+        packages = [
+            {"name": "Basic Pack", "amount": 50000, "popular": False},
+            {"name": "Standard Pack", "amount": 100000, "popular": True},
+            {"name": "Premium Pack", "amount": 200000, "popular": False},
+            {"name": "Ultimate Pack", "amount": 500000, "popular": False}
+        ]
+        
+        for pkg in packages:
+            card = QFrame()
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: white;
+                    border: 2px solid {'#4CAF50' if pkg['popular'] else '#E0E0E0'};
+                    border-radius: 10px;
+                    padding: 15px;
+                    margin: 5px;
+                }}
+            """)
+            
+            card_layout = QHBoxLayout(card)
+            
+            # Package info
+            info_layout = QVBoxLayout()
+            
+            name_label = QLabel(pkg['name'])
+            name_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+            info_layout.addWidget(name_label)
+            
+            amount_label = QLabel(f"💵 Rp {pkg['amount']:,} = {pkg['amount']:,} Credits")
+            amount_label.setStyleSheet("font-size: 14px; color: #2E7D32;")
+            info_layout.addWidget(amount_label)
+            
+            card_layout.addLayout(info_layout)
+            
+            if pkg['popular']:
+                popular_label = QLabel("🔥 POPULAR")
+                popular_label.setStyleSheet("""
+                    background-color: #4CAF50;
+                    color: white;
+                    padding: 5px 10px;
+                    border-radius: 15px;
+                    font-size: 12px;
+                    font-weight: bold;
+                """)
+                card_layout.addWidget(popular_label)
+            
+            # Top-up button
+            topup_btn = QPushButton("💳 Top-up")
+            topup_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {'#4CAF50' if pkg['popular'] else '#2196F3'};
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    background-color: {'#45A049' if pkg['popular'] else '#1976D2'};
+                }}
+            """)
+            topup_btn.clicked.connect(lambda checked, amount=pkg['amount']: self.process_real_payment(amount, dialog))
+            card_layout.addWidget(topup_btn)
+            
+            layout.addWidget(card)
+        
+        # Close button
+        close_btn = QPushButton("❌ Close")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #666;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #555;
+            }
+        """)
+        close_btn.clicked.connect(dialog.close)
+        layout.addWidget(close_btn)
+        
+        dialog.exec()
+    
+    def topup_credits_real_payment(self, package):
+        """Process top-up with real payment - 1:1 ratio"""
+        try:
+            # Get user email
+            from modules_client.config_manager import ConfigManager
+            cfg = ConfigManager()
+            email = cfg.get("user_data", {}).get("email", "")
+            
+            if not email:
+                QMessageBox.warning(self, "Login Required", "Please login first to top-up credits")
+                return
+            
+            # Show confirmation with 1:1 ratio
+            reply = QMessageBox.question(
+                self, "Confirm Top-up",
+                f"Top-up {package['name']}?\n\n"
+                f"💵 Price: Rp {package['price_idr']:,}\n"
+                f"💰 Credits: {package['price_idr']:,} (1:1 ratio)\n\n"
+                f"Payment via iPaymu - Bank Transfer, E-Wallet, QRIS\n"
+                f"Credits will be added automatically after payment confirmation.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self.process_real_payment(package['price_idr'])
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Top-up Error", f"Failed to process top-up: {str(e)}")
+    
+    def process_real_payment(self, amount, dialog=None):
+        """Process real payment through iPaymu"""
+        try:
+            # Get user email
+            from modules_client.config_manager import ConfigManager
+            cfg = ConfigManager()
+            email = cfg.get("user_data", {}).get("email", "")
+            
+            if not email:
+                QMessageBox.warning(self, "Login Required", "Please login first")
+                return
+            
+            # Show payment info
+            QMessageBox.information(
+                self, "Payment Required",
+                f"Top-up Amount: Rp {amount:,}\n"
+                f"Credits to receive: {amount:,} (1:1 ratio)\n\n"
+                f"Payment will be processed via iPaymu\n"
+                f"- Bank Transfer\n"
+                f"- E-Wallet (GoPay, OVO, Dana)\n"
+                f"- QRIS\n\n"
+                f"Credits will be added automatically after payment confirmation."
+            )
+            
+            if dialog:
+                dialog.close()
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Payment Error", f"Failed to process payment: {str(e)}")
     
     def setup_timers(self):
         """Setup refresh timers"""

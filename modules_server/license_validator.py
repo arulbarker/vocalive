@@ -38,16 +38,10 @@ def _check_exe_environment():
     """Check jika running dalam EXE"""
     return getattr(sys, 'frozen', False)
 
-if _check_exe_environment():
-    # Dalam EXE mode, paksa server validation
-    FORCE_SERVER_VALIDATION = True
-    DISABLE_LOCAL_CACHE = True
-    DEFAULT_CREDIT = 0.0  # Tidak ada kredit default
-else:
-    # Development mode
-    FORCE_SERVER_VALIDATION = False
-    DISABLE_LOCAL_CACHE = False
-    DEFAULT_CREDIT = 0.0
+# FORCE PRODUCTION MODE - NO DEVELOPMENT MODE
+FORCE_SERVER_VALIDATION = True
+DISABLE_LOCAL_CACHE = True
+DEFAULT_CREDIT = 0.0  # Tidak ada kredit default
 
 class LicenseValidator:
     def __init__(self, server_url="https://streammateai.com/api/license", testing_mode=False):
@@ -69,46 +63,8 @@ class LicenseValidator:
             })
 
     def _is_dev_user(self):
-        """Cek apakah pengguna adalah developer via server."""
-        # Skip untuk test mode
-        if hasattr(self, 'testing_mode') and self.testing_mode:
-            return True
-            
-        try:
-            email = self.cfg.get("user_data", {}).get("email", "")
-            if not email:
-                return False
-            
-            # Cek via server (production mode)
-            dev_check_urls = [
-                "http://69.62.79.238:8000/api/user/check_dev",
-                "http://localhost/api/user/check_dev"
-            ]
-            
-            for url in dev_check_urls:
-                try:
-                    response = requests.post(
-                        url,
-                        json={"email": email},
-                        timeout=5
-                    )
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        is_dev = data.get("is_dev", False)
-                        print(f"[DEBUG] Server dev check: {email} -> {is_dev}")
-                        return is_dev
-                    else:
-                        print(f"[DEBUG] Server dev check failed: {response.status_code}")
-                        
-                except Exception as e:
-                    print(f"[DEBUG] Dev user check error: {e}")
-                    continue
-                
-        except Exception as e:
-            print(f"[DEBUG] Dev user check error: {e}")
-        
-        # PENTING: Default ke FALSE (bukan True)
+        """PRODUCTION MODE: No developer users allowed"""
+        # Always return False in production mode
         return False
 
     def _read_cache(self):

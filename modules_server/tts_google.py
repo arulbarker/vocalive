@@ -153,24 +153,24 @@ def _parse_voice_name(voice_name):
             
         print(f"[GCLOUD-TTS] Parsed voice '{voice_name}': {voice_info}")
         
-        except Exception as e:
+    except Exception as e:
         print(f"[GCLOUD-TTS] Error parsing voice name: {e}")
-        
-        # Fallback parsing berdasarkan nama
-        if voice_name.startswith('id-ID'):
-            voice_info['language'] = 'id-ID'
-        elif voice_name.startswith('en-US'):
-            voice_info['language'] = 'en-US'
-        elif voice_name.startswith('en-GB'):
-            voice_info['language'] = 'en-GB'
-        elif voice_name.startswith('en-AU'):
-            voice_info['language'] = 'en-AU'
-        
-        # Simple gender detection dari nama
-        if 'Standard-A' in voice_name or 'Standard-C' in voice_name:
-            voice_info['gender'] = 'FEMALE'
-        elif 'Standard-B' in voice_name or 'Standard-D' in voice_name:
-            voice_info['gender'] = 'MALE'
+    
+    # Fallback parsing berdasarkan nama
+    if voice_name.startswith('id-ID'):
+        voice_info['language'] = 'id-ID'
+    elif voice_name.startswith('en-US'):
+        voice_info['language'] = 'en-US'
+    elif voice_name.startswith('en-GB'):
+        voice_info['language'] = 'en-GB'
+    elif voice_name.startswith('en-AU'):
+        voice_info['language'] = 'en-AU'
+    
+    # Simple gender detection dari nama
+    if 'Standard-A' in voice_name or 'Standard-C' in voice_name:
+        voice_info['gender'] = 'FEMALE'
+    elif 'Standard-B' in voice_name or 'Standard-D' in voice_name:
+        voice_info['gender'] = 'MALE'
     
     return voice_info
 
@@ -205,7 +205,7 @@ def _play_google_audio(audio_content, on_finished=None):
                     
                     if success:
                         print(f"[GCLOUD-TTS] ✅ Silent playback completed")
-        else:
+                    else:
                         print(f"[GCLOUD-TTS] ⚠️ Silent playback failed, trying fallback")
                         
                         # Last resort fallback (sudah silent karena global suppression)
@@ -213,11 +213,10 @@ def _play_google_audio(audio_content, on_finished=None):
                             from pydub.playback import play
                             play(audio_segment)
                             print(f"[GCLOUD-TTS] ✅ Fallback playback completed (silent)")
-                                
                         except Exception as fallback_error:
                             print(f"[GCLOUD-TTS] ❌ Fallback playback error: {fallback_error}")
-        
-    except Exception as e:
+                
+                except Exception as e:
                     print(f"[GCLOUD-TTS] ❌ Silent playback error: {e}")
                 finally:
                     # Cleanup
@@ -227,13 +226,13 @@ def _play_google_audio(audio_content, on_finished=None):
                     except:
                         pass
                     
-        if on_finished:
-            try:
-                    on_finished()
+                    if on_finished:
+                        try:
+                            on_finished()
                             print(f"[GCLOUD-TTS] Callback executed")
-            except Exception as callback_error:
+                        except Exception as callback_error:
                             print(f"[GCLOUD-TTS] Callback error: {callback_error}")
-    
+            
             # Start silent playback thread
             thread = threading.Thread(target=silent_play_thread, daemon=True)
             thread.start()
@@ -248,13 +247,9 @@ def _play_google_audio(audio_content, on_finished=None):
                 pass
             if on_finished:
                 on_finished()
-                
-    except ImportError:
-        print(f"[GCLOUD-TTS] pydub not available for audio playback")
-        if on_finished:
-            on_finished()
+    
     except Exception as e:
-        print(f"[GCLOUD-TTS] Audio playback error: {e}")
+        print(f"[GCLOUD-TTS] ❌ Critical error in _play_google_audio: {e}")
         if on_finished:
             on_finished()
 
@@ -271,15 +266,15 @@ def test_google_cloud_tts():
     
     for voice_name, text in test_voices:
         print(f"\nTesting voice: {voice_name}")
-    
-    def test_callback():
+        
+        def test_callback():
             print(f"✅ {voice_name} test completed")
-    
-    speak_with_google_cloud(
+        
+        speak_with_google_cloud(
             text=text,
             voice_name=voice_name,
-        on_finished=test_callback
-    )
+            on_finished=test_callback
+        )
         
         # Wait a bit between tests
         time.sleep(2)
