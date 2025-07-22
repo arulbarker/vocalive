@@ -257,17 +257,61 @@ except ImportError:
         TUTORIAL_AVAILABLE = False
         print("[WARNING] TutorialTab not available")
 
-# Import CoHost Seller tab
+# Import Pro Mode tabs
 try:
-    from ui.cohost_seller_tab import CohostSellerTab
-    COHOST_SELLER_AVAILABLE = True
+    from ui.cohost_tab_pro import CohostTabPro
+    COHOST_PRO_AVAILABLE = True
 except ImportError:
     try:
-        from cohost_seller_tab import CohostSellerTab
-        COHOST_SELLER_AVAILABLE = True
+        from cohost_tab_pro import CohostTabPro
+        COHOST_PRO_AVAILABLE = True
     except ImportError:
-        COHOST_SELLER_AVAILABLE = False
-        print("[WARNING] CohostSellerTab not available")
+        COHOST_PRO_AVAILABLE = False
+        print("[WARNING] CohostTabPro not available")
+
+try:
+    from ui.rag_tab import RAGTab
+    RAG_AVAILABLE = True
+except ImportError:
+    try:
+        from rag_tab import RAGTab
+        RAG_AVAILABLE = True
+    except ImportError:
+        RAG_AVAILABLE = False
+        print("[WARNING] RAGTab not available")
+
+try:
+    from ui.translate_tab_pro import TranslateTabPro
+    TRANSLATE_PRO_AVAILABLE = True
+except ImportError:
+    try:
+        from translate_tab_pro import TranslateTabPro
+        TRANSLATE_PRO_AVAILABLE = True
+    except ImportError:
+        TRANSLATE_PRO_AVAILABLE = False
+        print("[WARNING] TranslateTabPro not available")
+
+try:
+    from ui.viewers_tab import ViewersTab
+    VIEWERS_AVAILABLE = True
+except ImportError:
+    try:
+        from viewers_tab import ViewersTab
+        VIEWERS_AVAILABLE = True
+    except ImportError:
+        VIEWERS_AVAILABLE = False
+        print("[WARNING] ViewersTab not available")
+
+try:
+    from ui.virtual_mic_tab import VirtualMicTab
+    VIRTUAL_MIC_AVAILABLE = True
+except ImportError:
+    try:
+        from virtual_mic_tab import VirtualMicTab
+        VIRTUAL_MIC_AVAILABLE = True
+    except ImportError:
+        VIRTUAL_MIC_AVAILABLE = False
+        print("[WARNING] VirtualMicTab not available")
 
 # Import Credit Wallet tab
 try:
@@ -791,18 +835,18 @@ class MainWindow(QMainWindow):
         try:
             subscription_file = Path("config/subscription_status.json")
             if not subscription_file.exists():
-                return {"basic": False, "cohost_seller": False}
+                return {"basic": False, "pro": False}
             
             with open(subscription_file, 'r', encoding='utf-8') as f:
                 sub_data = json.load(f)
             
             return {
                 "basic": sub_data.get("basic", {}).get("active", False),
-                "cohost_seller": sub_data.get("cohost_seller", {}).get("active", False)
+                "pro": sub_data.get("pro", {}).get("active", False)
             }
         except Exception as e:
             logger.error(f"Error checking purchased packages: {e}")
-            return {"basic": False, "cohost_seller": False}
+            return {"basic": False, "pro": False}
 
     def pilih_paket(self, paket):
         """Initialize main UI based on actually purchased packages."""
@@ -816,8 +860,8 @@ class MainWindow(QMainWindow):
             print(f"[DEBUG] PILIH_PAKET: Purchased packages: {purchased}")
 
             # Determine which mode to use based on purchases
-            if purchased["cohost_seller"]:
-                actual_mode = "cohost_seller"
+            if purchased["pro"]:
+                actual_mode = "pro"
             elif purchased["basic"]:
                 actual_mode = "basic"
             else:
@@ -844,8 +888,8 @@ class MainWindow(QMainWindow):
             print(f"[DEBUG] PILIH_PAKET: Main tabs added to stack and set as current")
 
             # Update status
-            if purchased["cohost_seller"]:
-                self.status_bar.showMessage(f"StreamMate CoHost Seller activated", 5000)
+            if purchased["pro"]:
+                self.status_bar.showMessage(f"StreamMate Pro activated", 5000)
             else:
                 self.status_bar.showMessage(f"StreamMate Basic activated", 5000)
             print(f"[DEBUG] PILIH_PAKET: Status bar updated")
@@ -932,31 +976,92 @@ class MainWindow(QMainWindow):
                 tabs.addTab(placeholder, "🔒 Basic Features")
                 print("[INFO] Basic features locked - user needs to purchase")
 
-            # Only show CoHost Seller if that package is purchased
-            if purchased["cohost_seller"]:
-                if COHOST_SELLER_AVAILABLE:
-                    self.cohost_seller_tab = CohostSellerTab()
-                    tabs.addTab(self.cohost_seller_tab, "🛍️ CoHost Seller")
-                    print("[INFO] CoHost Seller tab added (CoHost Seller purchased)")
+            # Only show Pro Mode features if Pro package is purchased
+            if purchased["pro"]:
+                # Tab Cohost Pro - Advanced features
+                if COHOST_PRO_AVAILABLE:
+                    self.cohost_pro_tab = CohostTabPro()
+                    tabs.addTab(self.cohost_pro_tab, "🤖 Cohost Pro")
+                    print("[INFO] Cohost Pro tab added (Pro purchased)")
                 else:
                     placeholder = QWidget()
                     layout = QVBoxLayout(placeholder)
-                    label = QLabel("🛍️ CoHost Seller\n\n(Under development)")
+                    label = QLabel("🤖 Cohost Pro\n\n(Under development)")
                     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                     label.setStyleSheet("font-size: 16px; color: #888;")
                     layout.addWidget(label)
-                    tabs.addTab(placeholder, "🛍️ CoHost Seller")
-                    print("[WARNING] CoHost Seller tab not available - using placeholder")
+                    tabs.addTab(placeholder, "🤖 Cohost Pro")
+                    print("[WARNING] Cohost Pro tab not available - using placeholder")
+
+                # Tab RAG - Knowledge Base
+                if RAG_AVAILABLE:
+                    self.rag_tab = RAGTab()
+                    tabs.addTab(self.rag_tab, "📚 RAG Knowledge")
+                    print("[INFO] RAG tab added (Pro purchased)")
+                else:
+                    placeholder = QWidget()
+                    layout = QVBoxLayout(placeholder)
+                    label = QLabel("📚 RAG Knowledge\n\n(Under development)")
+                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    label.setStyleSheet("font-size: 16px; color: #888;")
+                    layout.addWidget(label)
+                    tabs.addTab(placeholder, "📚 RAG Knowledge")
+                    print("[WARNING] RAG tab not available - using placeholder")
+
+                # Tab Advanced Translation
+                if TRANSLATE_PRO_AVAILABLE:
+                    self.translate_pro_tab = TranslateTabPro()
+                    tabs.addTab(self.translate_pro_tab, "🌍 Translation Pro")
+                    print("[INFO] Translation Pro tab added (Pro purchased)")
+                else:
+                    placeholder = QWidget()
+                    layout = QVBoxLayout(placeholder)
+                    label = QLabel("🌍 Translation Pro\n\n(Under development)")
+                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    label.setStyleSheet("font-size: 16px; color: #888;")
+                    layout.addWidget(label)
+                    tabs.addTab(placeholder, "🌍 Translation Pro")
+                    print("[WARNING] Translation Pro tab not available - using placeholder")
+
+                # Tab Viewer Management
+                if VIEWERS_AVAILABLE:
+                    self.viewers_tab = ViewersTab()
+                    tabs.addTab(self.viewers_tab, "👥 Viewer Management")
+                    print("[INFO] Viewer Management tab added (Pro purchased)")
+                else:
+                    placeholder = QWidget()
+                    layout = QVBoxLayout(placeholder)
+                    label = QLabel("👥 Viewer Management\n\n(Under development)")
+                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    label.setStyleSheet("font-size: 16px; color: #888;")
+                    layout.addWidget(label)
+                    tabs.addTab(placeholder, "👥 Viewer Management")
+                    print("[WARNING] Viewer Management tab not available - using placeholder")
+
+                # Tab Virtual Microphone
+                if VIRTUAL_MIC_AVAILABLE:
+                    self.virtual_mic_tab = VirtualMicTab()
+                    tabs.addTab(self.virtual_mic_tab, "🎤 Virtual Mic")
+                    print("[INFO] Virtual Mic tab added (Pro purchased)")
+                else:
+                    placeholder = QWidget()
+                    layout = QVBoxLayout(placeholder)
+                    label = QLabel("🎤 Virtual Mic\n\n(Under development)")
+                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    label.setStyleSheet("font-size: 16px; color: #888;")
+                    layout.addWidget(label)
+                    tabs.addTab(placeholder, "🎤 Virtual Mic")
+                    print("[WARNING] Virtual Mic tab not available - using placeholder")
             else:
-                # Show locked placeholder for CoHost Seller
+                # Show locked placeholder for Pro features
                 placeholder = QWidget()
                 layout = QVBoxLayout(placeholder)
-                label = QLabel("🔒 CoHost Seller Locked\n\nPurchase CoHost Seller package\nwith credits to unlock")
+                label = QLabel("🔒 Pro Features Locked\n\nPurchase Pro package\nwith credits to unlock advanced features")
                 label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 label.setStyleSheet("font-size: 16px; color: #888;")
                 layout.addWidget(label)
-                tabs.addTab(placeholder, "🔒 CoHost Seller")
-                print("[INFO] CoHost Seller locked - user needs to purchase")
+                tabs.addTab(placeholder, "🔒 Pro Features")
+                print("[INFO] Pro features locked - user needs to purchase")
 
             # Tab Tutorial - always available
             if TUTORIAL_AVAILABLE:
@@ -1470,24 +1575,24 @@ class MainWindow(QMainWindow):
         try:
             logger.info(f"Activating {package} mode from subscription tab")
             
-            if package == "cohost_seller":
-                # Handle CoHost Seller activation
+            if package == "pro":
+                # Handle Pro mode activation
                 QMessageBox.information(
-                    self, "CoHost Seller Activated! 🛍️",
-                    "CoHost Seller package has been activated!\n\n"
-                    "✅ Product Management (2 slots)\n"
-                    "✅ Smart Trigger System\n"
-                    "✅ Auto OBS Scene Switch\n"
-                    "✅ Sales Analytics\n"
-                    "✅ Live Selling AI\n\n"
-                    "You can now access CoHost Seller features in the main tabs!"
+                    self, "Pro Mode Activated! ⭐",
+                    "Pro package has been activated!\n\n"
+                    "✅ Advanced AI Cohost (Pro)\n"
+                    "✅ RAG Knowledge Base\n"
+                    "✅ Advanced Translation\n"
+                    "✅ Viewer Management\n"
+                    "✅ Virtual Microphone\n\n"
+                    "You can now access Pro features in the main tabs!"
                 )
                 
-                # Navigate to CoHost Seller tab if available
+                # Navigate to Pro tab if available
                 if hasattr(self, 'main_tabs') and self.main_tabs:
                     for i in range(self.main_tabs.count()):
                         tab_text = self.main_tabs.tabText(i)
-                        if "cohost seller" in tab_text.lower():
+                        if "cohost pro" in tab_text.lower():
                             self.main_tabs.setCurrentIndex(i)
                             break
                 else:

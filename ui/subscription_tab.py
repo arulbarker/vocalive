@@ -531,44 +531,24 @@ class SubscriptionTab(QWidget):
         cards_layout.addWidget(basic_card)
         
         # COHOST SELLER PACKAGE CARD - Updated for credit purchase
-        seller_card = self.create_package_card(
-            title="COHOST SELLER",
-            price="300,000 Credits",  # Changed from money to credits
-            credits="One-time purchase",
-            features=[
-                "✅ All Basic features",
-                "🛍️ Product Management (2 slots)",
-                "🎯 Smart Trigger System",
-                "📺 Auto OBS Scene Switch",
-                "📊 Sales Analytics",
-                "🔥 Live Selling AI",
-                "💰 +8 slots (100k each)"
-            ],
-            color="#E91E63",
-            package_id="cohost_seller",
-            is_available=True,
-            is_popular=False
-        )
-        cards_layout.addWidget(seller_card)
-        
-        # PRO PACKAGE CARD (LOCKED)
+        # PRO PACKAGE CARD
         pro_card = self.create_package_card(
             title="PRO",
-            price="Coming Soon",
-            credits="TBA Credits",
+            price="200,000 Credits",
+            credits="200,000 Credits",
             features=[
                 "✅ All Basic features",
-                "✅ Sequential & Delay Mode",
-                "✅ Premium TTS Voices",
-                "✅ Virtual Microphone",
-                "✅ OCR Screen Translator",
-                "✅ RAG Knowledge System",
-                "✅ Priority Support"
+                "🤖 Advanced AI Cohost",
+                "📚 RAG Knowledge System",
+                "🌐 Advanced Translation",
+                "👥 Viewer Management",
+                "🎤 Virtual Microphone",
+                "🎯 Priority Support"
             ],
             color="#FF9800",
             package_id="pro",
-            is_available=False,
-            is_coming_soon=True
+            is_available=True,
+            is_popular=True
         )
         cards_layout.addWidget(pro_card)
         
@@ -1234,8 +1214,12 @@ class SubscriptionTab(QWidget):
                 self.demo_btn.setEnabled(True)
                 self.demo_btn.setText("🎮 Try Demo 30 Minutes")
         
-        # UPDATE BASIC MODE BUTTON - BERDASARKAN KREDIT SAJA (TIDAK PEDULI STATUS)
+        # UPDATE BASIC MODE BUTTON - BERDASARKAN KREDIT BASIC SAJA
         if hasattr(self, 'basic_mode_btn'):
+            # Cek kredit Basic (terpisah dari kredit Pro)
+            basic_credits = self._get_basic_credits()
+            print(f"[DEBUG] Basic Mode Button Update - Status: {status}, Basic Credits: {basic_credits:.1f}")
+            
             if status == "demo":
                 # Khusus untuk demo, disable tombol
                 self.basic_mode_btn.setEnabled(False)
@@ -1251,10 +1235,11 @@ class SubscriptionTab(QWidget):
                         font-weight: bold;
                     }
                 """)
-            elif credit_balance >= 50:
-                # Enable jika kredit cukup, tidak peduli status
+                print(f"[DEBUG] Basic Mode Button: DISABLED (Demo Active)")
+            elif basic_credits >= 50:
+                # Enable jika kredit Basic cukup
                 self.basic_mode_btn.setEnabled(True)
-                self.basic_mode_btn.setText(f"🚀 Enter Basic Mode ({credit_balance:.1f} credits)")
+                self.basic_mode_btn.setText(f"🚀 Enter Basic Mode ({basic_credits:.1f} Basic credits)")
                 self.basic_mode_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #1877F2;
@@ -1269,10 +1254,11 @@ class SubscriptionTab(QWidget):
                         background-color: #166FE5;
                     }
                 """)
+                print(f"[DEBUG] Basic Mode Button: ENABLED (Basic Credits: {basic_credits:.1f})")
             else:
-                # Disable jika kredit tidak cukup
+                # Disable jika kredit Basic tidak cukup
                 self.basic_mode_btn.setEnabled(False)
-                self.basic_mode_btn.setText(f"⚠️ Insufficient Credits ({credit_balance:.1f}/50)")
+                self.basic_mode_btn.setText(f"⚠️ Insufficient Basic Credits ({basic_credits:.1f}/50)")
                 self.basic_mode_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #CCCCCC;
@@ -1284,6 +1270,7 @@ class SubscriptionTab(QWidget):
                         font-weight: bold;
                     }
                 """)
+                print(f"[DEBUG] Basic Mode Button: DISABLED (Insufficient Basic Credits: {basic_credits:.1f})")
                 
         # Update package
         self.package_value.setText(package.capitalize() if package != "none" else "None")
@@ -1328,17 +1315,17 @@ class SubscriptionTab(QWidget):
         print("\n=== DEBUG CREDIT PURCHASE START ===")
         print(f"DEBUG: Package name: {package_name}")
         
-        # Special handling for CoHost Seller (already uses credit system)
-        if package_name == "cohost_seller":
-            self.buy_cohost_seller_package()
-            return
-        
         # Handle Basic package purchase with credits
         if package_name == "basic":
             self.buy_basic_package_with_credits()
             return
             
-        # For other packages (like PRO), show coming soon
+        # Handle Pro package purchase with credits
+        if package_name == "pro":
+            self.buy_pro_package_with_credits()
+            return
+            
+        # For other packages, show coming soon
         QMessageBox.information(
             self, "Coming Soon", 
             f"{package_name.capitalize()} package will be available soon!"
@@ -1426,6 +1413,9 @@ class SubscriptionTab(QWidget):
                     "package": "basic"
                 }
                 
+                # Add Basic credits (separate from Pro credits)
+                sub_data["basic_credits"] = current_balance - required_credits
+                
                 with open(subscription_file, 'w', encoding='utf-8') as f:
                     json.dump(sub_data, f, indent=2, ensure_ascii=False)
                 
@@ -1450,54 +1440,54 @@ class SubscriptionTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
-    def buy_cohost_seller_package(self):
-        """Handle CoHost Seller package purchase with credits"""
+    def buy_pro_package_with_credits(self):
+        """Handle Pro package purchase with credits"""
         try:
             email = self.cfg.get("user_data", {}).get("email", "")
             if not email:
-                QMessageBox.warning(self, "Login Required", "Please login first to purchase CoHost Seller")
+                QMessageBox.warning(self, "Login Required", "Please login first to purchase Pro package")
                 return
             
             # Check current credit balance
             try:
                 from modules_server.real_credit_tracker import get_current_credit_balance
                 current_balance = get_current_credit_balance()
-                required_credits = 300000  # 300,000 credits for CoHost Seller
+                required_credits = 200000  # 200,000 credits for Pro
                 
                 if current_balance < required_credits:
                     QMessageBox.warning(
                         self, "Insufficient Credits",
-                        f"CoHost Seller package requires {required_credits:,} credits.\n"
+                        f"Pro package requires {required_credits:,} credits.\n"
                         f"Your current balance: {current_balance:,} credits\n\n"
                         "Please top-up more credits in the Credit Wallet tab first."
                     )
                     return
                 
-                # Check if already has CoHost Seller package
+                # Check if already has Pro package
                 subscription_file = Path("config/subscription_status.json")
                 if subscription_file.exists():
                     with open(subscription_file, 'r', encoding='utf-8') as f:
                         sub_data = json.load(f)
-                        if sub_data.get("cohost_seller", {}).get("active", False):
+                        if sub_data.get("pro", {}).get("active", False):
                             QMessageBox.information(
                                 self, "Already Purchased",
-                                "You already have the CoHost Seller package active!"
+                                "You already have the Pro package active!"
                             )
                             return
                 
                 # Confirm purchase
                 reply = QMessageBox.question(
                     self, "Confirm Purchase",
-                    f"🛍️ CoHost Seller Package\n\n"
+                    f"🚀 Pro Package\n\n"
                     f"Price: {required_credits:,} credits\n"
                     f"Includes:\n"
                     f"• All Basic features\n"
-                    f"• Product Management (2 slots)\n"
-                    f"• Smart Trigger System\n"
-                    f"• Auto OBS Scene Switch\n"
-                    f"• Sales Analytics\n"
-                    f"• Live Selling AI\n"
-                    f"• Option to buy +8 more slots\n\n"
+                    f"• Advanced AI Cohost\n"
+                    f"• RAG Knowledge System\n"
+                    f"• Advanced Translation\n"
+                    f"• Viewer Management\n"
+                    f"• Virtual Microphone\n"
+                    f"• Priority Support\n\n"
                     f"Your balance after purchase: {current_balance - required_credits:,} credits\n\n"
                     f"Proceed with purchase?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
@@ -1510,8 +1500,8 @@ class SubscriptionTab(QWidget):
                 from modules_server.real_credit_tracker import force_credit_deduction
                 deduction_success = force_credit_deduction(
                     required_credits, 
-                    "cohost_seller_purchase", 
-                    "CoHost Seller Package Purchase"
+                    "pro_package_purchase", 
+                    "Pro Package Purchase"
                 )
                 
                 if not deduction_success:
@@ -1525,14 +1515,16 @@ class SubscriptionTab(QWidget):
                 else:
                     sub_data = {}
                 
-                # Add CoHost Seller data
-                sub_data["cohost_seller"] = {
+                # Add Pro data
+                sub_data["pro"] = {
                     "active": True,
                     "purchased_at": datetime.now().isoformat(),
-                    "purchased_slots": 2,  # Default 2 slots
                     "email": email,
-                    "package": "cohost_seller"
+                    "package": "pro"
                 }
+                
+                # Add Pro credits (separate from Basic credits)
+                sub_data["pro_credits"] = current_balance - required_credits
                 
                 with open(subscription_file, 'w', encoding='utf-8') as f:
                     json.dump(sub_data, f, indent=2, ensure_ascii=False)
@@ -1540,18 +1532,18 @@ class SubscriptionTab(QWidget):
                 # Show success message
                 QMessageBox.information(
                     self, "Purchase Successful! 🎉",
-                    f"CoHost Seller package activated successfully!\n\n"
+                    f"Pro package activated successfully!\n\n"
                     f"✅ Credits deducted: {required_credits:,}\n"
                     f"✅ Remaining balance: {current_balance - required_credits:,}\n"
-                    f"✅ Product slots: 2 (can upgrade to 10)\n\n"
-                    f"You can now access CoHost Seller features in the main application!"
+                    f"✅ All Pro features unlocked\n\n"
+                    f"You can now access Pro features in the main application!"
                 )
                 
                 # Refresh UI
                 self.refresh_credits()
                 
-                # Emit signal to activate CoHost Seller mode
-                self.package_activated.emit("cohost_seller")
+                # Emit signal to activate Pro mode
+                self.package_activated.emit("pro")
                 
             except Exception as e:
                 QMessageBox.critical(self, "Purchase Error", f"Failed to process purchase: {str(e)}")
@@ -1959,33 +1951,70 @@ class SubscriptionTab(QWidget):
             # Jika ada error, kembalikan dictionary kosong untuk mencegah crash
             return {}
 
+    def _get_basic_credits(self):
+        """Get Basic mode credits (separate from Pro credits)"""
+        try:
+            # Cek dari subscription file untuk kredit Basic
+            subscription_file = Path("config/subscription_status.json")
+            if subscription_file.exists():
+                with open(subscription_file, 'r', encoding='utf-8') as f:
+                    sub_data = json.load(f)
+                    basic_credits = float(sub_data.get("basic_credits", 0))
+                    return basic_credits
+            
+            # Fallback ke VPS server
+            credit_info = self.get_current_credit_info()
+            return float(credit_info.get("credit_balance", 0))
+            
+        except Exception as e:
+            print(f"[ERROR] Error getting basic credits: {e}")
+            return 0.0
+
+    def _get_pro_credits(self):
+        """Get Pro mode credits (separate from Basic credits)"""
+        try:
+            # Cek dari subscription file untuk kredit Pro
+            subscription_file = Path("config/subscription_status.json")
+            if subscription_file.exists():
+                with open(subscription_file, 'r', encoding='utf-8') as f:
+                    sub_data = json.load(f)
+                    pro_credits = float(sub_data.get("pro_credits", 0))
+                    return pro_credits
+            
+            # Fallback ke VPS server (jika belum ada sistem terpisah)
+            credit_info = self.get_current_credit_info()
+            return float(credit_info.get("credit_balance", 0))
+            
+        except Exception as e:
+            print(f"[ERROR] Error getting pro credits: {e}")
+            return 0.0
+
     def enter_basic_mode(self, bypass_credit_check=False):
         """Masuk ke mode basic dengan validasi dan UI update."""
         from PyQt6.QtWidgets import QMessageBox
         import logging
         logger = logging.getLogger(__name__)
         try:
-            # Check credit availability (skip if bypass flag is set)
+            # Check Basic credit availability (separate from Pro credits)
             if not bypass_credit_check:
-                credit_info = self.get_current_credit_info()
-                credit_balance = float(credit_info.get("credit_balance", credit_info.get("hours_credit", 0)))
+                basic_credits = self._get_basic_credits()
                 MIN_CREDIT_REQUIRED = 50.0
-                if credit_balance < MIN_CREDIT_REQUIRED:
+                if basic_credits < MIN_CREDIT_REQUIRED:
                     QMessageBox.warning(
-                        self, "Credits Insufficient",
-                        f"Credits are insufficient for Basic Mode.\n\n"
-                        f"Current credits: {credit_balance:.1f}\n"
-                        f"Minimum required: {MIN_CREDIT_REQUIRED} credits\n\n"
-                        f"Please purchase credits first."
+                        self, "Basic Credits Insufficient",
+                        f"Basic credits are insufficient for Basic Mode.\n\n"
+                        f"Current Basic credits: {basic_credits:.1f}\n"
+                        f"Minimum required: {MIN_CREDIT_REQUIRED} Basic credits\n\n"
+                        f"Please purchase Basic credits first."
                     )
                     return
                 # Konfirmasi masuk mode Basic
                 reply = QMessageBox.question(
                     self, "Enter Basic Mode",
                     f"Enter Basic Mode?\n\n"
-                    f"Credits available: {credit_balance:.1f}\n"
-                    f"Estimated: ~{int(credit_balance / 0.45)} auto-reply\n\n"
-                    f"Basic Mode will be active and start using credits.",
+                    f"Basic credits available: {basic_credits:.1f}\n"
+                    f"Estimated: ~{int(basic_credits / 0.45)} auto-reply\n\n"
+                    f"Basic Mode will be active and start using Basic credits.",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 if reply != QMessageBox.StandardButton.Yes:
@@ -1998,7 +2027,7 @@ class SubscriptionTab(QWidget):
                     QMessageBox.information(
                         self, "Basic Mode Active",
                         f"Basic Mode successfully activated!\n\n"
-                        f"Credits available: {credit_balance:.1f}\n"
+                        f"Basic credits available: {basic_credits:.1f}\n"
                         f"The app will switch to Basic mode."
                     )
             else:
@@ -2008,7 +2037,7 @@ class SubscriptionTab(QWidget):
                     QMessageBox.information(
                         self, "Basic Mode Active",
                         f"Basic Mode successfully activated!\n\n"
-                        f"Credits available: {credit_balance:.1f}\n"
+                        f"Basic credits available: {basic_credits:.1f}\n"
                         f"Basic Mode activated."
                     )
         except Exception as e:
