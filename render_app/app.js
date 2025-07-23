@@ -30,10 +30,23 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   }
 })
 
+// Environment detection
+const isSandbox = process.env.IPAYMU_API_KEY?.includes('SANDBOX') || false
+
+// Health check endpoint
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: isSandbox ? 'sandbox' : 'production'
+  })
+})
+
 // iPaymu Callback Endpoint
 app.post('/ipaymu-callback', async (req, res) => {
   try {
     console.log('iPaymu Callback Data:', req.body)
+    console.log('Environment:', isSandbox ? 'SANDBOX' : 'PRODUCTION')
 
     const {
       trx_id,
@@ -98,239 +111,101 @@ app.post('/ipaymu-callback', async (req, res) => {
     }
 
     // Calculate credits (1:1 ratio with paid amount)
-    const paidAmount = parseFloat(paid_off) || 0
-    const creditsToAdd = Math.floor(paidAmount / 1000) // 1000 IDR = 1 credit
+    const creditsToAdd = Math.floor(parseFloat(amount))
 
-    // Insert or update payment record
-    const paymentData = {
-      order_id: reference_id,
-      user_id: user.id,
-      amount: parseFloat(total) || 0,
-      status: 'success',
-      transaction_id: trx_id,
-      payment_method: via,
-      paid_amount: paidAmount,
-      credits_amount: creditsToAdd,
-      paid_at: paid_at,
-      processed_at: new Date().toISOString(),
-      callback_data: req.body,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+    // Update user credits
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({ 
+        credits: user.credits + creditsToAdd,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+
+    if (updateError) {
+      console.error('Error updating user credits:', updateError)
+      return res.status(500).send('Error updating credits')
     }
 
+    // Save payment record
     const { error: paymentError } = await supabase
       .from('payments')
-      .upsert(paymentData, {
-        onConflict: 'order_id',
-        ignoreDuplicates: false
+      .insert({
+        transaction_id: trx_id,
+        user_id: user.id,
+        amount: parseFloat(amount),
+        credits_added: creditsToAdd,
+        payment_method: via || channel,
+        status: 'completed',
+        processed_at: new Date().toISOString(),
+        payment_data: req.body,
+        environment: isSandbox ? 'sandbox' : 'production'
       })
 
     if (paymentError) {
-      console.error('Payment insert error:', paymentError)
-      return res.status(500).send('Payment processing error')
+      console.error('Error saving payment:', paymentError)
+      return res.status(500).send('Error saving payment')
     }
 
-    // Update user credits
-    const { error: creditError } = await supabase
-      .rpc('add_user_credits', {
-        user_id: user.id,
-        credits_to_add: creditsToAdd
-      })
-
-    if (creditError) {
-      console.error('Credit update error:', creditError)
-      // Still return OK to iPaymu, but log the error
-    }
-
-    console.log(`Payment processed successfully: ${trx_id}, Credits added: ${creditsToAdd}`)
-
-    return res.status(200).send('OK')
+    console.log(`Payment processed successfully: ${trx_id}, Credits added: ${creditsToAdd}, Environment: ${isSandbox ? 'SANDBOX' : 'PRODUCTION'}`)
+    res.status(200).send('OK')
 
   } catch (error) {
     console.error('Callback processing error:', error)
-    return res.status(500).send('Error processing callback')
+    res.status(500).send('Internal server error')
   }
 })
 
-// Payment Completed Page
-app.get('/payment-completed', async (req, res) => {
-  try {
-    const { order_id } = req.query
-
-    if (!order_id) {
-      return res.status(400).send('Order ID required')
-    }
-
-    // Get payment details
-    const { data: payment, error: paymentError } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('order_id', order_id)
-      .single()
-
-    if (paymentError || !payment) {
-      return res.status(404).send('Payment not found')
-    }
-
-    // Get user details
-    const { data: user, error: userError } = await supabase
-      .from('user_profiles')
-      .select('email, credits')
-      .eq('id', payment.user_id)
-      .single()
-
-    if (userError || !user) {
-      return res.status(404).send('User not found')
-    }
-
-    // Create success page HTML
-    const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Success - StreamMate AI</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            text-align: center;
-            max-width: 500px;
-            width: 90%;
-        }
-        .success-icon {
-            width: 80px;
-            height: 80px;
-            background: #4CAF50;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            color: white;
-            font-size: 40px;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        .amount {
-            font-size: 24px;
-            color: #4CAF50;
-            font-weight: bold;
-            margin: 20px 0;
-        }
-        .credits {
-            background: #f0f8ff;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-        .details {
-            text-align: left;
-            background: #f9f9f9;
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px 0;
-        }
-        .btn {
-            background: #4CAF50;
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            margin: 10px;
-        }
-        .btn:hover {
-            background: #45a049;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="success-icon">✓</div>
-        <h1>Payment Successful!</h1>
-        <p>Thank you for your purchase. Your credits have been added to your account.</p>
-        
-        <div class="amount">
-            Amount: Rp ${payment.paid_amount?.toLocaleString() || '0'}
-        </div>
-        
-        <div class="credits">
-            <strong>Credits Added:</strong> ${payment.credits_amount || 0} credits
-        </div>
-        
+// Payment completion page
+app.get('/payment-completed', (req, res) => {
+  const { status, trx_id } = req.query
+  
+  if (status === 'berhasil') {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Payment Successful</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+          .success { color: #28a745; font-size: 24px; }
+          .details { margin: 20px 0; }
+          .environment { background: #ffc107; color: #000; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="success">✅ Payment Successful!</div>
+        <div class="environment">${isSandbox ? '🧪 SANDBOX MODE' : '🚀 PRODUCTION MODE'}</div>
         <div class="details">
-            <div class="detail-row">
-                <span>Order ID:</span>
-                <span>${payment.order_id}</span>
-            </div>
-            <div class="detail-row">
-                <span>Transaction ID:</span>
-                <span>${payment.transaction_id}</span>
-            </div>
-            <div class="detail-row">
-                <span>Payment Method:</span>
-                <span>${payment.payment_method}</span>
-            </div>
-            <div class="detail-row">
-                <span>Date:</span>
-                <span>${new Date(payment.paid_at).toLocaleString()}</span>
-            </div>
-            <div class="detail-row">
-                <span>User Email:</span>
-                <span>${user.email}</span>
-            </div>
-            <div class="detail-row">
-                <span>Total Credits:</span>
-                <span>${user.credits} credits</span>
-            </div>
+          <p>Your credits have been added to your account.</p>
+          <p>Transaction ID: ${trx_id}</p>
         </div>
-        
-        <a href="https://streammate-ai.com" class="btn">Back to StreamMate AI</a>
-        <a href="mailto:support@streammate-ai.com" class="btn">Contact Support</a>
-    </div>
-</body>
-</html>
-    `
-
-    res.setHeader('Content-Type', 'text/html')
-    return res.status(200).send(html)
-
-  } catch (error) {
-    console.error('Error:', error)
-    return res.status(500).send('Internal server error')
+        <p>You can now close this window and return to StreamMate AI.</p>
+      </body>
+      </html>
+    `)
+  } else {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Payment Failed</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+          .error { color: #dc3545; font-size: 24px; }
+        </style>
+      </head>
+      <body>
+        <div class="error">❌ Payment Failed</div>
+        <p>Please try again or contact support.</p>
+      </body>
+      </html>
+    `)
   }
-})
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() })
 })
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
+  console.log(`Callback server running on port ${PORT}`)
+  console.log(`Environment: ${isSandbox ? 'SANDBOX' : 'PRODUCTION'}`)
 }) 
