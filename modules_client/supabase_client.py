@@ -145,17 +145,18 @@ class SupabaseClient:
                     }
                 }
             
-            wallet_balance = float(user_data.get("wallet_balance", 0))
+            # FIXED: Use 'credits' field instead of 'wallet_balance'
+            credits = float(user_data.get("credits", 0))
             basic_credits = float(user_data.get("basic_credits", 0))
             pro_credits = float(user_data.get("pro_credits", 0))
-            total_credits = wallet_balance + basic_credits + pro_credits
+            total_credits = credits + basic_credits + pro_credits
             
             return {
                 "status": "success",
                 "message": "Credit balance retrieved",
                 "data": {
                     "email": email,
-                    "wallet_balance": wallet_balance,
+                    "wallet_balance": credits,  # Map credits to wallet_balance for compatibility
                     "basic_credits": basic_credits,
                     "pro_credits": pro_credits,
                     "total_credits": total_credits,
@@ -182,7 +183,7 @@ class SupabaseClient:
         try:
             response = self._make_request(
                 'GET',
-                f"/rest/v1/users?email=eq.{email}",
+                f"/rest/v1/user_profiles?email=eq.{email}",  # FIXED: Use user_profiles table
                 use_service_role=True
             )
             
