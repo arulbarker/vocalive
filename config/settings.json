@@ -5,10 +5,10 @@
   "paket": "basic",
   "user_data": {
     "email": "mursalinasrul@gmail.com",
-    "last_login": "2025-07-23T09:03:59.506936"
+    "last_login": "2025-07-23T20:32:29.851444"
   },
   "app_version": "v1.0.0-basic",
-  "last_update_check": 1753174154.0672615,
+  "last_update_check": 1753276491.0407424,
   "trigger_words": [
     "mas"
   ],
@@ -59,5 +59,13 @@
   },
   "environment": "production",
   "debug_mode": false,
-  "safety_mode": true
+  "safety_mode": true,
+  "ipaymu_config": {
+    "SANDBOX_MODE": "false",
+    "VA_NUMBER": "1179005157914468",
+    "API_KEY": "C3CF720D-8347-4EA3-8DC9-BAC2DEF046AC",
+    "NOTIFY_URL": "https://nivwxqojwljihoybzgkc.supabase.co/functions/v1/payment_callback",
+    "RETURN_URL": "https://nivwxqojwljihoybzgkc.supabase.co/functions/v1/payment_completed",
+    "CANCEL_URL": "https://nivwxqojwljihoybzgkc.supabase.co/functions/v1/payment_completed?status=canceled"
+  }
 }

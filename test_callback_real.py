@@ -1,17 +1,11 @@
-#!/usr/bin/env python3
-"""
-Test Script untuk Callback iPaymu
-Menguji Edge Function callback dengan berbagai skenario
-"""
-
 import requests
 import json
 
-# Test callback data (sample iPaymu callback)
+# Test callback data dengan user yang ada di database
 test_data = {
     "trx_id": "TEST123456789",
     "sid": "S1234567890",
-    "reference_id": "test@email.com_1234567890",
+    "reference_id": "mursalinasrul@gmail.com_1234567890",  # User yang ada
     "status": "berhasil",
     "status_code": "1",
     "sub_total": "10000",
@@ -29,8 +23,8 @@ test_data = {
     "via": "va",
     "channel": "bca",
     "payment_no": "123456789",
-    "buyer_name": "Test User",
-    "buyer_email": "test@email.com",
+    "buyer_name": "Mursalin Asrul",
+    "buyer_email": "mursalinasrul@gmail.com",
     "buyer_phone": "081234567890",
     "additional_info": "",
     "url": "https://streammate-callback.onrender.com/payment-completed",
@@ -40,8 +34,9 @@ test_data = {
 # Test callback endpoint
 url = "https://streammate-callback.onrender.com/ipaymu-callback"
 
-print("🧪 Testing iPaymu Callback...")
+print("🧪 Testing iPaymu Callback dengan User Real...")
 print(f"URL: {url}")
+print(f"User: mursalinasrul@gmail.com")
 print(f"Data: {json.dumps(test_data, indent=2)}")
 
 try:
@@ -55,10 +50,13 @@ try:
     
     if response.status_code == 200:
         print("✅ Callback test SUCCESS!")
+        print("💳 Credits should be added to user account")
+        print("📊 Check Supabase database for payment record")
     else:
         print("❌ Callback test FAILED!")
         
 except Exception as e:
     print(f"❌ Error testing callback: {e}")
 
-print("\n🔍 Check Render logs for detailed processing info...") 
+print("\n🔍 Check Render logs for detailed processing info...")
+print("📊 Check Supabase database for user credits update...") 
