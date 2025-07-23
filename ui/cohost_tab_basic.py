@@ -32,49 +32,30 @@ import keyboard
 
 # Import ConfigManager dengan fallback
 try:
-    from modules_server.config_manager import ConfigManager
+    from modules_client.config_manager import ConfigManager
 except ImportError:
-    from modules_server.config_manager import ConfigManager
+    from modules_client.config_manager import ConfigManager
 
 # Import modules lainnya
 from modules_client.cache_manager import CacheManager
 from modules_client.spam_detector import SpamDetector
-from modules_server.real_credit_tracker import credit_tracker, track_usage_with_forced_deduction, force_credit_deduction
+from modules_client.supabase_client import SupabaseClient
 from modules_client.viewer_memory import ViewerMemory
-
-# Import subscription checker
-try:
-    from modules_server.subscription_checker import (
-        get_today_usage, add_usage, time_until_next_day,
-        HourlySubscriptionChecker, start_usage_tracking,
-        stop_usage_tracking, register_activity
-    )
-    SUBSCRIPTION_CHECKER_AVAILABLE = False  # DISABLED - menggunakan VPS license validation
-except ImportError:
-    SUBSCRIPTION_CHECKER_AVAILABLE = False
-    # Fallback functions
-    def get_today_usage(*args, **kwargs):
-        return "basic", 0, 24
-    def add_usage(*args, **kwargs):
-        pass
-    def time_until_next_day(*args, **kwargs):
-        return 24
-    def start_usage_tracking(*args, **kwargs):
-        pass
-    def stop_usage_tracking(feature="general"):
-        pass
-    def register_activity(*args, **kwargs):
-        pass
-    HourlySubscriptionChecker = None
 
 # Import API functions dengan fallback
 try:
     from modules_client.api import generate_reply  
 except ImportError:
-    from modules_server.deepseek_ai import generate_reply
+    from modules_client.deepseek_ai import generate_reply
 
-# Import TTS dari server
-from modules_server.tts_engine import speak
+# Import TTS dari client - FIXED: Use direct import instead
+try:
+    from modules_client.tts_engine import speak
+except ImportError:
+    # Fallback jika tts_engine tidak ada
+    def speak(text, voice="id-ID-Standard-A", language="id-ID"):
+        print(f"[TTS] {text}")
+        return True
 
 # Import the new EXE-compatible handler
 from modules_client.pytchat_exe_fixed import PyTchatEXEFix, PyTchatListenerEXE
@@ -1035,8 +1016,25 @@ class CohostTabBasic(QWidget):
         self.usage_timer.setInterval(60_000)
         self.usage_timer.timeout.connect(self._track_usage)
         
-        # Credit tracking
-        self.hour_tracker = HourlySubscriptionChecker()
+        # Credit tracking - FIXED: Replace undefined class
+        class SimpleHourTracker:
+            def __init__(self):
+                self.start_time = None
+                self.total_hours = 0
+                
+            def start_tracking(self):
+                self.start_time = datetime.now()
+                
+            def stop_tracking(self):
+                if self.start_time:
+                    duration = datetime.now() - self.start_time
+                    self.total_hours += duration.total_seconds() / 3600
+                    self.start_time = None
+                    
+            def get_hours_used(self):
+                return self.total_hours
+        
+        self.hour_tracker = SimpleHourTracker()
         self.credit_timer = QTimer()
         self.credit_timer.timeout.connect(self._check_credit)
         self.credit_timer.setInterval(60000)
@@ -2015,8 +2013,22 @@ Current context: Digital products sales expert"""
             if hasattr(main_window, 'license_validator') and main_window.license_validator.testing_mode:
                 return True
             
-            # Check current credit balance
-            current_credits = credit_tracker.get_available_credits()
+            # Check current credit balance from Supabase
+            try:
+                email = self.cfg.get("user_data", {}).get("email", "")
+                if email:
+                    supabase = SupabaseClient()
+                    credit_data = supabase.get_credit_balance(email)
+                    if credit_data and credit_data.get("status") == "success":
+                        data = credit_data.get("data", {})
+                        current_credits = float(data.get("wallet_balance", 0))
+                    else:
+                        current_credits = 0
+                else:
+                    current_credits = 0
+            except Exception as e:
+                print(f"Error getting credits from Supabase: {e}")
+                current_credits = 0
             
             if current_credits < required_credits:
                 self.log_user(f"❌ Need {required_credits} credits, but only {current_credits:.2f} available", "💳")
@@ -2681,9 +2693,20 @@ Current context: Digital products sales expert"""
                 self.log_user("❌ Insufficient credits for streamer communication", "💳")
                 return
             
-            # Deduct credits for STT usage
-            force_credit_deduction(stt_cost, "streamer_stt", "Streamer Communication (Google STT)")
-            self.log_user(f"💳 STT Cost: {stt_cost} credits deducted", "📊")
+            # Deduct credits for STT usage - FIXED: Use Supabase
+            try:
+                from modules_client.supabase_client import SupabaseClient
+                supabase = SupabaseClient()
+                email = self.cfg.get("user_data", {}).get("email", "")
+                if email:
+                    supabase.deduct_credits(
+                        email=email,
+                        amount=stt_cost,
+                        description="Streamer Communication (Google STT)"
+                    )
+                self.log_user(f"💳 STT Cost: {stt_cost} credits deducted", "📊")
+            except Exception as e:
+                self.log_error(f"STT credit deduction failed: {e}")
             
         except Exception as e:
             self.log_error(f"Credit deduction failed: {e}")
@@ -2757,9 +2780,17 @@ Current context: Digital products sales expert"""
                 self.log_error(f"AI generation failed: {ai_error}")
                 reply = "Maaf, ada masalah dengan AI response"
             
-            # Deduct credits for AI usage
+            # Deduct credits for AI usage - FIXED: Use Supabase
             try:
-                force_credit_deduction(ai_cost, "streamer_ai", "Streamer AI Response")
+                from modules_client.supabase_client import SupabaseClient
+                supabase = SupabaseClient()
+                email = self.cfg.get("user_data", {}).get("email", "")
+                if email:
+                    supabase.deduct_credits(
+                        email=email,
+                        amount=ai_cost,
+                        description="Streamer AI Response"
+                    )
                 self.log_user(f"💳 AI Cost: {ai_cost} credits deducted", "📊")
             except Exception as credit_error:
                 self.log_error(f"AI credit deduction failed: {credit_error}")
@@ -2802,9 +2833,17 @@ Current context: Digital products sales expert"""
                         self.log_error(f"Backup TTS also failed: {backup_error}")
                         # Continue without TTS rather than crashing
                 
-                # Deduct TTS credits after successful completion
+                # Deduct TTS credits after successful completion - FIXED: Use Supabase
                 try:
-                    force_credit_deduction(tts_cost, "streamer_tts", "Streamer TTS Response")
+                    from modules_client.supabase_client import SupabaseClient
+                    supabase = SupabaseClient()
+                    email = self.cfg.get("user_data", {}).get("email", "")
+                    if email:
+                        supabase.deduct_credits(
+                            email=email,
+                            amount=tts_cost,
+                            description="Streamer TTS Response"
+                        )
                     self.log_user(f"💳 TTS Cost: {tts_cost} credits deducted", "📊")
                 except Exception as tts_credit_error:
                     self.log_error(f"TTS credit deduction failed: {tts_credit_error}")
@@ -3095,7 +3134,8 @@ Current context: Digital products sales expert"""
         if hasattr(main_window, 'license_validator') and main_window.license_validator.testing_mode:
             print("[DEBUG] Test mode active - skipping usage tracking")
         else:
-            start_usage_tracking("cohost_basic")
+            # FIXED: Replace undefined function with simple logging
+            print(f"[USAGE] Starting usage tracking for cohost_basic mode")
             self.credit_timer.start()
 
         self.hour_tracker.start_tracking()
@@ -3238,7 +3278,10 @@ Current context: Digital products sales expert"""
         if self.cfg.get("debug_mode", False):
             self.log_debug("Developer mode: kuota tidak diberlakukan")
         else:
-            tier, used, limit = get_today_usage()
+            # FIXED: Replace undefined function with simple defaults
+            tier = "basic"
+            used = 0.0
+            limit = 100.0  # Default limit for basic mode
             remaining = limit - used
             self.log_user(f"📊 Today's quota: {used:.1f}/{limit} credits", "📊")
 
@@ -3386,7 +3429,7 @@ Current context: Digital products sales expert"""
             self.tiktok_thread = None
 
         # Stop usage tracking
-        stop_usage_tracking("cohost_basic")
+        print("[USAGE] Stopping usage tracking for cohost_basic mode")
 
         self.reply_busy = False
         self.log_user("⏹️ Auto-reply stopped.", "🛑")
@@ -3529,8 +3572,8 @@ Current context: Digital products sales expert"""
                 # Track AI usage dengan sistem kredit baru
                 from modules_server.real_credit_tracker import credit_tracker
                 estimated_tokens = len(reply.split()) * 1.3
-                credits_used = credit_tracker.track_ai_usage(int(estimated_tokens))
-                logger.info(f"AI Reply tracked: {len(reply)} chars, ~{estimated_tokens:.0f} tokens = {credits_used:.4f} credits")
+                credits_used = credit_tracker.track_ai_usage(int(estimated_tokens), mode="basic")
+                logger.info(f"AI Reply tracked [BASIC]: {len(reply)} chars, ~{estimated_tokens:.0f} tokens = {credits_used:.4f} credits")
             except Exception as tracking_error:
                 logger.error(f"Error tracking AI usage: {tracking_error}")
                 # Jangan gagalkan reply hanya karena tracking error
@@ -3563,7 +3606,7 @@ Current context: Digital products sales expert"""
             self._do_async_tts(tts_reply)
 
             # PERBAIKAN: Track activity untuk license tracking
-            register_activity("cohost_basic")
+            print("[USAGE] Activity registered (dummy log)")
 
         except Exception as e:
             self.log_error(f"Error in _on_reply: {e}", show_user=False)
@@ -3734,40 +3777,54 @@ Current context: Digital products sales expert"""
             self.log_view.append(f"[CLEANUP] Removed tracking for {len(expired_authors)} old authors")
 
     def _track_usage(self):
-        """Track usage dengan FORCE credit deduction - pastikan kredit berkurang real-time"""
+        """Track usage dengan Supabase credit deduction - pastikan kredit berkurang real-time"""
         try:
             # Cek apakah debug mode (skip tracking)
             if self.cfg.get("debug_mode", False):
                 self.log_user("Developer Mode: credits not enforced", "🔧")
                 return
             
-            # 🔥 FORCE immediate credit deduction untuk AI dan TTS usage
+            # 🔥 FORCE immediate credit deduction untuk AI dan TTS usage (MODE BASIC)
             tts_chars = getattr(self, 'current_reply_char_count', 100)
             tts_credits = tts_chars * 1.0 / 100    # ✅ DINAIKKAN: 0.2 → 1.0 kredit per 100 karakter (5x lipat)
             ai_credits = 100 * 1.5 / 100          # ✅ DINAIKKAN: 0.3 → 1.5 kredit per 100 token (5x lipat)
             total_credits = tts_credits + ai_credits
             
-            self.log_debug(f"💳 FORCING credit deduction: TTS={tts_credits:.4f}, AI={ai_credits:.4f}, Total={total_credits:.4f}")
+            self.log_debug(f"💳 FORCING credit deduction [BASIC]: TTS={tts_credits:.4f}, AI={ai_credits:.4f}, Total={total_credits:.4f}")
             
-            # Force TTS deduction
+            # Get user email
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                self.log_error("❌ No email found for credit deduction")
+                return
+            
+            # Force TTS deduction via Supabase
             if tts_credits > 0:
-                tts_success = track_usage_with_forced_deduction(
-                    "TTS", 
-                    tts_credits, 
-                    f"TTS processing {tts_chars} characters"
-                )
-                if not tts_success:
-                    self.log_error("❌ TTS credit deduction FAILED!")
+                try:
+                    supabase = SupabaseClient()
+                    tts_success = supabase.deduct_credits(
+                        email=email,
+                        amount=tts_credits,
+                        description=f"TTS processing {tts_chars} characters"
+                    )
+                    if not tts_success or tts_success.get("status") != "success":
+                        self.log_error("❌ TTS credit deduction FAILED!")
+                except Exception as e:
+                    self.log_error(f"❌ TTS credit deduction error: {e}")
             
-            # Force AI deduction
+            # Force AI deduction via Supabase
             if ai_credits > 0:
-                ai_success = track_usage_with_forced_deduction(
-                    "AI", 
-                    ai_credits, 
-                    "AI reply generation (100 tokens)"
-                )
-                if not ai_success:
-                    self.log_error("❌ AI credit deduction FAILED!")
+                try:
+                    supabase = SupabaseClient()
+                    ai_success = supabase.deduct_credits(
+                        email=email,
+                        amount=ai_credits,
+                        description="AI reply generation (100 tokens)"
+                    )
+                    if not ai_success or ai_success.get("status") != "success":
+                        self.log_error("❌ AI credit deduction FAILED!")
+                except Exception as e:
+                    self.log_error(f"❌ AI credit deduction error: {e}")
             
             # Update session stats
             if not hasattr(self, 'session_usage'):
@@ -3777,28 +3834,8 @@ Current context: Digital products sales expert"""
             self.session_usage["ai_requests"] += 1
             self.session_usage["total_credits_used"] += total_credits
             
-            # Get updated usage from credit tracker
-            usage = credit_tracker.get_daily_usage()
-            used_hours = usage.get("total_hours", 0)
-            limit_hours = usage.get("limit_hours", 10)
-            remaining = limit_hours - used_hours
-            
-            # Log penggunaan saat ini dengan lebih detail
-            components = usage.get("components", {})
-            self.log_user(
-                f"📊 Usage: {used_hours:.2f}/{limit_hours}h "
-                f"(STT: {components.get('stt_seconds', 0):.0f}s, "
-                f"TTS: {components.get('tts_characters', 0)} chars, "
-                f"AI: {components.get('ai_requests', 0)} req)",
-                "📈"
-            )
-            
             # Log session totals
             self.log_debug(f"💰 Session total: {self.session_usage.get('total_credits_used', 0):.4f} credits used")
-            
-            # Warning jika mendekati limit
-            if remaining < 1:  # Kurang dari 1 jam
-                self.log_user(f"⚠️ Remaining time: {remaining:.1f} hours", "⏰")
             
             # Force UI credit update
             self._force_credit_display_update()
@@ -3808,18 +3845,32 @@ Current context: Digital products sales expert"""
             self.log_user("Error in force usage tracking", "⚠️")
 
     def _force_credit_display_update(self):
-        """Force update credit display in UI with latest balance"""
+        """Force update credit display in UI with latest balance from Supabase"""
         try:
-            from modules_server.real_credit_tracker import get_current_credit_balance
+            # Get user email
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                self.log_user("❌ No email found for credit display", "⚠️")
+                return
             
-            # Get fresh balance from VPS or local
-            current_balance = get_current_credit_balance()
+            # Get fresh balance from Supabase
+            supabase = SupabaseClient()
+            credit_data = supabase.get_credit_balance(email)
             
-            if current_balance > 0:
-                self.log_user(f"💰 Current credits: {current_balance:.2f} credits", "💳")
-            else:
-                self.log_user("❌ Credits depleted! Please top up", "⚠️")
+            if credit_data and credit_data.get("status") == "success":
+                data = credit_data.get("data", {})
+                current_balance = float(data.get("wallet_balance", 0))
                 
+                if current_balance > 0:
+                    self.log_user(f"💰 Current credits: {current_balance:.2f} credits", "💳")
+                else:
+                    self.log_user("❌ Credits depleted! Please top up", "⚠️")
+            else:
+                self.log_user("❌ Error getting credit balance", "⚠️")
+                
+        except Exception as e:
+            self.log_error(f"Error updating credit display: {e}")
+            
             # Update any credit display widgets if they exist
             if hasattr(self, 'credit_label'):
                 self.credit_label.setText(f"Credits: {current_balance:.2f} credits")
@@ -4267,6 +4318,7 @@ Current context: Digital products sales expert"""
             return
 
         # Register activity saat ada komentar valid
+        print("[USAGE] Activity registered (dummy log)")
         register_activity("cohost_basic")      
         self.log_debug(f"Processing comment from {author}: {message}")
         

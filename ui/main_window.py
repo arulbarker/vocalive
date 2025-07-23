@@ -4,7 +4,6 @@ import os
 import datetime
 import json 
 import logging
-import requests
 from pathlib import Path
 from datetime import datetime, timedelta
 import pytz
@@ -128,50 +127,36 @@ DARK_THEME = """
 """
 
 # Import ConfigManager
-from modules_server.config_manager import ConfigManager
+from modules_client.config_manager import ConfigManager
 
-# PRODUCTION MODE: SERVER-ONLY VALIDATION
+# Import Supabase client
+from modules_client.supabase_client import SupabaseClient
+
+# PRODUCTION MODE: SUPABASE-ONLY VALIDATION
 import sys
 
 def _is_production_mode():
     """Check if running in production (EXE) mode"""
     return getattr(sys, 'frozen', False)
 
-# Import License validator dengan fallback
+# Import License validator dengan fallback untuk Supabase
 try:
-    from modules_server.license_validator import LicenseValidator
-    has_license_validator = True
+    from modules_client.supabase_client import SupabaseClient
+    has_supabase_client = True
 except ImportError:
-    has_license_validator = False
+    has_supabase_client = False
     
-    class LicenseValidator:
-        def __init__(self, testing_mode=False):
-            self.testing_mode = testing_mode
+    class SupabaseClient:
+        def __init__(self):
+            pass
             
-        def validate(self, force_refresh=False):
-            """PRODUCTION MODE: Server-only validation - NO LOCAL FALLBACK"""
-            
-            # In production mode, FORCE server validation
-            if _is_production_mode():
-                print("[PRODUCTION] Server-only mode - no local fallback allowed")
-                return {
-                    "is_valid": False,
-                    "tier": "none",
-                    "message": "Production mode requires server validation",
-                    "source": "production_server_only",
-                    "hours_credit": 0.0
-                }
-            
-            # Development mode fallback (only for dev)
-            if self.testing_mode:
-                return {"is_valid": True, "tier": "basic", "source": "testing_mode"}
-            
-            # Default: Invalid - must use server
+        def validate_license(self, email, hardware_id=None):
+            """SUPABASE MODE: Supabase-only validation"""
             return {
                 "is_valid": False,
-                "tier": "none", 
-                "message": "Must validate with server",
-                "source": "no_local_fallback",
+                "tier": "none",
+                "message": "Supabase validation required",
+                "source": "supabase_only",
                 "hours_credit": 0.0
             }
 
@@ -257,7 +242,19 @@ except ImportError:
         TUTORIAL_AVAILABLE = False
         print("[WARNING] TutorialTab not available")
 
-# Import Pro Mode tabs
+# Import CoHost Seller tab
+try:
+    from ui.cohost_seller_tab import CohostSellerTab
+    COHOST_SELLER_AVAILABLE = True
+except ImportError:
+    try:
+        from cohost_seller_tab import CohostSellerTab
+        COHOST_SELLER_AVAILABLE = True
+    except ImportError:
+        COHOST_SELLER_AVAILABLE = False
+        print("[WARNING] CohostSellerTab not available")
+
+# Import CoHost Pro tab
 try:
     from ui.cohost_tab_pro import CohostTabPro
     COHOST_PRO_AVAILABLE = True
@@ -269,28 +266,7 @@ except ImportError:
         COHOST_PRO_AVAILABLE = False
         print("[WARNING] CohostTabPro not available")
 
-try:
-    from ui.rag_tab import RAGTab
-    RAG_AVAILABLE = True
-except ImportError:
-    try:
-        from rag_tab import RAGTab
-        RAG_AVAILABLE = True
-    except ImportError:
-        RAG_AVAILABLE = False
-        print("[WARNING] RAGTab not available")
-
-try:
-    from ui.translate_tab_pro import TranslateTabPro
-    TRANSLATE_PRO_AVAILABLE = True
-except ImportError:
-    try:
-        from translate_tab_pro import TranslateTabPro
-        TRANSLATE_PRO_AVAILABLE = True
-    except ImportError:
-        TRANSLATE_PRO_AVAILABLE = False
-        print("[WARNING] TranslateTabPro not available")
-
+# Import Viewers tab
 try:
     from ui.viewers_tab import ViewersTab
     VIEWERS_AVAILABLE = True
@@ -302,6 +278,7 @@ except ImportError:
         VIEWERS_AVAILABLE = False
         print("[WARNING] ViewersTab not available")
 
+# Import Virtual Mic tab
 try:
     from ui.virtual_mic_tab import VirtualMicTab
     VIRTUAL_MIC_AVAILABLE = True
@@ -325,20 +302,22 @@ except ImportError:
         CREDIT_WALLET_AVAILABLE = False
         print("[WARNING] CreditWalletTab not available")
 
-# Import subscription checker
+# Define subscription checker availability
+SUBSCRIPTION_CHECKER_AVAILABLE = has_supabase_client
+
+# Import Supabase client untuk subscription checking
 try:
-    from modules_server.subscription_checker import (
-        check_subscription_validity, 
-        get_today_usage,
-        get_usage_history,
-        set_idle_callbacks,
-        start_usage_tracking,
-        stop_usage_tracking
-    )
-    from modules_client.update_manager import get_update_manager
-    SUBSCRIPTION_CHECKER_AVAILABLE = False  # DISABLED - menggunakan VPS license validation
+    from modules_client.supabase_client import SupabaseClient
+    SUPABASE_CLIENT_AVAILABLE = True
+    # Define idle callbacks for Supabase
+    def set_idle_callbacks(*args, **kwargs):
+        pass
+    def start_usage_tracking(*args, **kwargs):
+        pass
+    def stop_usage_tracking(*args, **kwargs):
+        pass
 except ImportError:
-    SUBSCRIPTION_CHECKER_AVAILABLE = False
+    SUPABASE_CLIENT_AVAILABLE = False
     # Fallback functions
     def set_idle_callbacks(*args, **kwargs):
         pass
@@ -385,8 +364,8 @@ class MainWindow(QMainWindow):
         # Apply dark theme
         self.setStyleSheet(DARK_THEME)
         
-        # Setup license validator
-        self.license_validator = LicenseValidator(testing_mode=False)
+        # Setup Supabase client for license validation
+        self.supabase_client = SupabaseClient()
         
         # Log mode yang digunakan
         logger.info("StreamMate AI - Basic Mode Only")
@@ -532,8 +511,8 @@ class MainWindow(QMainWindow):
                     logger.info(f"Subscription status: {status}, Hours: {hours_credit}")
                     
                     # CASE 1: User berbayar dengan kredit cukup
-                    if status == "paid" and hours_credit >= 1.0:  # Minimal 1 kredit
-                        logger.info("User has sufficient credit, going to basic mode")
+                    if status in ["paid", "active"] and hours_credit >= 1.0:  # Minimal 1 kredit
+                        logger.info(f"User has sufficient credit ({hours_credit}), going to basic mode")
                         self.pilih_paket("basic")
                         return
                         
@@ -673,18 +652,13 @@ class MainWindow(QMainWindow):
                 
             logger.info(f"Using email for validation: {email}")
             
-            # ✅ PERBAIKAN: Force refresh license validator config sebelum validate
-            self.license_validator.cfg.load_settings()
-            
-            # ✅ PERBAIKAN: Pass email directly ke license validator untuk memastikan ada email
-            # Sementara force set email di license validator config jika kosong
-            validator_user_data = self.license_validator.cfg.get("user_data", {})
-            if not validator_user_data.get("email"):
-                self.license_validator.cfg.set("user_data", {"email": email, "last_login": datetime.now().isoformat()})
-                logger.info(f"Email manually set in license validator: {email}")
+            # ✅ PERBAIKAN: Use Supabase client untuk validation
+            # Set email di config untuk Supabase validation
+            self.cfg.set("user_data", {"email": email, "last_login": datetime.now().isoformat()})
+            logger.info(f"Email set for Supabase validation: {email}")
                 
-            # Validate license - PENTING: Force refresh untuk selalu ambil data dari server
-            license_data = self.license_validator.validate(force_refresh=True)
+            # Validate license menggunakan Supabase - PENTING: Force refresh untuk selalu ambil data dari server
+            license_data = self.supabase_client.validate_license(email)
             logger.info(f"License validation result: {license_data}")
             
             # PERBAIKAN: Pastikan subscription tab dibuat dengan benar
@@ -698,10 +672,10 @@ class MainWindow(QMainWindow):
                 logger.info("Adding subscription tab to stack")
                 self.stack.addWidget(self.subscription_tab)
             
-            # TAMBAHAN BARU: Refresh subscription tab untuk sinkronisasi data VPS
-            logger.info("Refreshing subscription tab to sync VPS data")
+            # TAMBAHAN BARU: Refresh subscription tab untuk sinkronisasi data
+            logger.info("Refreshing subscription tab to sync data")
             if hasattr(self.subscription_tab, 'refresh_credits'):
-                self.subscription_tab.refresh_credits(force_vps_sync=True)
+                self.subscription_tab.refresh_credits()
                 
             # Switch ke subscription tab
             self.stack.setCurrentWidget(self.subscription_tab)
@@ -711,11 +685,24 @@ class MainWindow(QMainWindow):
             self.update_license_status()
             
             # PERBAIKAN: Cek apakah user sudah memiliki langganan valid
-            if license_data.get("is_valid", False):
-                tier = license_data.get("tier", "basic")
-                # PERBAIKAN: Gunakan credit_balance dengan fallback ke hours_credit
-                credit_balance = float(license_data.get("credit_balance", license_data.get("hours_credit", 0)))
-                source = license_data.get("source", "unknown")
+            # Support both direct is_valid and Supabase response format
+            is_valid = (license_data.get("is_valid", False) or 
+                       (license_data.get("status") == "success" and 
+                        license_data.get("data", {}).get("is_valid", False)))
+            
+            if is_valid:
+                # Extract data from either direct format or Supabase response
+                if license_data.get("status") == "success" and "data" in license_data:
+                    # Supabase response format
+                    data = license_data["data"]
+                    tier = data.get("tier", "basic")
+                    credit_balance = float(data.get("credit_balance", data.get("hours_credit", 0)))
+                    source = "supabase"
+                else:
+                    # Direct format
+                    tier = license_data.get("tier", "basic")
+                    credit_balance = float(license_data.get("credit_balance", license_data.get("hours_credit", 0)))
+                    source = license_data.get("source", "unknown")
                 
                 # Tambahkan debug print untuk memahami alur program
                 print(f"[DEBUG_STARTUP] Valid license found. Tier: {tier}, Credits: {credit_balance}, Source: {source}")
@@ -743,15 +730,11 @@ class MainWindow(QMainWindow):
                     except Exception as e:
                         print(f"[DEBUG_STARTUP] Error reading local credit: {e}")
                 
-                # JIKA KREDIT >= 50, JANGAN TAMPILKAN NOTIFIKASI APAPUN
-                if credit_balance >= 50:
-                    print(f"[DEBUG_STARTUP] User has sufficient credits ({credit_balance}). Activating {tier} mode without notifications.")
+                # PERBAIKAN: Jika user memiliki kredit yang cukup, langsung aktifkan mode basic
+                if credit_balance >= 1.0:  # Minimal 1 kredit untuk basic mode
+                    print(f"[DEBUG_STARTUP] User has sufficient credits ({credit_balance}). Activating {tier} mode.")
                     # Auto-activate jika sudah ada subscription
                     QTimer.singleShot(1500, lambda: self.pilih_paket(tier))
-                    return
-                elif credit_balance > 0:
-                    print(f"[DEBUG_STARTUP] User has low credits ({credit_balance} < 50). Showing subscription tab.")
-                    # Jangan tampilkan notifikasi, biarkan user lihat subscription tab
                     return
                     
                 # Jika kredit habis, tampilkan notifikasi khusus
@@ -764,7 +747,7 @@ class MainWindow(QMainWindow):
                 return
                 
             # Jika lisensi tidak valid atau tidak ada subscription
-            print(f"[DEBUG_STARTUP] No valid license. Reason: {license_data.get('reason')}, Message: {license_data.get('message')}")
+            print(f"[DEBUG_STARTUP] License validation result: Valid={license_data.get('is_valid', False)}, Message: {license_data.get('message')}")
             QTimer.singleShot(2000, lambda: QMessageBox.information(
                 self,
                 "Subscription Status",
@@ -835,18 +818,64 @@ class MainWindow(QMainWindow):
         try:
             subscription_file = Path("config/subscription_status.json")
             if not subscription_file.exists():
-                return {"basic": False, "pro": False}
+                return {"basic": False, "cohost_seller": False}
             
             with open(subscription_file, 'r', encoding='utf-8') as f:
                 sub_data = json.load(f)
             
-            return {
-                "basic": sub_data.get("basic", {}).get("active", False),
-                "pro": sub_data.get("pro", {}).get("active", False)
+            # PERBAIKAN: Support both old and new subscription structures
+            basic_active = False
+            cohost_seller_active = False
+            pro_active = False
+            
+            # Method 1: Check new structure (specific package purchases)
+            if "basic" in sub_data and isinstance(sub_data["basic"], dict):
+                basic_active = sub_data["basic"].get("active", False)
+            
+            if "cohost_seller" in sub_data and isinstance(sub_data["cohost_seller"], dict):
+                cohost_seller_active = sub_data["cohost_seller"].get("active", False)
+            
+            if "pro" in sub_data and isinstance(sub_data["pro"], dict):
+                pro_active = sub_data["pro"].get("active", False)
+            
+            # Method 2: Check old structure (general status + package + credits)
+            if not basic_active and not cohost_seller_active and not pro_active:
+                status = sub_data.get("status", "")
+                package = sub_data.get("package", "")
+                tier = sub_data.get("tier", "")
+                credit_balance = float(sub_data.get("credit_balance", sub_data.get("hours_credit", 0)))
+                is_valid = sub_data.get("is_valid", False)
+                
+                # User has active subscription with credits = basic access
+                if (status in ["active", "paid"] and 
+                    (package == "basic" or tier == "basic") and 
+                    credit_balance > 0 and 
+                    is_valid):
+                    basic_active = True
+                    print(f"[DEBUG] PACKAGE_CHECK: Detected basic access via old structure - Status: {status}, Credits: {credit_balance}")
+                
+                # Check for cohost_seller package
+                if package == "cohost_seller" or tier == "cohost_seller":
+                    cohost_seller_active = True
+                    print(f"[DEBUG] PACKAGE_CHECK: Detected cohost_seller access via old structure")
+                
+                # Check for pro package
+                if package == "pro" or tier == "pro":
+                    pro_active = True
+                    print(f"[DEBUG] PACKAGE_CHECK: Detected pro access via old structure")
+            
+            result = {
+                "basic": basic_active,
+                "cohost_seller": cohost_seller_active,
+                "pro": pro_active
             }
+            
+            print(f"[DEBUG] PACKAGE_CHECK: Final result: {result}")
+            return result
+            
         except Exception as e:
             logger.error(f"Error checking purchased packages: {e}")
-            return {"basic": False, "pro": False}
+            return {"basic": False, "cohost_seller": False, "pro": False}
 
     def pilih_paket(self, paket):
         """Initialize main UI based on actually purchased packages."""
@@ -862,6 +891,8 @@ class MainWindow(QMainWindow):
             # Determine which mode to use based on purchases
             if purchased["pro"]:
                 actual_mode = "pro"
+            elif purchased["cohost_seller"]:
+                actual_mode = "cohost_seller"
             elif purchased["basic"]:
                 actual_mode = "basic"
             else:
@@ -890,6 +921,8 @@ class MainWindow(QMainWindow):
             # Update status
             if purchased["pro"]:
                 self.status_bar.showMessage(f"StreamMate Pro activated", 5000)
+            elif purchased["cohost_seller"]:
+                self.status_bar.showMessage(f"StreamMate CoHost Seller activated", 5000)
             else:
                 self.status_bar.showMessage(f"StreamMate Basic activated", 5000)
             print(f"[DEBUG] PILIH_PAKET: Status bar updated")
@@ -976,92 +1009,69 @@ class MainWindow(QMainWindow):
                 tabs.addTab(placeholder, "🔒 Basic Features")
                 print("[INFO] Basic features locked - user needs to purchase")
 
-            # Only show Pro Mode features if Pro package is purchased
+            # Only show CoHost Pro if that package is purchased
             if purchased["pro"]:
-                # Tab Cohost Pro - Advanced features
                 if COHOST_PRO_AVAILABLE:
                     self.cohost_pro_tab = CohostTabPro()
-                    tabs.addTab(self.cohost_pro_tab, "🤖 Cohost Pro")
-                    print("[INFO] Cohost Pro tab added (Pro purchased)")
+                    tabs.addTab(self.cohost_pro_tab, "🚀 CoHost Pro")
+                    print("[INFO] CoHost Pro tab added (Pro purchased)")
                 else:
                     placeholder = QWidget()
                     layout = QVBoxLayout(placeholder)
-                    label = QLabel("🤖 Cohost Pro\n\n(Under development)")
+                    label = QLabel("🚀 CoHost Pro\n\n(Under development)")
                     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                     label.setStyleSheet("font-size: 16px; color: #888;")
                     layout.addWidget(label)
-                    tabs.addTab(placeholder, "🤖 Cohost Pro")
-                    print("[WARNING] Cohost Pro tab not available - using placeholder")
-
-                # Tab RAG - Knowledge Base
-                if RAG_AVAILABLE:
-                    self.rag_tab = RAGTab()
-                    tabs.addTab(self.rag_tab, "📚 RAG Knowledge")
-                    print("[INFO] RAG tab added (Pro purchased)")
-                else:
-                    placeholder = QWidget()
-                    layout = QVBoxLayout(placeholder)
-                    label = QLabel("📚 RAG Knowledge\n\n(Under development)")
-                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    label.setStyleSheet("font-size: 16px; color: #888;")
-                    layout.addWidget(label)
-                    tabs.addTab(placeholder, "📚 RAG Knowledge")
-                    print("[WARNING] RAG tab not available - using placeholder")
-
-                # Tab Advanced Translation
-                if TRANSLATE_PRO_AVAILABLE:
-                    self.translate_pro_tab = TranslateTabPro()
-                    tabs.addTab(self.translate_pro_tab, "🌍 Translation Pro")
-                    print("[INFO] Translation Pro tab added (Pro purchased)")
-                else:
-                    placeholder = QWidget()
-                    layout = QVBoxLayout(placeholder)
-                    label = QLabel("🌍 Translation Pro\n\n(Under development)")
-                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    label.setStyleSheet("font-size: 16px; color: #888;")
-                    layout.addWidget(label)
-                    tabs.addTab(placeholder, "🌍 Translation Pro")
-                    print("[WARNING] Translation Pro tab not available - using placeholder")
-
-                # Tab Viewer Management
-                if VIEWERS_AVAILABLE:
-                    self.viewers_tab = ViewersTab()
-                    tabs.addTab(self.viewers_tab, "👥 Viewer Management")
-                    print("[INFO] Viewer Management tab added (Pro purchased)")
-                else:
-                    placeholder = QWidget()
-                    layout = QVBoxLayout(placeholder)
-                    label = QLabel("👥 Viewer Management\n\n(Under development)")
-                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    label.setStyleSheet("font-size: 16px; color: #888;")
-                    layout.addWidget(label)
-                    tabs.addTab(placeholder, "👥 Viewer Management")
-                    print("[WARNING] Viewer Management tab not available - using placeholder")
-
-                # Tab Virtual Microphone
+                    tabs.addTab(placeholder, "🚀 CoHost Pro")
+                    print("[WARNING] CoHost Pro tab not available - using placeholder")
+                
+                # Add Virtual Mic tab for Pro users
                 if VIRTUAL_MIC_AVAILABLE:
                     self.virtual_mic_tab = VirtualMicTab()
-                    tabs.addTab(self.virtual_mic_tab, "🎤 Virtual Mic")
+                    tabs.addTab(self.virtual_mic_tab, "🎚️ Virtual Mic")
                     print("[INFO] Virtual Mic tab added (Pro purchased)")
-                else:
-                    placeholder = QWidget()
-                    layout = QVBoxLayout(placeholder)
-                    label = QLabel("🎤 Virtual Mic\n\n(Under development)")
-                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    label.setStyleSheet("font-size: 16px; color: #888;")
-                    layout.addWidget(label)
-                    tabs.addTab(placeholder, "🎤 Virtual Mic")
-                    print("[WARNING] Virtual Mic tab not available - using placeholder")
+                
+                # Add Viewers tab for Pro users
+                if VIEWERS_AVAILABLE:
+                    self.viewers_tab = ViewersTab()
+                    tabs.addTab(self.viewers_tab, "👥 Viewers")
+                    print("[INFO] Viewers tab added (Pro purchased)")
             else:
-                # Show locked placeholder for Pro features
+                # Show locked placeholder for CoHost Pro
                 placeholder = QWidget()
                 layout = QVBoxLayout(placeholder)
-                label = QLabel("🔒 Pro Features Locked\n\nPurchase Pro package\nwith credits to unlock advanced features")
+                label = QLabel("🔒 CoHost Pro Locked\n\nPurchase CoHost Pro package\nwith credits to unlock")
                 label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 label.setStyleSheet("font-size: 16px; color: #888;")
                 layout.addWidget(label)
-                tabs.addTab(placeholder, "🔒 Pro Features")
-                print("[INFO] Pro features locked - user needs to purchase")
+                tabs.addTab(placeholder, "🔒 CoHost Pro")
+                print("[INFO] CoHost Pro locked - user needs to purchase")
+
+            # Only show CoHost Seller if that package is purchased
+            if purchased["cohost_seller"]:
+                if COHOST_SELLER_AVAILABLE:
+                    self.cohost_seller_tab = CohostSellerTab()
+                    tabs.addTab(self.cohost_seller_tab, "🛍️ CoHost Seller")
+                    print("[INFO] CoHost Seller tab added (CoHost Seller purchased)")
+                else:
+                    placeholder = QWidget()
+                    layout = QVBoxLayout(placeholder)
+                    label = QLabel("🛍️ CoHost Seller\n\n(Under development)")
+                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    label.setStyleSheet("font-size: 16px; color: #888;")
+                    layout.addWidget(label)
+                    tabs.addTab(placeholder, "🛍️ CoHost Seller")
+                    print("[WARNING] CoHost Seller tab not available - using placeholder")
+            else:
+                # Show locked placeholder for CoHost Seller
+                placeholder = QWidget()
+                layout = QVBoxLayout(placeholder)
+                label = QLabel("🔒 CoHost Seller Locked\n\nPurchase CoHost Seller package\nwith credits to unlock")
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                label.setStyleSheet("font-size: 16px; color: #888;")
+                layout.addWidget(label)
+                tabs.addTab(placeholder, "🔒 CoHost Seller")
+                print("[INFO] CoHost Seller locked - user needs to purchase")
 
             # Tab Tutorial - always available
             if TUTORIAL_AVAILABLE:
@@ -1107,9 +1117,19 @@ class MainWindow(QMainWindow):
     def update_license_status(self):
         """Update license status in status bar."""
         try:
-            # Coba validasi license - PENTING: Force refresh untuk selalu ambil data dari server
+            # Coba validasi license menggunakan Supabase - PENTING: Force refresh untuk selalu ambil data dari server
             try:
-                license_data = self.license_validator.validate(force_refresh=True)
+                email = self.get_user_email()
+                if email:
+                    license_data = self.supabase_client.validate_license(email)
+                else:
+                    # Fallback ke mode offline jika tidak ada email
+                    license_data = {
+                        "is_valid": True,
+                        "tier": "basic",
+                        "expire_date": "2025-12-31",
+                        "offline_mode": True
+                    }
             except Exception as e:
                 logger.error(f"License validation error: {e}")
                 # Fallback ke mode offline
@@ -1407,10 +1427,11 @@ class MainWindow(QMainWindow):
             
             # CRITICAL: Clear ALL caches untuk mengatasi bug EXE cache persistence
             try:
-                if has_license_validator:
-                    # Use comprehensive cache clearing from license validator
-                    validator = LicenseValidator()
-                    validator.clear_all_caches_for_logout()
+                if has_supabase_client:
+                    # Use Supabase client for cache clearing
+                    self.supabase_client = SupabaseClient()
+                    # Clear local caches
+                    print("[LOGOUT] Using Supabase client for cache clearing...")
                 else:
                     # Fallback manual clearing
                     print("[LOGOUT] Using fallback cache clearing...")
@@ -1576,23 +1597,50 @@ class MainWindow(QMainWindow):
             logger.info(f"Activating {package} mode from subscription tab")
             
             if package == "pro":
-                # Handle Pro mode activation
+                # Handle Pro activation
                 QMessageBox.information(
-                    self, "Pro Mode Activated! ⭐",
-                    "Pro package has been activated!\n\n"
-                    "✅ Advanced AI Cohost (Pro)\n"
-                    "✅ RAG Knowledge Base\n"
-                    "✅ Advanced Translation\n"
+                    self, "CoHost Pro Activated! 🚀",
+                    "CoHost Pro package has been activated!\n\n"
+                    "✅ All Basic features\n"
+                    "✅ Sequential & Delay Mode\n"
+                    "✅ Premium Google Chirp3 TTS\n"
+                    "✅ Virtual Microphone\n"
                     "✅ Viewer Management\n"
-                    "✅ Virtual Microphone\n\n"
-                    "You can now access Pro features in the main tabs!"
+                    "✅ Advanced Analytics\n\n"
+                    "You can now access CoHost Pro features in the main tabs!"
                 )
                 
-                # Navigate to Pro tab if available
+                # Navigate to CoHost Pro tab if available
                 if hasattr(self, 'main_tabs') and self.main_tabs:
                     for i in range(self.main_tabs.count()):
                         tab_text = self.main_tabs.tabText(i)
                         if "cohost pro" in tab_text.lower():
+                            self.main_tabs.setCurrentIndex(i)
+                            break
+                else:
+                    # Create main tabs if not exists
+                    self.pilih_paket("pro")
+                
+                return
+            
+            if package == "cohost_seller":
+                # Handle CoHost Seller activation
+                QMessageBox.information(
+                    self, "CoHost Seller Activated! 🛍️",
+                    "CoHost Seller package has been activated!\n\n"
+                    "✅ Product Management (2 slots)\n"
+                    "✅ Smart Trigger System\n"
+                    "✅ Auto OBS Scene Switch\n"
+                    "✅ Sales Analytics\n"
+                    "✅ Live Selling AI\n\n"
+                    "You can now access CoHost Seller features in the main tabs!"
+                )
+                
+                # Navigate to CoHost Seller tab if available
+                if hasattr(self, 'main_tabs') and self.main_tabs:
+                    for i in range(self.main_tabs.count()):
+                        tab_text = self.main_tabs.tabText(i)
+                        if "cohost seller" in tab_text.lower():
                             self.main_tabs.setCurrentIndex(i)
                             break
                 else:
@@ -1602,15 +1650,25 @@ class MainWindow(QMainWindow):
                 return
             
             # Handle basic mode activation
-            # Validasi kredit sekali lagi
-            from modules_server.real_credit_tracker import credit_tracker
-            if not credit_tracker.check_credit_available(5.0):
-                QMessageBox.warning(
-                    self, "Insufficient Credits",
-                    "Insufficient credits to activate Basic Mode.\n"
-                    "Minimum 5 credits required."
-                )
-                return
+            # Validasi kredit sekali lagi via Supabase
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if email:
+                try:
+                    supabase = SupabaseClient()
+                    credit_data = supabase.get_credit_balance(email)
+                    if credit_data and credit_data.get("status") == "success":
+                        data = credit_data.get("data", {})
+                        basic_credits = float(data.get("basic_credits", 0))
+                        if basic_credits < 5.0:
+                            QMessageBox.warning(
+                                self, "Insufficient Credits",
+                                "Insufficient credits to activate Basic Mode.\n"
+                                "Minimum 5 credits required."
+                            )
+                            return
+                except Exception as e:
+                    print(f"Error checking credits via Supabase: {e}")
+                    # Fallback: allow activation if Supabase check fails
             
             # Aktifkan basic mode
             self.pilih_paket("basic")
@@ -1728,33 +1786,30 @@ class MainWindow(QMainWindow):
             return ""
 
     def refresh_license_data(self):
-        """Refresh license data dari server"""
+        """Refresh license data dari Supabase"""
         try:
             # Get user email
             email = self.get_user_email()
             if not email:
                 return
             
-            # Call VPS API
-            vps_url = "http://69.62.79.238:8000"
-            response = requests.post(
-                f"{vps_url}/api/license/validate",
-                json={"email": email},
-                timeout=10
-            )
+            # Call Supabase API
+            supabase = SupabaseClient()
+            credit_data = supabase.get_credit_balance(email)
             
-            if response.status_code == 200:
-                data = response.json()
-                license_data = data.get("data", {})
+            if credit_data and credit_data.get("status") == "success":
+                data = credit_data.get("data", {})
                 
-                # PERBAIKAN: Gunakan field baru 'credit_balance' bukan 'hours_credit'
-                hours_credit = float(license_data.get("credit_balance", 0))
+                # Update UI dengan data Supabase - show total credits
+                wallet_balance = float(data.get("wallet_balance", 0))
+                basic_credits = float(data.get("basic_credits", 0))
+                pro_credits = float(data.get("pro_credits", 0))
+                total_credits = wallet_balance + basic_credits + pro_credits
                 
-                # Update UI
-                self.credit_label.setText(f"{hours_credit:.2f} jam")
+                self.credit_label.setText(f"{total_credits:.2f} jam")
                 
             else:
-                print(f"VPS API error: {response.status_code}")
+                print(f"Supabase API error: {credit_data}")
             
         except Exception as e:
             print(f"Error refreshing license data: {e}")

@@ -38,16 +38,10 @@ def _check_exe_environment():
     """Check jika running dalam EXE"""
     return getattr(sys, 'frozen', False)
 
-if _check_exe_environment():
-    # Dalam EXE mode, paksa server validation
-    FORCE_SERVER_VALIDATION = True
-    DISABLE_LOCAL_CACHE = True
-    DEFAULT_CREDIT = 0.0  # Tidak ada kredit default
-else:
-    # Development mode
-    FORCE_SERVER_VALIDATION = False
-    DISABLE_LOCAL_CACHE = False
-    DEFAULT_CREDIT = 0.0
+# FORCE PRODUCTION MODE - NO DEVELOPMENT MODE
+FORCE_SERVER_VALIDATION = True
+DISABLE_LOCAL_CACHE = True
+DEFAULT_CREDIT = 0.0  # Tidak ada kredit default
 
 class LicenseValidator:
     def __init__(self, server_url="https://streammateai.com/api/license", testing_mode=False):
@@ -69,46 +63,8 @@ class LicenseValidator:
             })
 
     def _is_dev_user(self):
-        """Cek apakah pengguna adalah developer via server."""
-        # Skip untuk test mode
-        if hasattr(self, 'testing_mode') and self.testing_mode:
-            return True
-            
-        try:
-            email = self.cfg.get("user_data", {}).get("email", "")
-            if not email:
-                return False
-            
-            # Cek via server (production mode)
-            dev_check_urls = [
-                "http://69.62.79.238:8000/api/user/check_dev",
-                "http://localhost/api/user/check_dev"
-            ]
-            
-            for url in dev_check_urls:
-                try:
-                    response = requests.post(
-                        url,
-                        json={"email": email},
-                        timeout=5
-                    )
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        is_dev = data.get("is_dev", False)
-                        print(f"[DEBUG] Server dev check: {email} -> {is_dev}")
-                        return is_dev
-                    else:
-                        print(f"[DEBUG] Server dev check failed: {response.status_code}")
-                        
-                except Exception as e:
-                    print(f"[DEBUG] Dev user check error: {e}")
-                    continue
-                
-        except Exception as e:
-            print(f"[DEBUG] Dev user check error: {e}")
-        
-        # PENTING: Default ke FALSE (bukan True)
+        """PRODUCTION MODE: No developer users allowed"""
+        # Always return False in production mode
         return False
 
     def _read_cache(self):
@@ -313,6 +269,20 @@ class LicenseValidator:
         """Validasi lisensi dengan logika demo-aware yang lebih baik."""
         print(f"[LICENSE] Validating... (Force refresh: {force_refresh})")
         email = self.cfg.get("user_data", {}).get("email", "")
+        
+        # PERBAIKAN: Coba ambil email dari subscription file jika tidak ada di config
+        if not email:
+            try:
+                subscription_file = Path("config/subscription_status.json")
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                    email = sub_data.get("email", "")
+                    if email:
+                        print(f"[LICENSE] Email found in subscription file: {email}")
+            except Exception as e:
+                print(f"[LICENSE] Error reading subscription file for email: {e}")
+        
         if not email:
             print("[LICENSE] Error: No email found for validation.")
             return {"is_valid": False, "tier": "none", "message": "Email tidak ditemukan"}
@@ -342,7 +312,34 @@ class LicenseValidator:
         # --- AKHIR DARI BLOK PERBAIKAN ---
 
         # 2. Lanjutkan ke validasi server jika demo tidak aktif.
-        print(f"[LICENSE] Validating {email} with VPS server...")
+        print(f"[LICENSE] Validating {email} with Supabase server...")
+        
+        # Try Supabase first
+        try:
+            from modules_client.supabase_client import get_supabase_client
+            supabase_client = get_supabase_client()
+            
+            hardware_id = self._generate_hardware_id()
+            supabase_data = supabase_client.validate_license(email, hardware_id)
+            
+            if supabase_data.get("status") == "success":
+                print(f"[LICENSE] Supabase response: {supabase_data}")
+                
+                # Sinkronkan data dari Supabase ke file lokal
+                self._sync_supabase_to_subscription_file(supabase_data, email)
+                self._remove_logout_marker() # Hapus marker setelah sync berhasil
+                
+                # Kembalikan hasil dari data Supabase yang sudah disinkronkan
+                supabase_data['source'] = 'supabase_server'
+                return supabase_data
+            else:
+                print(f"[LICENSE] Supabase error: {supabase_data.get('message')}")
+                
+        except Exception as e:
+            print(f"[LICENSE] Supabase validation failed: {e}")
+        
+        # Fallback to VPS server
+        print(f"[LICENSE] Fallback to VPS server...")
         vps_url = "http://69.62.79.238:8000/api/license/validate"
         hardware_id = self._generate_hardware_id()
         payload = {"email": email, "hardware_id": hardware_id}
@@ -351,7 +348,7 @@ class LicenseValidator:
             response = requests.post(vps_url, json=payload, timeout=10)
             if response.status_code == 200:
                 vps_data = response.json()
-                print(f"[LICENSE] Server response: {vps_data}")
+                print(f"[LICENSE] VPS response: {vps_data}")
                 
                 # Sinkronkan data dari VPS ke file lokal
                 self._sync_vps_to_subscription_file(vps_data, email)
@@ -361,7 +358,7 @@ class LicenseValidator:
                 vps_data['source'] = 'vps_server'
                 return vps_data
             else:
-                print(f"[LICENSE] Server error: {response.status_code} - {response.text}")
+                print(f"[LICENSE] VPS error: {response.status_code} - {response.text}")
                 return {"is_valid": False, "tier": "none", "message": f"Server error: {response.status_code}"}
         
         except requests.exceptions.RequestException as e:
@@ -372,6 +369,53 @@ class LicenseValidator:
             import traceback
             traceback.print_exc()
             return {"is_valid": False, "tier": "none", "message": f"An unexpected error occurred: {e}"}
+
+    def _sync_supabase_to_subscription_file(self, supabase_data, email):
+        """
+        Sinkronkan data dari Supabase ke file subscription lokal.
+        """
+        try:
+            # Akses data dari dalam kunci 'data' yang benar dari respons Supabase
+            license_info = supabase_data.get('data', supabase_data)
+
+            # Ambil nilai dengan aman menggunakan .get()
+            credit_balance = float(license_info.get('credit_balance', license_info.get('hours_credit', 0.0)))
+            credit_used = float(license_info.get('credit_used', license_info.get('hours_used', 0.0)))
+            is_active = license_info.get('is_active', False)
+            tier = license_info.get('tier', 'none')
+            expire_date = license_info.get('expire_date')
+
+            # Log untuk debugging
+            print(f"[SYNC] Processing Supabase data: is_active='{is_active}', Credits={credit_balance}, Used={credit_used}")
+
+            subscription_file = Path("config/subscription_status.json")
+            
+            # Buat data baru untuk disimpan
+            new_sub_data = {
+                "email": email,
+                "status": "active" if is_active else "inactive",
+                "package": tier,
+                "credit_balance": credit_balance,
+                "credit_used": credit_used,
+                "hours_credit": credit_balance,     # Untuk legacy compatibility
+                "hours_used": credit_used,          # Untuk legacy compatibility
+                "tier": tier,
+                "is_valid": is_active,
+                "expire_date": expire_date,
+                "synced_from_supabase": True,
+                "supabase_source_only": True,
+                "last_sync": datetime.now(timezone.utc).isoformat(),
+            }
+            
+            subscription_file.write_text(
+                json.dumps(new_sub_data, indent=2, ensure_ascii=False),
+                encoding="utf-8"
+            )
+            
+            print(f"[SYNC] ✅ Successfully synced Supabase data to local file. Credits are now: {credit_balance}")
+            
+        except Exception as e:
+            print(f"[SYNC] ❌ Error syncing Supabase data: {e}")
 
     def _sync_vps_to_subscription_file(self, vps_data, email):
         """

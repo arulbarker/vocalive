@@ -1,15 +1,15 @@
 {
-  "email": "mursalinasrul@gmail.com",
-  "status": "active",
-  "package": "basic",
-  "credit_balance": 100878.39,
-  "credit_used": 602987.935,
-  "hours_credit": 100878.39,
-  "hours_used": 602987.935,
-  "tier": "basic",
-  "is_valid": true,
+  "email": "rachmawaty31mei@gmail.com",
+  "status": "inactive",
+  "package": "none",
+  "credit_balance": 0.0,
+  "credit_used": 0.0,
+  "hours_credit": 0.0,
+  "hours_used": 0.0,
+  "tier": "none",
+  "is_valid": false,
   "expire_date": null,
   "synced_from_vps": true,
   "vps_source_only": true,
-  "last_sync": "2025-07-20T19:42:27.287205+00:00"
+  "last_sync": "2025-07-22T08:58:23.185382+00:00"
 }

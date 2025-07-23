@@ -106,48 +106,57 @@ class RealCreditTracker:
             "sessions": []
         }
 
-    def track_stt_usage(self, duration_seconds: float, stt_type: str = "google_stt") -> float:
-        """Track penggunaan STT"""
+    def track_stt_usage(self, duration_seconds: float, stt_type: str = "google_stt", mode: str = "basic") -> float:
+        """Track penggunaan STT dengan multiplier mode"""
         if not self.enabled:
             return 0.0
             
         cost_key = f"stt_{stt_type}"
         unit_cost = self.costs.get(cost_key, 0.1)  # ✅ DINAIKKAN: 0.01 → 0.1
-        credits = duration_seconds * unit_cost * self.multiplier
+        
+        # Mode Pro = 5x lipat lebih mahal
+        mode_multiplier = 5.0 if mode == "pro" else 1.0
+        credits = duration_seconds * unit_cost * self.multiplier * mode_multiplier
         
         self.add_usage("stt_seconds", duration_seconds, credits)
         
-        logger.info(f"STT Usage: {duration_seconds}s ({stt_type}) = {credits:.4f} credits")
+        logger.info(f"STT Usage: {duration_seconds}s ({stt_type}) [{mode.upper()}] = {credits:.4f} credits")
         return credits
 
-    def track_tts_usage(self, text: str, tts_type: str = "gtts") -> float:
-        """Track penggunaan TTS"""
+    def track_tts_usage(self, text: str, tts_type: str = "gtts", mode: str = "basic") -> float:
+        """Track penggunaan TTS dengan multiplier mode"""
         if not self.enabled:
             return 0.0
             
         char_count = len(text)
         cost_key = f"tts_{tts_type}"
         unit_cost = self.costs.get(cost_key, 0.05)  # ✅ DINAIKKAN: 0.005 → 0.05 (10x lipat)
-        credits = char_count * unit_cost * self.multiplier
+        
+        # Mode Pro = 5x lipat lebih mahal
+        mode_multiplier = 5.0 if mode == "pro" else 1.0
+        credits = char_count * unit_cost * self.multiplier * mode_multiplier
         
         self.add_usage("tts_characters", char_count, credits)
         
-        logger.info(f"TTS Usage: {char_count} chars ({tts_type}) = {credits:.4f} credits")
+        logger.info(f"TTS Usage: {char_count} chars ({tts_type}) [{mode.upper()}] = {credits:.4f} credits")
         return credits
 
-    def track_ai_usage(self, tokens_used: int = 100) -> float:
-        """Track penggunaan AI Reply"""
+    def track_ai_usage(self, tokens_used: int = 100, mode: str = "basic") -> float:
+        """Track penggunaan AI Reply dengan multiplier mode"""
         if not self.enabled:
             return 0.0
             
         base_cost = self.costs.get("ai_reply_base", 0.5)     # ✅ DINAIKKAN: 0.1 → 0.5 (5x lipat)
         token_cost = tokens_used * self.costs.get("ai_reply_token", 0.005)  # ✅ DINAIKKAN: 0.001 → 0.005 (5x lipat)
-        total_cost = (base_cost + token_cost) * self.multiplier
         
-        self.add_usage("ai_requests", 1, base_cost * self.multiplier)
-        self.add_usage("ai_tokens", tokens_used, token_cost * self.multiplier)
+        # Mode Pro = 5x lipat lebih mahal
+        mode_multiplier = 5.0 if mode == "pro" else 1.0
+        total_cost = (base_cost + token_cost) * self.multiplier * mode_multiplier
         
-        logger.info(f"AI Usage: 1 request + {tokens_used} tokens = {total_cost:.4f} credits")
+        self.add_usage("ai_requests", 1, base_cost * self.multiplier * mode_multiplier)
+        self.add_usage("ai_tokens", tokens_used, token_cost * self.multiplier * mode_multiplier)
+        
+        logger.info(f"AI Usage: 1 request + {tokens_used} tokens [{mode.upper()}] = {total_cost:.4f} credits")
         return total_cost
 
     def track_translate_usage(self, word_count: int) -> float:

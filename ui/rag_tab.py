@@ -485,7 +485,7 @@ class RAGTab(QWidget):
             self.settings["rag_hybrid_search"] = self.hybrid_search_check.isChecked()
             
             self.config_manager.save_settings()
-            
+                
         except Exception as e:
             logger.error(f"Error saving RAG settings: {e}")
             
@@ -588,7 +588,7 @@ Based on the knowledge base, here's a comprehensive answer to your query about {
             self.search_time_label.setText("0.3s")
             self.hit_rate_label.setText("94.2%")
             self.kb_size_label.setText("1,247 documents")
-            
+        
         except Exception as e:
             logger.error(f"Error updating RAG analytics: {e}")
             

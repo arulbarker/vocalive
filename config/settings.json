@@ -5,10 +5,10 @@
   "paket": "basic",
   "user_data": {
     "email": "mursalinasrul@gmail.com",
-    "last_login": "2025-06-19T16:06:03.862929"
+    "last_login": "2025-07-23T09:03:59.506936"
   },
   "app_version": "v1.0.0-basic",
-  "last_update_check": 1753040070.5697613,
+  "last_update_check": 1753174154.0672615,
   "trigger_words": [
     "mas"
   ],
@@ -43,5 +43,21 @@
   "tr_api_key": "trapi-dxNc3yHDuVuxU8VSO5PWwVm7",
   "update_reminder_time": 1751192882.195746,
   "topic_cooldown_minutes": 13,
-  "skipped_update_version": ""
+  "skipped_update_version": "",
+  "api_keys": {
+    "DEEPSEEK_API_KEY": "sk-ac21349468e94936960052f076b64af4",
+    "YOUTUBE_API_KEY": "AIzaSyA2pWsC4CF7ur16hRWiyu3SHlILe-G_jSY",
+    "TRAKTEER_API_KEY": "trapi-dxNc3yHDuVuxU8VSO5PWwVm7",
+    "TR_API_KEY": "trapi-dxNc3yHDuVuxU8VSO5PWwVm7"
+  },
+  "ipaymu": {
+    "api_key": "your_ipaymu_api_key",
+    "va": "your_ipaymu_va",
+    "sandbox": false,
+    "callback_url": "http://69.62.79.238:8000/api/payment/callback",
+    "return_url": "http://69.62.79.238:8000/api/payment/completed"
+  },
+  "environment": "production",
+  "debug_mode": false,
+  "safety_mode": true
 }

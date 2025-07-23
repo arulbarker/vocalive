@@ -20,31 +20,15 @@ load_dotenv()
 class APIClient:
     def __init__(self):
         self.cfg = ConfigManager()
-        # Debug environment
-        print(f"[DEBUG] Environment STREAMMATE_DEV: {os.getenv('STREAMMATE_DEV', 'not set')}")
-        print(f"[DEBUG] Environment STREAMMATE_SERVER_URL: {os.getenv('STREAMMATE_SERVER_URL', 'not set')}")
-        
-        # Base URL dengan prioritas environment variable - PERBAIKAN: Port 8000 untuk VPS
-        env_url = os.getenv("STREAMMATE_SERVER_URL")
-        if env_url:
-            self.base_url = env_url
-            print(f"[API] Using server URL from environment: {env_url}")
-        else:
-            self.base_url = "http://69.62.79.238:8000"  # PERBAIKAN: VPS di port 8000
-            print(f"[API] Using default server URL: {self.base_url}")
+        # FORCE PRODUCTION MODE - Always use VPS server
+        self.base_url = "http://69.62.79.238:8000"
+        print(f"[API] PRODUCTION MODE: Using VPS server: {self.base_url}")
         
         self.timeout = 30
         
     def _get_server_url(self):
-        """Tentukan server URL berdasarkan mode"""
-        # 1. Cek environment variable dari .env
-        env_url = self.cfg.get_env('API_BASE_URL')
-        if env_url:
-            return env_url
-            
-        # 2. Cek environment variable dulu (developer override) - PERBAIKAN: Port 8000
-        if os.getenv("STREAMMATE_DEV", "").lower() == "true":
-            return "http://localhost:8888"  # Dev mode gunakan localhost
+        """PRODUCTION MODE: Always use VPS server"""
+        return "http://69.62.79.238:8000"
     
     def _make_request(self, endpoint, data, timeout=None):
         """Make request dengan error handling"""
@@ -98,15 +82,22 @@ def get_server_info():
     }
 
 class APIBridge:
-    """Bridge untuk komunikasi dengan VPS server"""
+    """Bridge untuk komunikasi dengan Supabase server"""
     
     def __init__(self):
-        # Server endpoints - PERBAIKAN: VPS di port 8000, local tetap 8888
-        self.vps_server = "http://69.62.79.238:8000"  # VPS di port 8000
-        self.local_server = "http://localhost:8888"  # Local dev di port 8888
-        
-        # Test koneksi dan tentukan server aktif
-        self.active_server = self._get_active_server()
+        # Import Supabase client
+        try:
+            from modules_client.supabase_client import get_supabase_client
+            self.supabase_client = get_supabase_client()
+            self.use_supabase = True
+            print("[API] Using Supabase backend")
+        except ImportError:
+            # Fallback to VPS server if Supabase not available
+            self.vps_server = "http://69.62.79.238:8000"
+            self.local_server = "http://localhost:8888"
+            self.use_supabase = False
+            self.active_server = self._get_active_server()
+            print("[API] Using VPS backend (fallback)")
         
     def _get_active_server(self):
         """Test koneksi server dan return yang aktif"""
@@ -137,7 +128,7 @@ api_bridge = APIBridge()
 
 def generate_reply(prompt: str, timeout: int = 30) -> str:
     """
-    Generate AI reply using VPS DeepSeek API with local fallback
+    Generate AI reply using Supabase with VPS fallback
     
     Args:
         prompt: User prompt for AI
@@ -148,7 +139,20 @@ def generate_reply(prompt: str, timeout: int = 30) -> str:
     """
     print(f"[API] generate_reply called with prompt length: {len(prompt)}")
     
-    # Method 1: Try VPS API endpoint (preferred)
+    # Method 1: Try Supabase API (preferred)
+    if api_bridge.use_supabase:
+        try:
+            print(f"[API] Trying Supabase AI endpoint...")
+            reply = api_bridge.supabase_client.generate_ai_reply(prompt, timeout)
+            if reply and len(reply.strip()) > 0:
+                print(f"[API] Supabase AI success: {len(reply)} chars")
+                return reply
+            else:
+                print(f"[API] Supabase AI returned empty reply")
+        except Exception as e:
+            print(f"[API] Supabase AI error: {e}")
+    
+    # Method 2: Try VPS API endpoint (fallback)
     try:
         print(f"[API] Trying VPS API endpoint...")
         

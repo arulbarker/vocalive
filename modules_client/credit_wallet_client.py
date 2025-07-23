@@ -170,15 +170,15 @@ def add_credits_to_wallet(amount: int, description: str = "Top-up") -> Tuple[boo
     """Add credits to current user's wallet"""
     return get_credit_wallet_client().add_credits(amount, description)
 
-# Credit packages for UI
+# Credit packages for UI - RASIO 1:1 (1 Rupiah = 1 Credit)
 CREDIT_PACKAGES = [
     {
         "id": "starter",
-        "name": "💎 Starter Pack",
+        "name": "🎯 Starter Pack",
         "price_idr": 50000,
-        "credits": 100000,
-        "bonus": 20000,
-        "total_credits": 120000,
+        "credits": 50000,
+        "bonus": 0,
+        "total_credits": 50000,
         "description": "Good for: Basic mode testing",
         "popular": False
     },
@@ -186,31 +186,11 @@ CREDIT_PACKAGES = [
         "id": "regular", 
         "name": "🚀 Regular Pack",
         "price_idr": 100000,
-        "credits": 250000,
-        "bonus": 50000,
-        "total_credits": 300000,
+        "credits": 100000,
+        "bonus": 0,
+        "total_credits": 100000,
         "description": "Good for: Basic mode + some upgrades",
         "popular": True
-    },
-    {
-        "id": "premium",
-        "name": "⭐ Premium Pack", 
-        "price_idr": 200000,
-        "credits": 600000,
-        "bonus": 150000,
-        "total_credits": 750000,
-        "description": "Good for: Seller mode + upgrades",
-        "popular": False
-    },
-    {
-        "id": "enterprise",
-        "name": "🏆 Enterprise Pack",
-        "price_idr": 500000, 
-        "credits": 1500000,
-        "bonus": 500000,
-        "total_credits": 2000000,
-        "description": "Good for: All features + long usage",
-        "popular": False
     }
 ]
 

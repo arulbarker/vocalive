@@ -1,0 +1,14 @@
+{
+  "email": "rachmawaty31mei@gmail.com",
+  "status": "paid",
+  "package": "basic",
+  "tier": "basic",
+  "hours_credit": 1600014.391244,
+  "hours_used": 15.608756,
+  "expire_date": null,
+  "updated_at": "2025-06-17T19:19:38.273089",
+  "sync_info": {
+    "synced_from": "database",
+    "sync_timestamp": "2025-06-17T19:19:38.273095"
+  }
+}

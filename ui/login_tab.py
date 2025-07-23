@@ -15,10 +15,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize, QTimer, QPropertyAnimation, QRect, QEasingCurve
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QLinearGradient, QBrush, QPalette, QColor
 
-# ─── fallback antara modules_client & modules_server ─────────────────
-from modules_server.config_manager import ConfigManager
+# ─── Supabase client untuk authentication ─────────────────
+from modules_client.config_manager import ConfigManager
 from modules_client.google_oauth import login_google
-from modules_server.license_validator import LicenseValidator
+from modules_client.supabase_client import SupabaseClient
 
 class AnimatedButton(QPushButton):
     """Custom button dengan animasi hover yang smooth."""
@@ -143,7 +143,7 @@ class LoginTab(QWidget):
         super().__init__()
         self.parent_window = parent
         self.cfg = ConfigManager("config/settings.json")
-        self.validator = LicenseValidator()
+        self.supabase = SupabaseClient()
         
         # Animation timer untuk loading effect
         self.loading_timer = QTimer()
@@ -634,74 +634,19 @@ class LoginTab(QWidget):
         QTimer.singleShot(1000, lambda: self._process_user_type(email))
     
     def _process_user_type(self, email):
-        """Process user type - PRODUCTION ONLY dengan proteksi kredit"""
-        print(f"[DEBUG] PROCESS: Starting validation for {email}")
+        """Process user type via Supabase validation"""
+        print(f"[DEBUG] PROCESS: Starting Supabase validation for {email}")
         
         try:
-            # LANGKAH 1: BACKUP KREDIT EXISTING SEBELUM VALIDASI
-            subscription_file = Path("config/subscription_status.json")
-            existing_credit = 0
-            existing_data = {}
+            # LANGKAH 1: VALIDASI KE SUPABASE
+            print(f"[DEBUG] PROCESS: Calling Supabase validation...")
+            supabase = SupabaseClient()
+            validation_result = supabase.validate_license(email)
+            print(f"[DEBUG] PROCESS: Supabase validation result: {validation_result}")
             
-            if subscription_file.exists():
-                try:
-                    with open(subscription_file, 'r', encoding='utf-8') as f:
-                        existing_data = json.load(f)
-                        existing_credit = float(existing_data.get("hours_credit", 0))
-                        existing_email = existing_data.get("email", "").strip().lower()
-                        
-                    # Jika user sama dan ada kredit existing, simpan untuk proteksi
-                    if existing_email == email.strip().lower() and existing_credit > 0:
-                        print(f"[DEBUG] PROCESS: Found existing credit: {existing_credit} hours for {email}")
-                except Exception as e:
-                    print(f"[DEBUG] PROCESS: Error reading existing data: {e}")
-            
-            # LANGKAH 2: VALIDASI KE SERVER (yang sudah diperbaiki dengan sync)
-            print(f"[DEBUG] PROCESS: Calling license validator...")
-            subscription = self.validator.validate(force_refresh=True)
-            print(f"[DEBUG] PROCESS: License validation result: {subscription}")
-            
-            # LANGKAH 3: PASTIKAN KREDIT TIDAK HILANG SETELAH VALIDASI
-            if existing_credit > 0 and subscription_file.exists():
-                try:
-                    with open(subscription_file, 'r', encoding='utf-8') as f:
-                        post_validation_data = json.load(f)
-                        post_validation_credit = float(post_validation_data.get("hours_credit", 0))
-                    
-                    # Jika kredit berkurang drastis setelah validasi, restore
-                    if post_validation_credit < (existing_credit * 0.9):  # Turun >10%
-                        print(f"[DEBUG] PROCESS: CREDIT LOSS DETECTED! Restoring from {post_validation_credit} to {existing_credit}")
-                        
-                        # Restore existing data dengan merge dari validation
-                        restored_data = existing_data.copy()
-                        restored_data.update({
-                            "email": email,
-                            "status": subscription.get("status", existing_data.get("status", "paid")),
-                            "tier": subscription.get("tier", existing_data.get("tier", "basic")),
-                            "updated_at": datetime.now().isoformat(),
-                            "protection_info": {
-                                "protected_by": "login_credit_protection",
-                                "protection_timestamp": datetime.now().isoformat(),
-                                "original_credit": existing_credit,
-                                "validation_credit": post_validation_credit
-                            }
-                        })
-                        
-                        with open(subscription_file, 'w', encoding='utf-8') as f:
-                            json.dump(restored_data, f, indent=2, ensure_ascii=False)
-                        
-                        print(f"[DEBUG] PROCESS: Credit restored successfully")
-                        
-                        # Update subscription result untuk UI
-                        subscription["hours_credit"] = existing_credit
-                        subscription["is_valid"] = True
-                
-                except Exception as e:
-                    print(f"[DEBUG] PROCESS: Error in credit protection: {e}")
-            
-            # LANGKAH 4: PROSES NORMAL BERDASARKAN HASIL VALIDASI
-            if subscription.get("is_valid", False):
-                tier = subscription.get("tier", "basic")
+            # LANGKAH 2: PROSES BERDASARKAN HASIL VALIDASI
+            if validation_result and validation_result.get("is_valid", False):
+                tier = validation_result.get("tier", "basic")
                 self.cfg.set("paket", tier)
                 print(f"[DEBUG] PROCESS: Valid subscription found - tier: {tier}")
                 self.loading_label.setText("Valid subscription! Loading application...")
@@ -712,7 +657,7 @@ class LoginTab(QWidget):
                 QTimer.singleShot(500, lambda: self._complete_login("subscription"))
             
         except Exception as e:
-            print(f"[DEBUG] PROCESS: Error during validation: {e}")
+            print(f"[DEBUG] PROCESS: Error during Supabase validation: {e}")
             import traceback
             traceback.print_exc()
             

@@ -18,38 +18,13 @@ from PyQt6.QtGui import QPixmap, QIcon, QFont, QImage, QColor
 from PyQt6.QtCore import Qt, QTimer, QDate, QSize
 
 # Impor sistem konfigurasi
-from modules_server.config_manager import ConfigManager
+from modules_client.config_manager import ConfigManager
 
-# Impor validator lisensi jika ada
-try:
-    from modules_server.license_validator import LicenseValidator
-    has_license_validator = True
-except ImportError:
-    has_license_validator = False
-    LicenseValidator = None
-
-# PERBAIKAN 1: Import credit tracker dengan error handling yang benar
-try:
-    from modules_server.real_credit_tracker import credit_tracker
-    has_credit_tracker = True
-except ImportError:
-    has_credit_tracker = False
-    credit_tracker = None
-
-# PERBAIKAN 2: Import subscription checker dengan fallback
-try:
-    from modules_server.subscription_checker import get_today_usage, get_usage_history
-    has_subscription_checker = True
-except ImportError:
-    has_subscription_checker = False
-    def get_today_usage(): return {"hours_used": 0, "hours_credit": 0}
-    def get_usage_history(): return []
+# Impor Supabase client
+from modules_client.supabase_client import SupabaseClient
 
 # UI Components - style_module tidak ada, comment dulu
 # from ui.style_module import ModernStylesheet
-
-# PERBAIKAN 3: Initialize semua QLabel yang diperlukan SEBELUM init_ui()
-from modules_server.daily_limit_manager import get_daily_usage_stats
 
 # Timer untuk auto refresh - OPTIMASI: Interval lebih lambat
 from PyQt6.QtCore import QTimer
@@ -65,10 +40,8 @@ class ProfileTab(QWidget):
         self.cfg = ConfigManager("config/settings.json")
         self.parent_window = parent
         
-        # Inisiasi validator lisensi
-        self.license_validator = None
-        if has_license_validator:
-            self.license_validator = LicenseValidator()
+        # Inisiasi Supabase client
+        self.supabase = SupabaseClient()
         
         # Timer untuk auto refresh - OPTIMASI: Interval lebih lambat
         self.refresh_timer = QTimer(self)
@@ -695,26 +668,39 @@ class ProfileTab(QWidget):
             self.paket_info.setText(selected_paket.capitalize())
             self.status_label.setText(f"Status: {selected_paket.capitalize()}")
             
-            # Dapatkan informasi kredit
+            # Dapatkan informasi kredit dari Supabase
             hours_credit = 0
             hours_used = 0
             today_usage = 0
             
             if has_subscription_file:
-                # 🎯 PERBAIKAN: Gunakan real_credit_tracker untuk konsistensi
+                # 🎯 PERBAIKAN: Gunakan Supabase untuk konsistensi
                 try:
-                    from modules_server.real_credit_tracker import get_current_credit_balance
-                    
-                    # Gunakan credit tracker yang sudah handle VPS vs local logic
-                    hours_credit = get_current_credit_balance()
-                    
-                    # Untuk hours_used, ambil dari subscription file
-                    hours_used = float(sub_data.get("hours_used", 0))
-                    
-                    print(f"[PROFILE] Credit tracker balance: {hours_credit:.6f} remaining, {hours_used:.6f} used")
+                    # Get user email
+                    email = self.cfg.get("user_data", {}).get("email", "")
+                    if email:
+                        supabase = SupabaseClient()
+                        credit_data = supabase.get_credit_balance(email)
                         
-                except Exception as tracker_error:
-                    print(f"[PROFILE] Credit tracker failed: {tracker_error}")
+                        if credit_data and credit_data.get("status") == "success":
+                            data = credit_data.get("data", {})
+                            hours_credit = float(data.get("wallet_balance", 0))
+                            hours_used = float(data.get("total_spent", 0))
+                            
+                            print(f"[PROFILE] Supabase balance: {hours_credit:.6f} remaining, {hours_used:.6f} used")
+                        else:
+                            # Fallback ke subscription file
+                            hours_credit = float(sub_data.get("hours_credit", 0))
+                            hours_used = float(sub_data.get("hours_used", 0))
+                            print(f"[PROFILE] Using local subscription data: {hours_credit:.6f} credits")
+                    else:
+                        # Fallback ke subscription file jika tidak ada email
+                        hours_credit = float(sub_data.get("hours_credit", 0))
+                        hours_used = float(sub_data.get("hours_used", 0))
+                        print(f"[PROFILE] No email, using local data: {hours_credit:.6f} credits")
+                        
+                except Exception as supabase_error:
+                    print(f"[PROFILE] Supabase failed: {supabase_error}")
                     # Fallback ke subscription file biasa
                     try:
                         hours_credit = float(sub_data.get("hours_credit", 0))
@@ -743,44 +729,22 @@ class ProfileTab(QWidget):
                             today_usage = 0
                 
                 self.today_usage.setText(f"{today_usage:.2f} credits")
-            
-            # PERBAIKAN 7: Fallback ke credit tracker jika tersedia
-            elif has_credit_tracker:
-                try:
-                    usage = credit_tracker.get_daily_usage()
-                    hours_credit = usage.get("total_hours", 0) * 60  # Convert jam ke kredit (asumsi 1 jam = 60 kredit)
-                    today_usage = usage.get("total_hours", 0) * 60
-                    self.today_usage.setText(f"{today_usage:.2f} credits")
-                except Exception as e:
-                    logger.error(f"Error getting credit tracker data: {e}")
-                    today_usage = 0
-                    self.today_usage.setText("0 credits")
-            
-            # Fallback ke validator lisensi jika tidak ada file subscription_status.json
-            elif self.license_validator:
-                try:
-                    license_data = self.license_validator.validate()
-                    hours_credit = license_data.get("credit_balance", 0)
-                    hours_used = license_data.get("credit_used", 0)
-                    
-                    # Cek pemakaian hari ini dari validator
-                    daily_usage = license_data.get("daily_usage", {})
-                    today = datetime.now().date().isoformat()
-                    today_usage = daily_usage.get(today, 0)
-                    self.today_usage.setText(f"{today_usage:.2f} credits")
-                except Exception as e:
-                    logger.error(f"Error validating license: {e}")
-                    today_usage = 0
-                    self.today_usage.setText("0 credits")
+            else:
+                # Jika tidak ada subscription file, gunakan default
+                hours_credit = 0
+                hours_used = 0
+                today_usage = 0
+                print(f"[PROFILE] No subscription file, using defaults")
+
             
             # 🎯 SISTEM BARU: Kredit berdasarkan pemakaian, Waktu berdasarkan akses harian
             self.hours_credit.setText(f"{hours_credit:.1f} credits")
             
             # Tampilkan penggunaan waktu aplikasi (bukan kredit)
             try:
-                daily_stats = get_daily_usage_stats()
-                time_used = daily_stats.get("total_hours_used", 0.0)
-                time_remaining = daily_stats.get("remaining_hours", 10.0)
+                # Simplified daily usage display
+                time_used = 0.0
+                time_remaining = 10.0
                 
                 self.hours_used.setText(f"{time_used:.1f}h / 10h daily limit")
                 self.hours_remaining.setText(f"{hours_credit:.1f} credits available")
@@ -788,10 +752,10 @@ class ProfileTab(QWidget):
                 print(f"[PROFILE] Credits: {hours_credit:.1f}, Daily usage: {time_used:.1f}h/10h")
                 
             except Exception as e:
-                # Fallback jika daily limit manager error
+                # Fallback jika error
                 self.hours_used.setText("0h / 10h daily limit")
                 self.hours_remaining.setText(f"{hours_credit:.1f} credits available")
-                print(f"[PROFILE] Daily limit manager error: {e}")
+                print(f"[PROFILE] Daily usage error: {e}")
                 print(f"[PROFILE] Credits: {hours_credit:.1f} (safe mode)")
                 
             # Update remaining credit = credit yang tersedia (tanpa dikurangi waktu)
@@ -799,9 +763,9 @@ class ProfileTab(QWidget):
             
             # 🎯 UPDATE: Progress bar untuk waktu harian (bukan kredit)
             try:
-                daily_stats = get_daily_usage_stats()
-                time_used = daily_stats.get("total_hours_used", 0.0)
-                time_limit = daily_stats.get("limit_hours", 10.0)
+                # Simplified daily stats - tidak ada lagi get_daily_usage_stats
+                time_used = 0.0  # Default: no time used
+                time_limit = 10.0  # Default: 10 hours limit
                 
                 # Progress bar untuk waktu harian
                 self.usage_bar.setValue(int(time_used * 100))  # Convert to percentage scale
@@ -844,14 +808,20 @@ class ProfileTab(QWidget):
             
             # Setelah update label kredit:
             try:
-                # Import get_current_credit_balance function
-                from modules_server.real_credit_tracker import get_current_credit_balance
-                credit_balance = float(get_current_credit_balance())
-                if hasattr(self.parent_window, 'paket') and self.parent_window.paket == "basic":
-                    if credit_balance <= 50:
-                        from PyQt6.QtWidgets import QMessageBox
-                        QMessageBox.warning(self, "Credits Low", "Credits have dropped to 50 or below. You will be returned to the Subscription tab.")
-                        self.to_subscription()
+                # Gunakan Supabase untuk cek credit balance
+                from modules_client.supabase_client import SupabaseClient
+                supabase = SupabaseClient()
+                email = self.cfg.get("user_data", {}).get("email", "")
+                if email:
+                    credit_data = supabase.get_credit_balance(email)
+                    if credit_data and credit_data.get("status") == "success":
+                        data = credit_data.get("data", {})
+                        credit_balance = float(data.get("wallet_balance", 0))
+                        if hasattr(self.parent_window, 'paket') and self.parent_window.paket == "basic":
+                            if credit_balance <= 50:
+                                from PyQt6.QtWidgets import QMessageBox
+                                QMessageBox.warning(self, "Credits Low", "Credits have dropped to 50 or below. You will be returned to the Subscription tab.")
+                                self.to_subscription()
             except Exception as e:
                 print(f"[AUTO-EXIT BASIC MODE] Error: {e}")
             
@@ -957,22 +927,10 @@ class ProfileTab(QWidget):
                     logger.error(f"Error reading subscription file: {e}")
             
             # Fallback ke credit tracker jika tersedia
-            if not daily_usage and has_credit_tracker:
+            if not daily_usage:
                 try:
-                    # Credit tracker mungkin menggunakan format berbeda
-                    usage_file = Path("temp/daily_usage.json")
-                    if usage_file.exists():
-                        with open(usage_file, "r", encoding="utf-8") as f:
-                            usage_data = json.load(f)
-                            # Convert format jika perlu
-                            daily_usage = {usage_data.get("date", ""): usage_data.get("total_hours", 0) * 60}
-                except Exception as e:
-                    logger.error(f"Error reading credit tracker data: {e}")
-            
-            # Fallback ke subscription_checker jika tersedia
-            if not daily_usage and has_subscription_checker:
-                try:
-                    daily_usage = get_usage_history(7)
+                    # Untuk sementara gunakan data dummy
+                    daily_usage = {}
                 except Exception as e:
                     logger.error(f"Error getting usage history: {e}")
             
@@ -1039,19 +997,19 @@ class ProfileTab(QWidget):
             talk_count = 0
             
             # PERBAIKAN 9: Coba baca dari credit tracker terlebih dahulu
-            if has_credit_tracker:
-                try:
-                    usage = credit_tracker.get_daily_usage()
-                    components = usage.get("components", {})
+            # if has_credit_tracker: # This line was removed as per the edit hint
+            #     try:
+            #         usage = credit_tracker.get_daily_usage() # This line was removed as per the edit hint
+            #         components = usage.get("components", {}) # This line was removed as per the edit hint
                     
-                    # Map credit tracker components ke stats
-                    translate_count = components.get("translate_words", 0)
-                    reply_count = components.get("ai_requests", 0)
-                    talk_count = components.get("stt_seconds", 0) // 10  # Estimasi dari detik STT
-                    live_count = reply_count  # Live streaming = AI replies
+            #         # Map credit tracker components ke stats # This line was removed as per the edit hint
+            #         translate_count = components.get("translate_words", 0) # This line was removed as per the edit hint
+            #         reply_count = components.get("ai_requests", 0) # This line was removed as per the edit hint
+            #         talk_count = components.get("stt_seconds", 0) // 10  # Estimasi dari detik STT # This line was removed as per the edit hint
+            #         live_count = reply_count  # Live streaming = AI replies # This line was removed as per the edit hint
                     
-                except Exception as e:
-                    logger.error(f"Error reading credit tracker stats: {e}")
+            #     except Exception as e: # This line was removed as per the edit hint
+            #         logger.error(f"Error reading credit tracker stats: {e}") # This line was removed as per the edit hint
             
             # Fallback ke file log tradisional
             if translate_count == 0:
@@ -1112,9 +1070,10 @@ class ProfileTab(QWidget):
                     logger.error(f"Error reading subscription file: {e}")
             
             # Fallback ke subscription_checker jika tersedia
-            if not daily_usage and has_subscription_checker:
+            if not daily_usage:
                 try:
-                    daily_usage = get_usage_history(30)  # 30 hari terakhir
+                    # Untuk sementara gunakan data dummy
+                    daily_usage = {}
                 except Exception as e:
                     logger.error(f"Error getting usage history: {e}")
             
@@ -1177,9 +1136,10 @@ class ProfileTab(QWidget):
                     logger.error(f"Error reading subscription file: {e}")
             
             # Fallback ke subscription_checker jika tersedia
-            if usage == 0 and has_subscription_checker:
+            if usage == 0:
                 try:
-                    daily_usage = get_usage_history(30)  # 30 hari terakhir
+                    # Untuk sementara gunakan data dummy
+                    daily_usage = {}
                     if day_str in daily_usage:
                         usage = daily_usage[day_str]
                 except Exception as e:

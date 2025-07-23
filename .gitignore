@@ -175,3 +175,4 @@ crash.log
 user_config.json
 personal_settings.json
 local_settings.py 
+.vercel

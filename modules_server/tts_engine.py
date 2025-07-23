@@ -663,9 +663,20 @@ def speak(text: str, language_code: str = None, voice_name: str = None, output_d
         # Tentukan tipe TTS
         tts_type = "google" if voice_name and voice_name.startswith(("id-ID-", "en-US-")) else "gtts"
         
-        # Track penggunaan
-        credits_used = credit_tracker.track_tts_usage(text, tts_type)
-        logger.info(f"TTS Credit tracked: {len(text)} chars = {credits_used:.4f} credits")
+        # Deteksi mode dari context (Pro atau Basic)
+        mode = "basic"  # default
+        try:
+            from modules_client.config_manager import ConfigManager
+            cfg = ConfigManager("config/settings.json")
+            current_mode = cfg.get("current_mode", "basic")
+            if current_mode == "pro":
+                mode = "pro"
+        except:
+            pass  # fallback ke basic
+        
+        # Track penggunaan dengan mode yang sesuai
+        credits_used = credit_tracker.track_tts_usage(text, tts_type, mode=mode)
+        logger.info(f"TTS Credit tracked [{mode.upper()}]: {len(text)} chars = {credits_used:.4f} credits")
         
     except ImportError:
         logger.debug("Credit tracker not available for TTS tracking")

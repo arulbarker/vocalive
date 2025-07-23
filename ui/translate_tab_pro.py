@@ -547,8 +547,8 @@ class TranslateTabPro(QWidget):
             source_text = self.source_text.toPlainText()
             if not source_text.strip():
                 QMessageBox.warning(self, "Warning", "Please enter text to translate")
-                return
-                
+            return
+
             source_lang = self.supported_languages.get(self.source_lang_combo.currentText(), "id")
             target_lang = self.supported_languages.get(self.target_lang_combo.currentText(), "en")
             mode = self.translation_mode_combo.currentText()
@@ -624,8 +624,8 @@ class TranslateTabPro(QWidget):
             voice_input = self.voice_display.toPlainText()
             if not voice_input.strip():
                 QMessageBox.warning(self, "Warning", "Please record or enter voice input")
-                return
-                
+            return
+
             # Simulate voice translation
             translation = f"""
 🎤 Voice Translation Result
@@ -645,7 +645,7 @@ class TranslateTabPro(QWidget):
             
             self.voice_translation_display.setPlainText(translation)
             
-        except Exception as e:
+                except Exception as e:
             logger.error(f"Error translating voice: {e}")
             QMessageBox.warning(self, "Error", f"Failed to translate voice: {e}")
             

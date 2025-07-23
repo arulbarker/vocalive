@@ -1,156 +1,176 @@
+"""
+Config Manager - Updated to use Supabase for configuration
+"""
+
 import json
-from pathlib import Path
 import os
-from dotenv import load_dotenv
+from pathlib import Path
+from typing import Dict, Any, Optional
+import logging
+
+logger = logging.getLogger('StreamMate')
 
 class ConfigManager:
-    """
-    Manages application settings (settings.json), available voices (voices.json),
-    and environment variables (.env files).
-    Supports filtering voice models by subscription tier.
-    """
-    # mapping package tiers ke sections di voices.json
-    _TIER_SECTION = {
-        "basic":   "coqui",
-        "premium": "gtts_standard",
-        "pro":     "chirp3",
-    }
-
-    def __init__(self,
-                 config_path: str = "config/settings.json",
-                 voices_path: str = "config/voices.json"):
-        # path ke settings dan voices
-        self.config_path = Path(config_path)
-        self.voices_path = Path(voices_path)
-
-        # data runtime
-        self.data = {}
-        self.voices = {}
-        self.env_data = {}
-
-        # Load environment variables
-        self._load_env()
-
-        # muat dari disk
-        self.load_settings()
-        self.load_voices()
-
-    def _load_env(self):
-        """Load environment variables from .env files"""
-        # Try to load local env first (development)
-        if os.path.exists('.env.local'):
-            load_dotenv('.env.local')
-        # Then try production env
-        elif os.path.exists('.env.production'):
-            load_dotenv('.env.production')
-        # Finally try default .env
-        elif os.path.exists('.env'):
-            load_dotenv('.env')
-
-        # Store environment variables
-        self.env_data = {
-            'API_BASE_URL': os.getenv('API_BASE_URL'),
-            'API_TIMEOUT': int(os.getenv('API_TIMEOUT', 10)),
-            'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
-            'DEEPSEEK_API_KEY': os.getenv('DEEPSEEK_API_KEY'),
-            'STREAMMATE_DEV': os.getenv('STREAMMATE_DEV', 'false').lower() == 'true',
-            'DEBUG_MODE': os.getenv('DEBUG_MODE', 'false').lower() == 'true',
-            'DB_HOST': os.getenv('DB_HOST'),
-            'DB_PORT': os.getenv('DB_PORT'),
-            'DB_NAME': os.getenv('DB_NAME'),
-            'DB_USER': os.getenv('DB_USER'),
-            'DB_PASSWORD': os.getenv('DB_PASSWORD')
-        }
-
-    def get_env(self, key: str, default=None):
-        """Get environment variable value"""
-        return self.env_data.get(key, default)
-
-    def load_settings(self) -> dict:
-        """Load settings dari settings.json."""
-        if self.config_path.exists():
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                self.data = json.load(f)
-        else:
-            self.data = {}
-        return self.data
-
-    def save_settings(self) -> None:
-        """Simpan data setting ke settings.json."""
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.config_path, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, indent=2)
-
-    def get(self, key: str, default=None):
-        """Dapatkan nilai setting, atau default jika tidak ada."""
-        return self.data.get(key, default)
-
-    def set(self, key: str, value) -> None:
-        """Perbarui setting dan simpan ke disk segera."""
-        self.data[key] = value
-        self.save_settings()
-
-    def load_voices(self) -> dict:
-        """Load semua voice model dari voices.json."""
-        if self.voices_path.exists():
-            with open(self.voices_path, "r", encoding="utf-8") as f:
-                self.voices = json.load(f)
-        else:
-            self.voices = {}
-        return self.voices
-
-    def get_available_voices(self) -> dict:
-        """
-        Kembalikan subset voices.json sesuai tier saat ini.
-        Keys bergantung pada 'basic', 'premium', atau 'pro'.
-        """
-        tier = self.get("tts_tier", "basic")
-        section = self._TIER_SECTION.get(tier, "coqui")
-        return self.voices.get(section, {})
-
-    def list_voice_models(self) -> list:
-        """
-        Flatten available voices menjadi list.
-        Masing-masing entry dict:
-            {
-              'language': <kode atau nama bahasa>,
-              'model_id': <identifier model>,
-              'gender':   <"MALE"|"FEMALE"|None>,
-              'display':  <label untuk UI>
-            }
-        """
-        models = []
-        for lang, voices_dict in self.get_available_voices().items():
-            for model_id, info in voices_dict.items():
-                gender  = info.get("gender")
-                display = info.get("display", model_id)
-                models.append({
-                    "language": lang,
-                    "model_id":  model_id,
-                    "gender":    gender,
-                    "display":   display,
-                })
-        return models
-
-    # helper khusus hotkey
-    def get_translate_hotkey(self, default=None):
-        """Ambil hotkey untuk mode translate."""
-        return self.get("translate_hotkey", default)
-
-    def get_cohost_hotkey(self, default=None):
-        """Ambil hotkey untuk mode cohost/chat."""
-        return self.get("cohost_hotkey", default)
-
-    def force_production_mode(self):
-        """Paksa aplikasi ke production mode"""
-        self.set("debug_mode", False)
-        self.set("testing_mode", False)
+    """Configuration manager with Supabase integration"""
+    
+    def __init__(self, config_file: str = "config/settings.json"):
+        self.config_file = Path(config_file)
+        self.supabase_config = None
+        self._load_supabase_config()
         
-        # Hapus flag developer
-        user_data = self.get("user_data", {})
-        if "dev_mode" in user_data:
-            del user_data["dev_mode"]
-            self.set("user_data", user_data)
+    def _load_supabase_config(self):
+        """Load Supabase configuration"""
+        try:
+            supabase_config_file = Path("config/supabase_config.json")
+            if supabase_config_file.exists():
+                with open(supabase_config_file, 'r', encoding='utf-8') as f:
+                    self.supabase_config = json.load(f)
+                logger.info("Supabase config loaded")
+            else:
+                logger.warning("Supabase config file not found")
+        except Exception as e:
+            logger.error(f"Error loading Supabase config: {e}")
+    
+    def get_api_key(self, key_name: str) -> Optional[str]:
+        """Get API key from Supabase or fallback to local config"""
+        try:
+            # Try to get from Supabase first
+            if self.supabase_config:
+                from modules_client.supabase_config_client import config_client
+                api_key = config_client.get_api_key(key_name)
+                if api_key:
+                    logger.debug(f"Got {key_name} from Supabase")
+                    return api_key
+        except Exception as e:
+            logger.warning(f"Failed to get {key_name} from Supabase: {e}")
         
-        print("[CONFIG] Forced production mode settings")
+        # Fallback to local config
+        try:
+            if self.config_file.exists():
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # Check in various possible locations
+                if key_name in config:
+                    return config[key_name]
+                elif 'api_keys' in config and key_name in config['api_keys']:
+                    return config['api_keys'][key_name]
+                elif 'credentials' in config and key_name in config['credentials']:
+                    return config['credentials'][key_name]
+                    
+        except Exception as e:
+            logger.error(f"Error getting {key_name} from local config: {e}")
+        
+        return None
+    
+    def get_payment_config(self, provider: str, config_key: str) -> Optional[str]:
+        """Get payment configuration from Supabase"""
+        try:
+            if self.supabase_config:
+                from modules_client.supabase_config_client import config_client
+                return config_client.get_payment_config(provider, config_key)
+        except Exception as e:
+            logger.warning(f"Failed to get payment config {provider}.{config_key}: {e}")
+        return None
+    
+    def get_server_config(self, config_key: str) -> Optional[str]:
+        """Get server configuration from Supabase"""
+        try:
+            if self.supabase_config:
+                from modules_client.supabase_config_client import config_client
+                return config_client.get_server_config(config_key)
+        except Exception as e:
+            logger.warning(f"Failed to get server config {config_key}: {e}")
+        return None
+    
+    def get_google_credentials(self, credential_type: str) -> Optional[Dict[str, Any]]:
+        """Get Google credentials from Supabase"""
+        try:
+            if self.supabase_config:
+                from modules_client.supabase_config_client import config_client
+                return config_client.get_google_credentials(credential_type)
+        except Exception as e:
+            logger.warning(f"Failed to get Google credentials {credential_type}: {e}")
+        return None
+    
+    def load_settings(self) -> Dict[str, Any]:
+        """Load all settings with Supabase integration"""
+        settings = {}
+        
+        # Load local settings first
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+            except Exception as e:
+                logger.error(f"Error loading local settings: {e}")
+        
+        # Override with Supabase configs
+        try:
+            if self.supabase_config:
+                from modules_client.supabase_config_client import config_client
+                
+                # Get API keys
+                api_keys = {}
+                for key_name in ['DEEPSEEK_API_KEY', 'YOUTUBE_API_KEY', 'TRAKTEER_API_KEY', 'TR_API_KEY']:
+                    api_key = config_client.get_api_key(key_name)
+                    if api_key:
+                        api_keys[key_name] = api_key
+                
+                if api_keys:
+                    settings['api_keys'] = api_keys
+                
+                # Get payment config
+                ipaymu_config = config_client.get_ipaymu_config()
+                if ipaymu_config:
+                    settings['ipaymu_config'] = ipaymu_config
+                
+                # Get server config
+                environment = config_client.get_environment()
+                if environment:
+                    settings['environment'] = environment
+                
+                debug_mode = config_client.is_debug_mode()
+                settings['debug_mode'] = debug_mode
+                
+                safety_mode = config_client.is_safety_mode()
+                settings['safety_mode'] = safety_mode
+                
+        except Exception as e:
+            logger.warning(f"Error loading Supabase settings: {e}")
+        
+        return settings
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get configuration value"""
+        settings = self.load_settings()
+        return settings.get(key, default)
+    
+    def set(self, key: str, value: Any) -> bool:
+        """Set configuration value (local only for now)"""
+        try:
+            settings = self.load_settings()
+            settings[key] = value
+            
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error setting config {key}: {e}")
+            return False
+    
+    def save(self) -> bool:
+        """Save current settings"""
+        try:
+            settings = self.load_settings()
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            logger.error(f"Error saving settings: {e}")
+            return False
+
+# Global instance
+config_manager = ConfigManager()
 

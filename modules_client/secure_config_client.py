@@ -13,10 +13,21 @@ import tempfile
 import os
 
 class SecureConfigClient:
-    def __init__(self, server_url: str = "http://69.62.79.238:8000"):
-        self.server_url = server_url.rstrip('/')
-        self.session = requests.Session()
-        self.session.timeout = 30
+    def __init__(self, server_url: str = None):
+        # Try to use Supabase first
+        try:
+            from modules_client.supabase_client import get_supabase_client
+            self.supabase_client = get_supabase_client()
+            self.use_supabase = True
+            print("[CONFIG] Using Supabase backend")
+        except ImportError:
+            # Fallback to VPS server
+            self.server_url = server_url or "http://69.62.79.238:8000"
+            self.server_url = self.server_url.rstrip('/')
+            self.session = requests.Session()
+            self.session.timeout = 30
+            self.use_supabase = False
+            print("[CONFIG] Using VPS backend (fallback)")
         
     def get_packages_config(self) -> Dict[str, Any]:
         """Get packages configuration from server"""

@@ -1,6 +1,5 @@
 import os
 import json
-import requests
 import sys
 import time
 import logging
@@ -16,7 +15,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QDesktopServices, QColor, QPixmap
 from PyQt6.QtCore import QUrl, Qt, QTimer, pyqtSignal
 from modules_client.config_manager import ConfigManager
-from modules_server.daily_limit_manager import get_daily_usage_stats
+from modules_client.supabase_client import SupabaseClient
+import re
+import hashlib
+import hmac
 
 logger = logging.getLogger('StreamMate')
 
@@ -46,8 +48,8 @@ class SubscriptionTab(QWidget):
         self.demo_duration_minutes = 30
         self.demo_active = False
         
-        # Server URL dengan fallback
-        self.server_url = self._get_server_url()
+        # Supabase client
+        self.supabase = SupabaseClient()
         
         # TAMBAHKAN background setup seperti login_tab
         self.setup_background()
@@ -74,32 +76,7 @@ class SubscriptionTab(QWidget):
         # Initial refresh
         self.refresh_credits()
         
-    def _get_server_url(self):
-        """Dapatkan URL server yang aktif dengan fallback yang baik"""
-        primary_url = "http://69.62.79.238:8000"
-        fallback_url = "http://localhost"
-        
-        # Test koneksi ke production server dengan timeout lebih pendek
-        try:
-            response = requests.get(f"{primary_url}/api/health", timeout=10)
-            if response.status_code == 200:
-                print(f"[DEBUG] Using production server: {primary_url}")
-                return primary_url
-        except Exception as e:
-            print(f"[DEBUG] Production server failed: {e}")
-            
-        # Test koneksi ke localhost dengan timeout minimal
-        try:
-            response = requests.get(f"{fallback_url}/api/health", timeout=1)
-            if response.status_code == 200:
-                print(f"[DEBUG] Using localhost server: {fallback_url}")
-                return fallback_url
-        except Exception as e:
-            print(f"[DEBUG] Localhost server failed: {e}")
-            
-        # Fallback ke production meskipun tidak dapat ditest
-        print(f"[DEBUG] No server responding, defaulting to production: {primary_url}")
-        return primary_url
+
     
     def setup_background(self):
         """Setup background gradient yang modern seperti login_tab."""
@@ -168,6 +145,10 @@ class SubscriptionTab(QWidget):
         # ========== PACKAGE CARDS ==========
         packages_widget = self.create_packages_section()
         content_layout.addWidget(packages_widget)
+        
+        # ========== ENTER MODE BUTTONS ==========
+        mode_buttons_widget = self.create_mode_buttons_section()
+        content_layout.addWidget(mode_buttons_widget)
         
         # ========== INFO SECTION ==========
         info_widget = self.create_info_section()
@@ -350,11 +331,11 @@ class SubscriptionTab(QWidget):
         self.demo_btn.clicked.connect(self.start_demo)
         layout.addWidget(self.demo_btn)
         
-        # TAMBAHAN BARU: Basic Mode Button
-        self.basic_mode_btn = QPushButton("🚀 Enter Basic Mode")
-        self.basic_mode_btn.setStyleSheet("""
+        # Top-up Credits button
+        topup_btn = QPushButton("💳 Top-up Credits")
+        topup_btn.setStyleSheet("""
             QPushButton {
-                background-color: #1877F2;
+                background-color: #FF6B35;
                 color: white;
                 border: none;
                 padding: 12px 24px;
@@ -363,16 +344,11 @@ class SubscriptionTab(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #166FE5;
-            }
-            QPushButton:disabled {
-                background-color: #CCCCCC;
-                color: #666666;
+                background-color: #E55A2B;
             }
         """)
-        self.basic_mode_btn.clicked.connect(self.enter_basic_mode)
-        self.basic_mode_btn.setEnabled(False)  # Default disabled
-        layout.addWidget(self.basic_mode_btn)
+        topup_btn.clicked.connect(self.show_topup_options)
+        layout.addWidget(topup_btn)
         
         # Refresh button
         refresh_btn = QPushButton("🔄 Refresh Status")
@@ -390,7 +366,7 @@ class SubscriptionTab(QWidget):
                 background-color: #E8F0FE;
             }
         """)
-        refresh_btn.clicked.connect(lambda: self.refresh_credits(force_vps_sync=True))
+        refresh_btn.clicked.connect(lambda: self.refresh_credits(force_supabase_sync=True))
         layout.addWidget(refresh_btn)
         
         # Logout button
@@ -423,7 +399,9 @@ class SubscriptionTab(QWidget):
             QFrame {
                 background-color: #F8F9FA;
                 border-radius: 12px;
+                border: 1px solid #E0E0E0;
                 padding: 20px;
+                margin: 10px 0;
             }
         """)
         
@@ -433,34 +411,13 @@ class SubscriptionTab(QWidget):
         title = QLabel("📦 Choose Features Package (Paid with Credits)")
         title.setStyleSheet("""
             QLabel {
-                font-size: 20px;
+                font-size: 18px;
                 font-weight: bold;
                 color: #333;
-                margin-bottom: 10px;
+                margin-bottom: 15px;
             }
         """)
         main_layout.addWidget(title)
-        
-        # Current balance display
-        try:
-            from modules_client.credit_wallet_client import get_current_balance
-            current_balance = get_current_balance()
-            balance_label = QLabel(f"💰 Your Current Balance: {current_balance:,} credits")
-            balance_label.setStyleSheet("""
-                QLabel {
-                    font-size: 16px;
-                    color: #4CAF50;
-                    font-weight: bold;
-                    margin-bottom: 10px;
-                    background-color: #E8F5E8;
-                    padding: 10px;
-                    border-radius: 8px;
-                    border-left: 4px solid #4CAF50;
-                }
-            """)
-            main_layout.addWidget(balance_label)
-        except:
-            pass
         
         # Info label about credit purchases with top-up button
         info_widget = QFrame()
@@ -530,12 +487,11 @@ class SubscriptionTab(QWidget):
         )
         cards_layout.addWidget(basic_card)
         
-        # COHOST SELLER PACKAGE CARD - Updated for credit purchase
         # PRO PACKAGE CARD
         pro_card = self.create_package_card(
             title="PRO",
-            price="200,000 Credits",
-            credits="200,000 Credits",
+            price="300,000 Credits",
+            credits="300,000 Credits",
             features=[
                 "✅ All Basic features",
                 "🤖 Advanced AI Cohost",
@@ -555,6 +511,89 @@ class SubscriptionTab(QWidget):
         main_layout.addLayout(cards_layout)
         
         return packages_frame
+        
+    def create_mode_buttons_section(self):
+        """Create section untuk tombol Enter Basic Mode dan Enter Pro Mode"""
+        buttons_frame = QFrame()
+        buttons_frame.setStyleSheet("""
+            QFrame {
+                background-color: #F8F9FA;
+                border-radius: 12px;
+                border: 1px solid #E0E0E0;
+                padding: 20px;
+                margin: 10px 0;
+            }
+        """)
+        
+        main_layout = QVBoxLayout(buttons_frame)
+        
+        # Section title
+        title = QLabel("🚀 Enter Application Mode")
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+                color: #333;
+                margin-bottom: 15px;
+            }
+        """)
+        main_layout.addWidget(title)
+        
+        # Buttons container
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(20)
+        
+        # BASIC MODE BUTTON
+        self.basic_mode_btn = QPushButton("🚀 Enter Basic Mode")
+        self.basic_mode_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 15px 30px;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: bold;
+                border: none;
+                min-width: 200px;
+            }
+            QPushButton:hover {
+                background-color: #45A049;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #666666;
+            }
+        """)
+        self.basic_mode_btn.clicked.connect(self.enter_basic_mode)
+        buttons_layout.addWidget(self.basic_mode_btn)
+        
+        # PRO MODE BUTTON
+        self.pro_mode_btn = QPushButton("🚀 Enter Pro Mode")
+        self.pro_mode_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                padding: 15px 30px;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: bold;
+                border: none;
+                min-width: 200px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+            QPushButton:disabled {
+                background-color: #CCCCCC;
+                color: #666666;
+            }
+        """)
+        self.pro_mode_btn.clicked.connect(self.enter_pro_mode)
+        buttons_layout.addWidget(self.pro_mode_btn)
+        
+        main_layout.addLayout(buttons_layout)
+        
+        return buttons_frame
         
     def create_package_card(self, title, price, credits, features, color, 
                             package_id, is_available=True, is_popular=False, 
@@ -1019,15 +1058,15 @@ class SubscriptionTab(QWidget):
         
         <h3>ℹ️ Important Information</h3>
         <ul>
-            <li><b>Demo Mode:</b> 30 minutes free to try Basic features (one-time use)</li>
-            <li><b>Payment:</b> Via iPaymu - Bank Transfer, E-Wallet, QRIS</li>
-            <li><b>Activation:</b> Automatic after successful payment</li>
-            <li><b>Credits:</b> Valid for 30 days from purchase</li>
+            <li style="color: black;"><b>Demo Mode:</b> 30 minutes free to try Basic features (one-time use)</li>
+            <li style="color: black;"><b>Payment:</b> Via iPaymu - Bank Transfer, E-Wallet, QRIS</li>
+            <li style="color: black;"><b>Activation:</b> Automatic after successful payment</li>
+            <li style="color: black;"><b>Credits:</b> Valid for 30 days from purchase</li>
         </ul>
         
         <h3>📞 Need Help?</h3>
-        <p>Email: support@streammateai.com<br>
-        WhatsApp: +62 812-3456-7890</p>
+        <p style="color: black;">Email: mursalinasrul@gmail.com<br>
+        WhatsApp: +62 895-1642-5913</p>
         """
         
         info_widget = QTextEdit()
@@ -1050,48 +1089,50 @@ class SubscriptionTab(QWidget):
         """Setup auto refresh timer - DEPRECATED, gunakan credit_timer"""
         pass
 
-    def refresh_credits(self, force_vps_sync=False):
-        """Refresh status dan kredit"""
+    def refresh_credits(self, force_supabase_sync=False):
+        """Refresh status dan kredit dari Supabase"""
         try:
             # Check for daily demo reset first
             reset_occurred = self._check_demo_daily_reset()
             if reset_occurred:
                 print("[REFRESH] Demo was reset during refresh_credits call")
                 
-            # 🎯 PERBAIKAN: Selalu ambil data dari VPS server terlebih dahulu
+            # 🎯 PERBAIKAN: Selalu ambil data dari Supabase terlebih dahulu
             email = self.cfg.get("user_data", {}).get("email", "")
-            vps_data = None
+            supabase_data = None
             
             if email:
                 try:
-                    import requests
-                    print("[REFRESH] Fetching latest data from VPS server...")
-                    vps_url = "http://69.62.79.238:8000"
-                    response = requests.post(f"{vps_url}/api/license/validate", 
-                                           json={"email": email}, timeout=10)
+                    print("[REFRESH] Fetching latest data from Supabase...")
+                    credit_data = self.supabase.get_credit_balance(email)
                     
-                    if response.status_code == 200:
-                        vps_result = response.json().get("data", {})
+                    if credit_data and credit_data.get("status") == "success":
+                        data = credit_data.get("data", {})
                         # --- Perbaikan: Gunakan credit_balance/credit_used jika ada ---
-                        credit_balance = float(vps_result.get("credit_balance", vps_result.get("hours_credit", 0)))
-                        credit_used = float(vps_result.get("credit_used", vps_result.get("hours_used", 0)))
-                        vps_data = {
-                            "status": "paid" if vps_result.get("is_active") else "inactive",
-                            "package": vps_result.get("tier", "basic"),
+                        credit_balance = float(data.get("wallet_balance", 0))
+                        credit_used = float(data.get("total_spent", 0))
+                        basic_credits = float(data.get("basic_credits", 0))
+                        pro_credits = float(data.get("pro_credits", 0))
+                        
+                        supabase_data = {
+                            "status": "paid" if data.get("status") == "active" else "inactive",
+                            "package": data.get("tier", "basic"),
                             "credit_balance": credit_balance,
                             "credit_used": credit_used,
+                            "basic_credits": basic_credits,
+                            "pro_credits": pro_credits,
                             "hours_credit": credit_balance,  # for legacy fallback
                             "hours_used": credit_used,      # for legacy fallback
                             "email": email
                         }
-                        print(f"[REFRESH] VPS data: {vps_data['credit_balance']:.6f} credits, {vps_data['credit_used']:.6f} used")
+                        print(f"[REFRESH] Supabase data: {supabase_data['credit_balance']:.6f} credits, {supabase_data['credit_used']:.6f} used")
                     else:
-                        print(f"[REFRESH] VPS error: {response.status_code}")
+                        print(f"[REFRESH] Supabase error: {credit_data}")
                 except Exception as e:
-                    print(f"[REFRESH] VPS connection error: {e}")
+                    print(f"[REFRESH] Supabase connection error: {e}")
             
-            # Fallback ke subscription file jika VPS gagal
-            if not vps_data:
+            # Fallback ke subscription file jika Supabase gagal
+            if not supabase_data:
                 subscription_file = Path("config/subscription_status.json")
                 
                 if not subscription_file.exists():
@@ -1100,19 +1141,25 @@ class SubscriptionTab(QWidget):
                         "package": "none", 
                         "credit_balance": 0,
                         "credit_used": 0,
+                        "basic_credits": 0,
+                        "pro_credits": 0,
                         "hours_credit": 0,
                         "hours_used": 0
                     })
                     return
                     
                 with open(subscription_file, "r", encoding="utf-8") as f:
-                    vps_data = json.load(f)
+                    supabase_data = json.load(f)
                 print("[REFRESH] Using local subscription file")
                 # --- Perbaikan: Pastikan field credit_balance/credit_used ada ---
-                if "credit_balance" not in vps_data:
-                    vps_data["credit_balance"] = float(vps_data.get("hours_credit", 0))
-                if "credit_used" not in vps_data:
-                    vps_data["credit_used"] = float(vps_data.get("hours_used", 0))
+                if "credit_balance" not in supabase_data:
+                    supabase_data["credit_balance"] = float(supabase_data.get("hours_credit", 0))
+                if "credit_used" not in supabase_data:
+                    supabase_data["credit_used"] = float(supabase_data.get("hours_used", 0))
+                if "basic_credits" not in supabase_data:
+                    supabase_data["basic_credits"] = 0
+                if "pro_credits" not in supabase_data:
+                    supabase_data["pro_credits"] = 0
             
             # Cek status demo lokal sebelum overwrite dengan data server
             subscription_file = Path("config/subscription_status.json")
@@ -1141,11 +1188,11 @@ class SubscriptionTab(QWidget):
                     self.update_demo_button()
                     return
 
-            self.update_status_display(vps_data)
+            self.update_status_display(supabase_data)
             
             # ✅ PERBAIKAN: Log data untuk debugging
-            credit_balance = float(vps_data.get("credit_balance", vps_data.get("hours_credit", 0)))
-            credit_used = float(vps_data.get("credit_used", vps_data.get("hours_used", 0)))
+            credit_balance = float(supabase_data.get("credit_balance", supabase_data.get("hours_credit", 0)))
+            credit_used = float(supabase_data.get("credit_used", supabase_data.get("hours_used", 0)))
             print(f"[REFRESH] Current data: {credit_balance:.1f} credits, {credit_used:.4f} used")
             
             # Update credit display jika ada
@@ -1229,10 +1276,11 @@ class SubscriptionTab(QWidget):
                         background-color: #CCCCCC;
                         color: #666666;
                         border: none;
-                        padding: 12px 24px;
+                        padding: 15px 30px;
                         border-radius: 8px;
-                        font-size: 14px;
+                        font-size: 16px;
                         font-weight: bold;
+                        min-width: 200px;
                     }
                 """)
                 print(f"[DEBUG] Basic Mode Button: DISABLED (Demo Active)")
@@ -1242,16 +1290,17 @@ class SubscriptionTab(QWidget):
                 self.basic_mode_btn.setText(f"🚀 Enter Basic Mode ({basic_credits:.1f} Basic credits)")
                 self.basic_mode_btn.setStyleSheet("""
                     QPushButton {
-                        background-color: #1877F2;
+                        background-color: #4CAF50;
                         color: white;
                         border: none;
-                        padding: 12px 24px;
+                        padding: 15px 30px;
                         border-radius: 8px;
-                        font-size: 14px;
+                        font-size: 16px;
                         font-weight: bold;
+                        min-width: 200px;
                     }
                     QPushButton:hover {
-                        background-color: #166FE5;
+                        background-color: #45A049;
                     }
                 """)
                 print(f"[DEBUG] Basic Mode Button: ENABLED (Basic Credits: {basic_credits:.1f})")
@@ -1264,13 +1313,75 @@ class SubscriptionTab(QWidget):
                         background-color: #CCCCCC;
                         color: #666666;
                         border: none;
-                        padding: 12px 24px;
+                        padding: 15px 30px;
                         border-radius: 8px;
-                        font-size: 14px;
+                        font-size: 16px;
                         font-weight: bold;
+                        min-width: 200px;
                     }
                 """)
                 print(f"[DEBUG] Basic Mode Button: DISABLED (Insufficient Basic Credits: {basic_credits:.1f})")
+        
+        # UPDATE PRO MODE BUTTON - BERDASARKAN KREDIT PRO SAJA
+        if hasattr(self, 'pro_mode_btn'):
+            # Cek kredit Pro (terpisah dari kredit Basic)
+            pro_credits = self._get_pro_credits()
+            print(f"[DEBUG] Pro Mode Button Update - Status: {status}, Pro Credits: {pro_credits:.1f}")
+            
+            if status == "demo":
+                # Khusus untuk demo, disable tombol
+                self.pro_mode_btn.setEnabled(False)
+                self.pro_mode_btn.setText("Pro Mode (Demo Active)")
+                self.pro_mode_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #CCCCCC;
+                        color: #666666;
+                        border: none;
+                        padding: 15px 30px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        min-width: 200px;
+                    }
+                """)
+                print(f"[DEBUG] Pro Mode Button: DISABLED (Demo Active)")
+            elif pro_credits >= 300000:
+                # Enable jika kredit Pro cukup
+                self.pro_mode_btn.setEnabled(True)
+                self.pro_mode_btn.setText(f"🚀 Enter Pro Mode ({pro_credits:,.0f} Pro credits)")
+                self.pro_mode_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #FF9800;
+                        color: white;
+                        border: none;
+                        padding: 15px 30px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        min-width: 200px;
+                    }
+                    QPushButton:hover {
+                        background-color: #F57C00;
+                    }
+                """)
+                print(f"[DEBUG] Pro Mode Button: ENABLED (Pro Credits: {pro_credits:.1f})")
+            else:
+                # Disable jika kredit Pro tidak cukup
+                self.pro_mode_btn.setEnabled(False)
+                self.pro_mode_btn.setText(f"⚠️ Insufficient Pro Credits ({pro_credits:,.0f}/300,000)")
+                self.pro_mode_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #CCCCCC;
+                        color: #666666;
+                        border: none;
+                        padding: 15px 30px;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        min-width: 200px;
+                    }
+                """)
+                print(f"[DEBUG] Pro Mode Button: DISABLED (Insufficient Pro Credits: {pro_credits:.1f})")
                 
         # Update package
         self.package_value.setText(package.capitalize() if package != "none" else "None")
@@ -1331,19 +1442,141 @@ class SubscriptionTab(QWidget):
             f"{package_name.capitalize()} package will be available soon!"
         )
         print("=== DEBUG CREDIT PURCHASE END ===\n")
+        
+    def buy_pro_package_with_credits(self):
+        """Handle Pro package purchase with credits via Supabase"""
+        try:
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                QMessageBox.warning(self, "Login Required", "Please login first to purchase Pro package")
+                return
+            
+            # Check current credit balance from Supabase
+            try:
+                credit_data = self.supabase.get_credit_balance(email)
+                if not credit_data or credit_data.get("status") != "success":
+                    QMessageBox.warning(self, "Error", "Failed to get credit balance from Supabase")
+                    return
+                
+                data = credit_data.get("data", {})
+                current_balance = float(data.get("wallet_balance", 0))
+                required_credits = 300000  # 300,000 credits for Pro
+                
+                if current_balance < required_credits:
+                    QMessageBox.warning(
+                        self, "Insufficient Credits",
+                        f"Pro package requires {required_credits:,} credits.\n"
+                        f"Your current balance: {current_balance:,} credits\n\n"
+                        "Please top-up more credits first."
+                    )
+                    return
+                
+                # Check if already has Pro package
+                subscription_file = Path("config/subscription_status.json")
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                        if sub_data.get("pro", {}).get("active", False):
+                            QMessageBox.information(
+                                self, "Already Purchased",
+                                "You already have the Pro package active!"
+                            )
+                            return
+                
+                # Confirm purchase
+                reply = QMessageBox.question(
+                    self, "Confirm Purchase",
+                    f"🚀 CoHost Pro Package\n\n"
+                    f"Price: {required_credits:,} credits\n"
+                    f"Includes:\n"
+                    f"• All Basic features\n"
+                    f"• Sequential & Delay Mode\n"
+                    f"• Premium Google Chirp3 TTS\n"
+                    f"• Virtual Microphone\n"
+                    f"• Viewer Management\n"
+                    f"• Advanced Analytics\n"
+                    f"• Priority Support\n\n"
+                    f"Your balance after purchase: {current_balance - required_credits:,} credits\n\n"
+                    f"Proceed with purchase?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+                
+                # Purchase via Supabase
+                purchase_result = self.supabase.purchase_mode_credits(
+                    email=email,
+                    mode="pro",
+                    credits_needed=required_credits
+                )
+                
+                if not purchase_result or purchase_result.get("status") != "success":
+                    QMessageBox.critical(self, "Purchase Failed", "Failed to purchase Pro package via Supabase")
+                    return
+                
+                # Update local subscription data
+                if subscription_file.exists():
+                    with open(subscription_file, 'r', encoding='utf-8') as f:
+                        sub_data = json.load(f)
+                else:
+                    sub_data = {}
+                
+                # Add Pro package data
+                sub_data["pro"] = {
+                    "active": True,
+                    "purchased_at": datetime.now().isoformat(),
+                    "email": email,
+                    "package": "pro"
+                }
+                
+                # Save updated subscription data
+                with open(subscription_file, 'w', encoding='utf-8') as f:
+                    json.dump(sub_data, f, indent=2, ensure_ascii=False)
+                
+                # Success message
+                QMessageBox.information(
+                    self, "Purchase Successful! 🎉",
+                    f"Pro package purchased successfully!\n\n"
+                    f"✅ Credits deducted: {required_credits:,}\n"
+                    f"✅ Pro mode is now available\n\n"
+                    f"You can now access Pro features!"
+                )
+                
+                # Refresh UI
+                self.refresh_credits()
+                
+                # Activate Pro mode if parent available
+                if self.parent and hasattr(self.parent, 'pilih_paket'):
+                    self.parent.pilih_paket("pro")
+                else:
+                    self.package_activated.emit("pro")
+                    
+            except Exception as e:
+                logger.error(f"Error purchasing pro package: {e}")
+                QMessageBox.critical(self, "Purchase Error", f"Failed to purchase Pro package: {str(e)}")
+                
+        except Exception as e:
+            logger.error(f"Error in buy_pro_package_with_credits: {e}")
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
 
     def buy_basic_package_with_credits(self):
-        """Handle Basic package purchase with credits"""
+        """Handle Basic package purchase with credits via Supabase"""
         try:
             email = self.cfg.get("user_data", {}).get("email", "")
             if not email:
                 QMessageBox.warning(self, "Login Required", "Please login first to purchase Basic package")
                 return
             
-            # Check current credit balance
+            # Check current credit balance from Supabase
             try:
-                from modules_server.real_credit_tracker import get_current_credit_balance
-                current_balance = get_current_credit_balance()
+                credit_data = self.supabase.get_credit_balance(email)
+                if not credit_data or credit_data.get("status") != "success":
+                    QMessageBox.warning(self, "Error", "Failed to get credit balance from Supabase")
+                    return
+                
+                data = credit_data.get("data", {})
+                current_balance = float(data.get("wallet_balance", 0))
                 required_credits = 100000  # 100,000 credits for Basic
                 
                 if current_balance < required_credits:
@@ -1386,19 +1619,18 @@ class SubscriptionTab(QWidget):
                 if reply != QMessageBox.StandardButton.Yes:
                     return
                 
-                # Deduct credits
-                from modules_server.real_credit_tracker import force_credit_deduction
-                deduction_success = force_credit_deduction(
-                    required_credits, 
-                    "basic_package_purchase", 
-                    "Basic Package Purchase"
+                # Purchase via Supabase
+                purchase_result = self.supabase.purchase_mode_credits(
+                    email=email,
+                    mode="basic",
+                    credits_needed=required_credits
                 )
                 
-                if not deduction_success:
-                    QMessageBox.critical(self, "Purchase Failed", "Credit deduction failed. Please try again.")
+                if not purchase_result or purchase_result.get("status") != "success":
+                    QMessageBox.critical(self, "Purchase Failed", "Failed to purchase Basic package via Supabase")
                     return
                 
-                # Update subscription data
+                # Update local subscription data
                 if subscription_file.exists():
                     with open(subscription_file, 'r', encoding='utf-8') as f:
                         sub_data = json.load(f)
@@ -1412,9 +1644,6 @@ class SubscriptionTab(QWidget):
                     "email": email,
                     "package": "basic"
                 }
-                
-                # Add Basic credits (separate from Pro credits)
-                sub_data["basic_credits"] = current_balance - required_credits
                 
                 with open(subscription_file, 'w', encoding='utf-8') as f:
                     json.dump(sub_data, f, indent=2, ensure_ascii=False)
@@ -1439,117 +1668,232 @@ class SubscriptionTab(QWidget):
                 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
-
-    def buy_pro_package_with_credits(self):
-        """Handle Pro package purchase with credits"""
+    
+    def create_ipaymu_payment(self, email, package, order_id):
+        """Create iPaymu payment URL (PRODUCTION, Redirect Payment - Auto semua metode pembayaran)"""
         try:
-            email = self.cfg.get("user_data", {}).get("email", "")
-            if not email:
-                QMessageBox.warning(self, "Login Required", "Please login first to purchase Pro package")
-                return
+            import hmac
+            import hashlib
+            import time
+            import requests
+            import json
             
-            # Check current credit balance
-            try:
-                from modules_server.real_credit_tracker import get_current_credit_balance
-                current_balance = get_current_credit_balance()
-                required_credits = 200000  # 200,000 credits for Pro
-                
-                if current_balance < required_credits:
-                    QMessageBox.warning(
-                        self, "Insufficient Credits",
-                        f"Pro package requires {required_credits:,} credits.\n"
-                        f"Your current balance: {current_balance:,} credits\n\n"
-                        "Please top-up more credits in the Credit Wallet tab first."
-                    )
-                    return
-                
-                # Check if already has Pro package
-                subscription_file = Path("config/subscription_status.json")
-                if subscription_file.exists():
-                    with open(subscription_file, 'r', encoding='utf-8') as f:
-                        sub_data = json.load(f)
-                        if sub_data.get("pro", {}).get("active", False):
-                            QMessageBox.information(
-                                self, "Already Purchased",
-                                "You already have the Pro package active!"
-                            )
-                            return
-                
-                # Confirm purchase
-                reply = QMessageBox.question(
-                    self, "Confirm Purchase",
-                    f"🚀 Pro Package\n\n"
-                    f"Price: {required_credits:,} credits\n"
-                    f"Includes:\n"
-                    f"• All Basic features\n"
-                    f"• Advanced AI Cohost\n"
-                    f"• RAG Knowledge System\n"
-                    f"• Advanced Translation\n"
-                    f"• Viewer Management\n"
-                    f"• Virtual Microphone\n"
-                    f"• Priority Support\n\n"
-                    f"Your balance after purchase: {current_balance - required_credits:,} credits\n\n"
-                    f"Proceed with purchase?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                )
-                
-                if reply != QMessageBox.StandardButton.Yes:
-                    return
-                
-                # Deduct credits
-                from modules_server.real_credit_tracker import force_credit_deduction
-                deduction_success = force_credit_deduction(
-                    required_credits, 
-                    "pro_package_purchase", 
-                    "Pro Package Purchase"
-                )
-                
-                if not deduction_success:
-                    QMessageBox.critical(self, "Purchase Failed", "Credit deduction failed. Please try again.")
-                    return
-                
-                # Update subscription data
-                if subscription_file.exists():
-                    with open(subscription_file, 'r', encoding='utf-8') as f:
-                        sub_data = json.load(f)
-                else:
-                    sub_data = {}
-                
-                # Add Pro data
-                sub_data["pro"] = {
-                    "active": True,
-                    "purchased_at": datetime.now().isoformat(),
-                    "email": email,
-                    "package": "pro"
-                }
-                
-                # Add Pro credits (separate from Basic credits)
-                sub_data["pro_credits"] = current_balance - required_credits
-                
-                with open(subscription_file, 'w', encoding='utf-8') as f:
-                    json.dump(sub_data, f, indent=2, ensure_ascii=False)
-                
-                # Show success message
-                QMessageBox.information(
-                    self, "Purchase Successful! 🎉",
-                    f"Pro package activated successfully!\n\n"
-                    f"✅ Credits deducted: {required_credits:,}\n"
-                    f"✅ Remaining balance: {current_balance - required_credits:,}\n"
-                    f"✅ All Pro features unlocked\n\n"
-                    f"You can now access Pro features in the main application!"
-                )
-                
-                # Refresh UI
-                self.refresh_credits()
-                
-                # Emit signal to activate Pro mode
-                self.package_activated.emit("pro")
-                
-            except Exception as e:
-                QMessageBox.critical(self, "Purchase Error", f"Failed to process purchase: {str(e)}")
+            # SANDBOX/PRODUCTION CONFIG
+            ipaymu_config = self.cfg.get("ipaymu_config", {})
+            ipaymu_api_key = ipaymu_config.get("API_KEY", "SANDBOXE1498BCD-9D73-4607-A2EB-FA78939BBC45")
+            ipaymu_va = ipaymu_config.get("VA_NUMBER", "0000009516425913")
+            sandbox_mode = ipaymu_config.get("SANDBOX_MODE", "true").lower() == "true"
             
+            # Force sandbox mode untuk testing
+            sandbox_mode = True
+            ipaymu_api_key = "SANDBOXE1498BCD-9D73-4607-A2EB-FA78939BBC45"
+            ipaymu_va = "0000009516425913"
+            
+            # Set URL berdasarkan mode
+            if sandbox_mode:
+                api_url = "https://sandbox.ipaymu.com/api/v2/payment"
+                print(f"🔧 Using SANDBOX mode for testing")
+            else:
+                api_url = "https://my.ipaymu.com/api/v2/payment"
+                print(f"🔧 Using PRODUCTION mode")
+            
+            # DEBUG: Cek konfigurasi
+            print(f"🔍 DEBUG: API Key: {ipaymu_api_key[:8]}...")
+            print(f"🔍 DEBUG: VA Number: {ipaymu_va}")
+            print(f"🔍 DEBUG: Sandbox Mode: {sandbox_mode}")
+            print(f"🔍 DEBUG: API URL: {api_url}")
+
+            amount = package['price_idr']
+            raw_name = f"StreamMate AI - {package['name']}"
+            product_name = raw_name.encode('ascii', 'ignore').decode()
+            product_price = amount
+            product_qty = 1
+                
+            print(f"🔧 iPaymu Config: VA={ipaymu_va}, Sandbox={sandbox_mode}")
+            print(f"🔧 Redirect Payment - Semua metode pembayaran otomatis tersedia")
+            print(f"🔧 API URL: {api_url}")
+            print(f"🔧 Mode: {'SANDBOX' if sandbox_mode else 'PRODUCTION'}")
+                
+            body = {
+                "product": [product_name],
+                "qty": [product_qty],
+                "price": [product_price],
+                "returnUrl": "https://nivwxqojwljihoybzgkc.supabase.co/functions/v1/payment_completed",
+                "cancelUrl": "https://nivwxqojwljihoybzgkc.supabase.co/functions/v1/payment_completed?status=canceled",
+                "notifyUrl": "https://nivwxqojwljihoybzgkc.supabase.co/functions/v1/payment_callback",
+                "referenceId": order_id,
+                "name": email.split('@')[0],
+                "email": email,
+                "phone": "08123456789"
+                # TIDAK perlu paymentMethod - iPaymu akan tampilkan semua opsi otomatis
+            }
+            
+            print(f"🔧 iPaymu Body: {json.dumps(body, indent=2)}")
+
+            body_json = json.dumps(body, separators=(',', ':'), sort_keys=True)
+            body_hash = hashlib.sha256(body_json.encode()).hexdigest()
+            stringToSign = f"POST:{ipaymu_va}:{body_hash}:{ipaymu_api_key}"
+            signature = hmac.new(
+                ipaymu_api_key.encode('utf-8'),
+                stringToSign.encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
+
+            mode_text = "SANDBOX" if sandbox_mode else "PRODUCTION"
+            print(f"🔧 [IPAYMU-{mode_text}] VA: {ipaymu_va}")
+            print(f"🔧 [IPAYMU-{mode_text}] API_KEY: {ipaymu_api_key[:6]}... (hidden)")
+            print(f"🔧 [IPAYMU-{mode_text}] BODY_JSON: {body_json}")
+            print(f"🔧 [IPAYMU-{mode_text}] BODY_HASH: {body_hash}")
+            print(f"🔧 [IPAYMU-{mode_text}] STRING_TO_SIGN: {stringToSign}")
+            print(f"🔧 [IPAYMU-{mode_text}] SIGNATURE: {signature}")
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "va": ipaymu_va,
+                "signature": signature
+            }
+
+            response = requests.post(api_url, data=body_json, headers=headers)
+            response_data = response.json()
+            print(f"🔧 [IPAYMU-{mode_text}] RESPONSE: {response_data}")
+
+            if response_data.get("Status") == 200:
+                return response_data.get("Data", {}).get("Url")
+            else:
+                error_msg = response_data.get("Message", "Unknown error")
+                logger.error(f"iPaymu {'SANDBOX' if sandbox_mode else 'PRODUCTION'} API error: {response_data}")
+                
+                # Handle specific error cases
+                if "test transaksi" in error_msg.lower():
+                    logger.error("❌ Akun iPaymu production belum terverifikasi atau ada masalah konfigurasi")
+                    logger.error("💡 Solusi: Verifikasi akun di https://my.ipaymu.com atau gunakan sandbox mode")
+                elif "unauthorized" in error_msg.lower():
+                    logger.error("❌ API Key atau VA Number salah")
+                elif "invalid" in error_msg.lower():
+                    logger.error("❌ Data transaksi tidak valid")
+                
+                return None
+
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+            logger.error(f"Failed to create iPaymu {'SANDBOX' if sandbox_mode else 'PRODUCTION'} payment: {e}")
+            return None
+    
+    def show_payment_info_dialog(self):
+        """Dialog untuk menampilkan info pembayaran"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Informasi Pembayaran")
+        dialog.setFixedSize(500, 400)
+        dialog.setStyleSheet("""
+            QDialog {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                                            stop:0 #0F1419, stop:0.3 #1a1f2e,
+                                            stop:0.7 #2c3e50, stop:1 #34495e);
+                color: white;
+            }
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #27ae60, stop:1 #229954);
+                border: none;
+                padding: 15px;
+                border-radius: 8px;
+                color: white;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #58d68d, stop:1 #27ae60);
+            }
+            QLabel {
+                color: white;
+                font-size: 14px;
+                line-height: 1.5;
+            }
+            QTextEdit {
+                background: rgba(255,255,255,0.1);
+                border: 1px solid #3498db;
+                border-radius: 8px;
+                color: white;
+                font-size: 12px;
+                padding: 10px;
+            }
+        """)
+        
+        layout = QVBoxLayout()
+        
+        # Header
+        header_label = QLabel("🎯 Metode Pembayaran Tersedia")
+        header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #3498db;")
+        layout.addWidget(header_label)
+        
+        layout.addSpacing(20)
+        
+        # Info Text
+        info_text = QTextEdit()
+        info_text.setReadOnly(True)
+        info_text.setMaximumHeight(200)
+        info_text.setHtml("""
+        <div style='color: white; font-size: 14px;'>
+        <p><strong>🏦 Virtual Account (VA)</strong></p>
+        <ul>
+            <li>Bank BCA, BNI, BRI, Mandiri</li>
+            <li>Bank Permata, CIMB, BSI, Danamon</li>
+            <li>Transfer bank online</li>
+        </ul>
+        
+        <p><strong>📱 QRIS (QR Code)</strong></p>
+        <ul>
+            <li>GoPay, OVO, DANA, LinkAja</li>
+            <li>ShopeePay, GrabPay, dll</li>
+            <li>Scan QR code untuk bayar</li>
+        </ul>
+        
+        <p><strong>🏪 Convenience Store</strong></p>
+        <ul>
+            <li>Indomaret, Alfamart</li>
+            <li>Bayar di toko terdekat</li>
+        </ul>
+        
+        <p><strong>💳 Credit Card</strong></p>
+        <ul>
+            <li>Visa, Mastercard</li>
+            <li>Pembayaran kartu kredit</li>
+        </ul>
+        </div>
+        """)
+        layout.addWidget(info_text)
+        
+        layout.addSpacing(20)
+        
+        # Continue Button
+        continue_button = QPushButton("🚀 Lanjutkan ke Pembayaran")
+        continue_button.clicked.connect(dialog.accept)
+        layout.addWidget(continue_button)
+        
+        dialog.setLayout(layout)
+        
+        # Show dialog
+        result = dialog.exec()
+        return result == QDialog.DialogCode.Accepted
+    
+    def cancel_payment_transaction(self, order_id):
+        """Cancel payment transaction"""
+        try:
+            if order_id:
+                # Update payment transaction status to cancelled
+                self.supabase._make_request(
+                    'PATCH',
+                    f"/rest/v1/payment_transactions?order_id=eq.{order_id}",
+                    {"status": "cancelled"},
+                    use_service_role=True
+                )
+                logger.info(f"Payment transaction {order_id} cancelled")
+        except Exception as e:
+            logger.error(f"Failed to cancel payment transaction: {e}")
+
+
 
     def process_payment(self, email, package_id):
         """Process payment untuk paket yang dipilih."""
@@ -1606,8 +1950,7 @@ class SubscriptionTab(QWidget):
             self.parent.logout()
         else:
             QMessageBox.information(self, "Logout", "Logout feature not available")
-        self.log_queue.put(("INFO", "User logged out successfully"))
-        
+
     def start_demo(self):
         """Start demo mode with 30 minutes limit."""
         try:
@@ -1954,17 +2297,24 @@ class SubscriptionTab(QWidget):
     def _get_basic_credits(self):
         """Get Basic mode credits (separate from Pro credits)"""
         try:
-            # Cek dari subscription file untuk kredit Basic
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                return 0.0
+            
+            # Cek dari Supabase untuk kredit Basic
+            credit_data = self.supabase.get_credit_balance(email)
+            if credit_data and credit_data.get("status") == "success":
+                data = credit_data.get("data", {})
+                return float(data.get("basic_credits", 0))
+            
+            # Fallback ke subscription file
             subscription_file = Path("config/subscription_status.json")
             if subscription_file.exists():
                 with open(subscription_file, 'r', encoding='utf-8') as f:
                     sub_data = json.load(f)
-                    basic_credits = float(sub_data.get("basic_credits", 0))
-                    return basic_credits
+                    return float(sub_data.get("basic_credits", 0))
             
-            # Fallback ke VPS server
-            credit_info = self.get_current_credit_info()
-            return float(credit_info.get("credit_balance", 0))
+            return 0.0
             
         except Exception as e:
             print(f"[ERROR] Error getting basic credits: {e}")
@@ -1973,17 +2323,24 @@ class SubscriptionTab(QWidget):
     def _get_pro_credits(self):
         """Get Pro mode credits (separate from Basic credits)"""
         try:
-            # Cek dari subscription file untuk kredit Pro
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                return 0.0
+            
+            # Cek dari Supabase untuk kredit Pro
+            credit_data = self.supabase.get_credit_balance(email)
+            if credit_data and credit_data.get("status") == "success":
+                data = credit_data.get("data", {})
+                return float(data.get("pro_credits", 0))
+            
+            # Fallback ke subscription file
             subscription_file = Path("config/subscription_status.json")
             if subscription_file.exists():
                 with open(subscription_file, 'r', encoding='utf-8') as f:
                     sub_data = json.load(f)
-                    pro_credits = float(sub_data.get("pro_credits", 0))
-                    return pro_credits
+                    return float(sub_data.get("pro_credits", 0))
             
-            # Fallback ke VPS server (jika belum ada sistem terpisah)
-            credit_info = self.get_current_credit_info()
-            return float(credit_info.get("credit_balance", 0))
+            return 0.0
             
         except Exception as e:
             print(f"[ERROR] Error getting pro credits: {e}")
@@ -1995,26 +2352,27 @@ class SubscriptionTab(QWidget):
         import logging
         logger = logging.getLogger(__name__)
         try:
-            # Check Basic credit availability (separate from Pro credits)
+            # Check credit availability (skip if bypass flag is set)
             if not bypass_credit_check:
-                basic_credits = self._get_basic_credits()
+                credit_info = self.get_current_credit_info()
+                credit_balance = float(credit_info.get("credit_balance", credit_info.get("hours_credit", 0)))
                 MIN_CREDIT_REQUIRED = 50.0
-                if basic_credits < MIN_CREDIT_REQUIRED:
+                if credit_balance < MIN_CREDIT_REQUIRED:
                     QMessageBox.warning(
-                        self, "Basic Credits Insufficient",
-                        f"Basic credits are insufficient for Basic Mode.\n\n"
-                        f"Current Basic credits: {basic_credits:.1f}\n"
-                        f"Minimum required: {MIN_CREDIT_REQUIRED} Basic credits\n\n"
-                        f"Please purchase Basic credits first."
+                        self, "Credits Insufficient",
+                        f"Credits are insufficient for Basic Mode.\n\n"
+                        f"Current credits: {credit_balance:.1f}\n"
+                        f"Minimum required: {MIN_CREDIT_REQUIRED} credits\n\n"
+                        f"Please purchase credits first."
                     )
                     return
                 # Konfirmasi masuk mode Basic
                 reply = QMessageBox.question(
                     self, "Enter Basic Mode",
                     f"Enter Basic Mode?\n\n"
-                    f"Basic credits available: {basic_credits:.1f}\n"
-                    f"Estimated: ~{int(basic_credits / 0.45)} auto-reply\n\n"
-                    f"Basic Mode will be active and start using Basic credits.",
+                    f"Credits available: {credit_balance:.1f}\n"
+                    f"Estimated: ~{int(credit_balance / 0.45)} auto-reply\n\n"
+                    f"Basic Mode will be active and start using credits.",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 if reply != QMessageBox.StandardButton.Yes:
@@ -2027,7 +2385,7 @@ class SubscriptionTab(QWidget):
                     QMessageBox.information(
                         self, "Basic Mode Active",
                         f"Basic Mode successfully activated!\n\n"
-                        f"Basic credits available: {basic_credits:.1f}\n"
+                        f"Credits available: {credit_balance:.1f}\n"
                         f"The app will switch to Basic mode."
                     )
             else:
@@ -2037,7 +2395,7 @@ class SubscriptionTab(QWidget):
                     QMessageBox.information(
                         self, "Basic Mode Active",
                         f"Basic Mode successfully activated!\n\n"
-                        f"Basic credits available: {basic_credits:.1f}\n"
+                        f"Credits available: {credit_balance:.1f}\n"
                         f"Basic Mode activated."
                     )
         except Exception as e:
@@ -2045,6 +2403,64 @@ class SubscriptionTab(QWidget):
             QMessageBox.critical(
                 self, "Error",
                 f"Failed to enter Basic Mode: {str(e)}"
+            )
+
+    def enter_pro_mode(self, bypass_credit_check=False):
+        """Masuk ke mode pro dengan validasi dan UI update."""
+        from PyQt6.QtWidgets import QMessageBox
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            # Check Pro credit availability (separate from Basic credits)
+            if not bypass_credit_check:
+                pro_credits = self._get_pro_credits()
+                MIN_CREDIT_REQUIRED = 300000.0  # 300,000 credits for Pro
+                if pro_credits < MIN_CREDIT_REQUIRED:
+                    QMessageBox.warning(
+                        self, "Pro Credits Insufficient",
+                        f"Pro credits are insufficient for Pro Mode.\n\n"
+                        f"Current Pro credits: {pro_credits:.1f}\n"
+                        f"Minimum required: {MIN_CREDIT_REQUIRED:,.0f} Pro credits\n\n"
+                        f"Please purchase Pro package first."
+                    )
+                    return
+                # Konfirmasi masuk mode Pro
+                reply = QMessageBox.question(
+                    self, "Enter Pro Mode",
+                    f"Enter Pro Mode?\n\n"
+                    f"Pro credits available: {pro_credits:.1f}\n"
+                    f"Estimated: ~{int(pro_credits / 0.45)} auto-reply\n\n"
+                    f"Pro Mode will be active and start using Pro credits.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+            # ✅ PERBAIKAN UTAMA: Langsung panggil parent method
+            if self.parent and hasattr(self.parent, 'pilih_paket'):
+                print(f"[DEBUG] Calling parent.pilih_paket('pro') directly")
+                self.parent.pilih_paket("pro")
+                if not bypass_credit_check:
+                    QMessageBox.information(
+                        self, "Pro Mode Active",
+                        f"Pro Mode successfully activated!\n\n"
+                        f"Pro credits available: {pro_credits:.1f}\n"
+                        f"The app will switch to Pro mode."
+                    )
+            else:
+                print(f"[DEBUG] Parent not available, using signal emit")
+                self.package_activated.emit("pro")
+                if not bypass_credit_check:
+                    QMessageBox.information(
+                        self, "Pro Mode Active",
+                        f"Pro Mode successfully activated!\n\n"
+                        f"Pro credits available: {pro_credits:.1f}\n"
+                        f"Pro Mode activated."
+                    )
+        except Exception as e:
+            logger.error(f"Error entering pro mode: {e}")
+            QMessageBox.critical(
+                self, "Error",
+                f"Failed to enter Pro Mode: {str(e)}"
             )
 
     def activate_demo(self):
@@ -2234,45 +2650,35 @@ class SubscriptionTab(QWidget):
         except Exception as e:
             print(f"[DEMO-TIMEOUT] Error during auto-stop: {e}")
 
-    def refresh_vps_data(self):
-        """Refresh data dari VPS server"""
+    def refresh_supabase_data(self):
+        """Refresh data dari Supabase"""
         try:
-            # Get user email
-            email = self.get_user_email()
+            email = self.cfg.get("user_data", {}).get("email", "")
             if not email:
                 return
                 
-            # Call VPS API
-            vps_url = "http://69.62.79.238:8000"
-            response = requests.post(
-                f"{vps_url}/api/license/validate",
-                json={"email": email},
-                timeout=10
-            )
+            # Call Supabase API
+            credit_data = self.supabase.get_credit_balance(email)
             
-            if response.status_code == 200:
-                data = response.json()
-                vps_data = data.get("data", {})
-                
-                # PERBAIKAN: Gunakan field baru 'credit_balance' bukan 'hours_credit'
-                hours_credit = float(vps_data.get("credit_balance", 0))
-                hours_used = float(vps_data.get("credit_used", 0))
-                
-                # Update UI
-                self.vps_credit_label.setText(f"{hours_credit:.2f} jam")
-                self.vps_used_label.setText(f"{hours_used:.2f} jam")
+            if credit_data and credit_data.get("status") == "success":
+                data = credit_data.get("data", {})
                 
                 # Update local file
-                self.update_local_subscription_file(hours_credit, hours_used)
+                self.update_local_subscription_file(
+                    float(data.get("wallet_balance", 0)),
+                    float(data.get("total_spent", 0))
+                )
+                
+                print(f"[SYNC] ✅ Successfully synced Supabase data to local file")
                 
             else:
-                print(f"VPS API error: {response.status_code}")
+                print(f"Supabase API error: {credit_data}")
                 
         except Exception as e:
-            print(f"Error refreshing VPS data: {e}")
+            print(f"Error refreshing Supabase data: {e}")
 
-    def update_local_subscription_file(self, hours_credit, hours_used):
-        """Update local subscription file dengan data dari VPS"""
+    def update_local_subscription_file(self, wallet_balance, total_spent):
+        """Update local subscription file dengan data dari Supabase"""
         try:
             subscription_file = Path("config/subscription_status.json")
             
@@ -2282,9 +2688,9 @@ class SubscriptionTab(QWidget):
             else:
                 data = {}
             
-            # PERBAIKAN: Gunakan field baru 'credit_balance' bukan 'hours_credit'
-            data["credit_balance"] = hours_credit
-            data["credit_used"] = hours_used
+            # Update dengan data Supabase
+            data["credit_balance"] = wallet_balance
+            data["credit_used"] = total_spent
             data["updated_at"] = datetime.now().isoformat()
             
             with open(subscription_file, 'w', encoding='utf-8') as f:
@@ -2327,7 +2733,7 @@ class SubscriptionTab(QWidget):
         layout.addWidget(header)
         
         # Info
-        info = QLabel("💡 Top-up credits with real money, then use credits to buy feature packages")
+        info = QLabel("💡 Top-up credits with real money via iPaymu payment gateway\n💰 1:1 ratio - Rp 50.000 = 50.000 credits, Rp 100.000 = 100.000 credits")
         info.setStyleSheet("""
             QLabel {
                 font-size: 14px;
@@ -2340,14 +2746,14 @@ class SubscriptionTab(QWidget):
         info.setWordWrap(True)
         layout.addWidget(info)
         
-        # Get packages
+        # Get packages - RASIO 1:1 (1 Rupiah = 1 Credit)
         try:
             from modules_client.credit_wallet_client import get_credit_packages
             packages = get_credit_packages()
         except:
             packages = [
-                {"id": "regular", "name": "🚀 Regular Pack", "price_idr": 100000, "total_credits": 300000, "popular": True},
-                {"id": "premium", "name": "⭐ Premium Pack", "price_idr": 200000, "total_credits": 750000, "popular": False}
+                {"id": "starter", "name": "🎯 Starter Pack", "price_idr": 50000, "total_credits": 50000, "popular": False},
+                {"id": "regular", "name": "🚀 Regular Pack", "price_idr": 100000, "total_credits": 100000, "popular": True}
             ]
         
         # Package cards
@@ -2437,8 +2843,9 @@ class SubscriptionTab(QWidget):
         dialog.exec()
 
     def process_topup(self, package, dialog):
-        """Process top-up purchase"""
+        """Process top-up purchase via iPaymu with 1:1 ratio"""
         from PyQt6.QtWidgets import QMessageBox
+        import webbrowser
         
         try:
             # Get user email
@@ -2447,52 +2854,111 @@ class SubscriptionTab(QWidget):
                 QMessageBox.warning(self, "Login Required", "Please login first to top-up credits")
                 return
             
-            # In development mode, simulate top-up
+            # Verify 1:1 ratio
+            if package['price_idr'] != package['total_credits']:
+                QMessageBox.warning(self, "Invalid Package", f"Package ratio error: Price Rp {package['price_idr']:,} should equal {package['total_credits']:,} credits")
+                return
+            
+            # Create order ID
+            import time
+            order_id = f"{email}_{int(time.time())}"
+            
+            # Save transaction record to VPS server first
             try:
-                from modules_client.credit_wallet_client import get_credit_wallet_client
-                client = get_credit_wallet_client()
+                import requests
+                vps_url = "http://69.62.79.238:8000"
+                transaction_data = {
+                    "email": email,
+                    "order_id": order_id,
+                    "package": package['name'],
+                    "amount": package['price_idr'],
+                    "credits": package['total_credits'],
+                    "status": "pending"
+                }
                 
-                if client.local_mode:
-                    # Simulate top-up in development mode
-                    reply = QMessageBox.question(
-                        self, "Confirm Top-up",
-                        f"Top-up {package['name']}?\n\n"
-                        f"💵 Price: Rp {package['price_idr']:,}\n"
-                        f"💰 Credits: {package['total_credits']:,}\n\n"
-                        f"Note: This is a simulation in development mode.",
-                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-                    )
-                    
-                    if reply == QMessageBox.StandardButton.Yes:
-                        success, message = client.add_credits(
-                            package['total_credits'], 
-                            f"Top-up: {package['name']}"
-                        )
-                        
-                        if success:
-                            QMessageBox.information(
-                                self, "Top-up Successful! 🎉", 
-                                f"Successfully topped up {package['name']}!\n\n"
-                                f"✅ Credits added: {package['total_credits']:,}\n"
-                                f"✅ {message}\n\n"
-                                f"You can now purchase feature packages!"
-                            )
-                            dialog.close()
-                            self.refresh_credits()
-                        else:
-                            QMessageBox.warning(self, "Top-up Failed", message)
-                else:
-                    # Production mode - redirect to payment
-                    QMessageBox.information(
-                        self, "Payment Required", 
-                        f"Top-up {package['name']} requires real payment.\n\n"
-                        f"💵 Price: Rp {package['price_idr']:,}\n"
-                        f"💰 Credits: {package['total_credits']:,}\n\n"
-                        f"Payment integration coming soon!"
-                    )
+                response = requests.post(
+                    f"{vps_url}/api/payment/save_transaction",
+                    json=transaction_data,
+                    timeout=10
+                )
+                
+                if response.status_code != 200:
+                    print(f"[TOPUP] Failed to save transaction to VPS: {response.status_code}")
+                    # Continue anyway, callback will handle it
                     
             except Exception as e:
-                QMessageBox.critical(self, "Top-up Error", f"Failed to process top-up: {str(e)}")
+                print(f"[TOPUP] Error saving transaction to VPS: {e}")
+                # Continue anyway, callback will handle it
+            
+            # Create payment transaction via Supabase first
+            try:
+                payment_result = self.supabase.create_payment_transaction(
+                    email=email,
+                    package=package['name'],
+                    amount=package['price_idr']
+                )
+                
+                if payment_result and payment_result.get("status") == "success":
+                    # Get iPaymu payment URL
+                    ipaymu_url = self.create_ipaymu_payment(
+                        email=email,
+                        package=package,
+                        order_id=order_id
+                    )
+                    
+                    if ipaymu_url:
+                        # Show payment info dialog first
+                        if self.show_payment_info_dialog():
+                            # Show confirmation dialog
+                            confirm = QMessageBox.question(
+                                self, "Redirect to iPaymu", 
+                                f"You will be redirected to iPaymu to complete payment for:\n\n"
+                                f"📦 Package: {package['name']}\n"
+                                f"💰 Amount: Rp {package['price_idr']:,}\n"
+                                f"✅ Credits: {package['total_credits']:,} (1:1 ratio)\n\n"
+                                f"Click 'Yes' to proceed to payment page.",
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                            )
+                            
+                            if confirm == QMessageBox.StandardButton.Yes:
+                                # Open iPaymu payment page
+                                webbrowser.open(ipaymu_url)
+                                
+                                QMessageBox.information(
+                                    self, "Payment Page Opened", 
+                                    f"iPaymu payment page has been opened in your browser.\n\n"
+                                    f"Please complete the payment and return to this application.\n"
+                                    f"Your credits will be added automatically after payment confirmation."
+                                )
+                                
+                                dialog.close()
+                            else:
+                                # Cancel payment transaction
+                                self.cancel_payment_transaction(order_id)
+                        else:
+                            # User cancelled from info dialog
+                            self.cancel_payment_transaction(order_id)
+                    else:
+                        error_msg = "Failed to create iPaymu payment URL"
+                        
+                        # Check if it's a verification issue
+                        if "test transaksi" in str(e).lower():
+                            error_msg = """❌ Akun iPaymu production belum terverifikasi!
+
+💡 Solusi:
+1. Login ke https://my.ipaymu.com
+2. Verifikasi akun Anda
+3. Pastikan Virtual Account sudah aktif
+4. Coba lagi setelah verifikasi selesai
+
+Atau gunakan sandbox mode untuk testing."""
+                        
+                        QMessageBox.warning(self, "Payment Error", error_msg)
+                else:
+                    QMessageBox.warning(self, "Payment Failed", f"Failed to create payment transaction: {payment_result.get('message', 'Unknown error')}")
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Payment Error", f"Failed to process payment: {str(e)}")
                 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
