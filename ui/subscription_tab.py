@@ -4,6 +4,7 @@ import sys
 import time
 import logging
 import webbrowser
+import requests
 from pathlib import Path
 from datetime import datetime, timedelta
 from PyQt6.QtWidgets import (
@@ -21,6 +22,13 @@ import hashlib
 import hmac
 
 logger = logging.getLogger('StreamMate')
+
+def safe_attr_check(obj, attr_name):
+    """Safely check if an object has an attribute."""
+    try:
+        return hasattr(obj, attr_name)
+    except Exception:
+        return False
 
 # Setup path
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,7 +71,7 @@ class SubscriptionTab(QWidget):
         
         # ✅ TAMBAHAN: Debug parent connection
         print(f"[DEBUG] SubscriptionTab initialized with parent: {type(parent).__name__ if parent else 'None'}")
-        if parent and hasattr(parent, 'pilih_paket'):
+        if parent and safe_attr_check(parent, 'pilih_paket'):
             print(f"[DEBUG] Parent has pilih_paket method - direct call available")
         else:
             print(f"[DEBUG] Parent missing pilih_paket method - will use signal")
@@ -71,7 +79,7 @@ class SubscriptionTab(QWidget):
         # Setup timer untuk update kredit dan status - OPTIMASI: Interval lebih lambat
         self.credit_timer = QTimer(self)
         self.credit_timer.timeout.connect(self.refresh_credits)
-        self.credit_timer.start(120000)  # ✅ OPTIMASI: Ubah dari 30 detik ke 2 menit
+        self.credit_timer.start(180000)  # ✅ OPTIMASI: Ubah dari 30 detik ke 2 menit
         
         # Initial refresh
         self.refresh_credits()
@@ -142,13 +150,13 @@ class SubscriptionTab(QWidget):
         quick_actions = self.create_quick_actions()
         content_layout.addWidget(quick_actions)
         
-        # ========== PACKAGE CARDS ==========
-        packages_widget = self.create_packages_section()
-        content_layout.addWidget(packages_widget)
-        
         # ========== ENTER MODE BUTTONS ==========
         mode_buttons_widget = self.create_mode_buttons_section()
         content_layout.addWidget(mode_buttons_widget)
+        
+        # ========== PACKAGE CARDS ==========
+        packages_widget = self.create_packages_section()
+        content_layout.addWidget(packages_widget)
         
         # ========== INFO SECTION ==========
         info_widget = self.create_info_section()
@@ -250,24 +258,42 @@ class SubscriptionTab(QWidget):
         self.package_value.setStyleSheet(self.get_value_style())
         layout.addWidget(self.package_value, 1, 1)
         
-        # Row 3: Kredit Tersisa
-        layout.addWidget(self.create_status_label("Credits:"), 2, 0)
-        self.credit_value = QLabel("0 credits")
-        self.credit_value.setStyleSheet(self.get_value_style("#1877F2"))
-        layout.addWidget(self.credit_value, 2, 1)
+        # Row 3: Total Kredit
+        layout.addWidget(self.create_status_label("Total Credits:"), 2, 0)
+        self.credits_value = QLabel("0 credits")
+        self.credits_value.setStyleSheet(self.get_value_style("#1877F2"))
+        layout.addWidget(self.credits_value, 2, 1)
         
-        # Row 4: Total Penggunaan
-        layout.addWidget(self.create_status_label("Usage:"), 3, 0)
+        # Row 4: Wallet Credits
+        layout.addWidget(self.create_status_label("Wallet Credits:"), 3, 0)
+        self.wallet_credits_value = QLabel("0 credits")
+        self.wallet_credits_value.setStyleSheet(self.get_value_style("#4CAF50"))
+        layout.addWidget(self.wallet_credits_value, 3, 1)
+        
+        # Row 5: Basic Credits
+        layout.addWidget(self.create_status_label("Basic Credits:"), 4, 0)
+        self.basic_credits_value = QLabel("0 credits")
+        self.basic_credits_value.setStyleSheet(self.get_value_style("#FF9800"))
+        layout.addWidget(self.basic_credits_value, 4, 1)
+        
+        # Row 6: Pro Credits
+        layout.addWidget(self.create_status_label("Pro Credits:"), 5, 0)
+        self.pro_credits_value = QLabel("0 credits")
+        self.pro_credits_value.setStyleSheet(self.get_value_style("#2196F3"))
+        layout.addWidget(self.pro_credits_value, 5, 1)
+        
+        # Row 7: Total Penggunaan
+        layout.addWidget(self.create_status_label("Usage:"), 6, 0)
         self.usage_value = QLabel("0 credits")
         self.usage_value.setStyleSheet(self.get_value_style())
-        layout.addWidget(self.usage_value, 3, 1)
+        layout.addWidget(self.usage_value, 6, 1)
         
-        # Row 5: Expire Date (jika ada)
+        # Row 8: Expire Date (jika ada)
         self.expire_label = self.create_status_label("Expires:")
         self.expire_value = QLabel("-")
         self.expire_value.setStyleSheet(self.get_value_style())
-        layout.addWidget(self.expire_label, 4, 0)
-        layout.addWidget(self.expire_value, 4, 1)
+        layout.addWidget(self.expire_label, 7, 0)
+        layout.addWidget(self.expire_value, 7, 1)
         self.expire_label.setVisible(False)
         self.expire_value.setVisible(False)
         
@@ -330,25 +356,6 @@ class SubscriptionTab(QWidget):
         """)
         self.demo_btn.clicked.connect(self.start_demo)
         layout.addWidget(self.demo_btn)
-        
-        # Top-up Credits button
-        topup_btn = QPushButton("💳 Top-up Credits")
-        topup_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FF6B35;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #E55A2B;
-            }
-        """)
-        topup_btn.clicked.connect(self.show_topup_options)
-        layout.addWidget(topup_btn)
         
         # Refresh button
         refresh_btn = QPushButton("🔄 Refresh Status")
@@ -419,7 +426,7 @@ class SubscriptionTab(QWidget):
         """)
         main_layout.addWidget(title)
         
-        # Info label about credit purchases with top-up button
+        # Info label about credit purchases
         info_widget = QFrame()
         info_widget.setStyleSheet("""
             QFrame {
@@ -432,7 +439,7 @@ class SubscriptionTab(QWidget):
         """)
         info_layout = QHBoxLayout(info_widget)
         
-        info_label = QLabel("💡 Need more credits? Top-up first, then purchase packages below")
+        info_label = QLabel("💡 Need more credits? Use the 'Top-up Credits' button above to add credits, then purchase packages below")
         info_label.setStyleSheet("""
             QLabel {
                 font-size: 14px;
@@ -442,24 +449,6 @@ class SubscriptionTab(QWidget):
         """)
         info_label.setWordWrap(True)
         info_layout.addWidget(info_label)
-        
-        # Quick top-up button in info section
-        quick_topup_btn = QPushButton("💳 Quick Top-up")
-        quick_topup_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #45A049;
-            }
-        """)
-        quick_topup_btn.clicked.connect(self.show_topup_options)
-        info_layout.addWidget(quick_topup_btn)
         
         main_layout.addWidget(info_widget)
         
@@ -614,7 +603,6 @@ class SubscriptionTab(QWidget):
                 }}
                 QFrame:hover {{
                     border: 3px solid {color};
-                    transform: translateY(-2px);
                 }}
             """)
         else:
@@ -857,6 +845,103 @@ class SubscriptionTab(QWidget):
         try:
             print("[DEMO-RESET] Checking if demo needs resetting...")
             
+            # ✅ GUNAKAN SUPABASE UNTUK DEMO RESET
+            from modules_client.supabase_client import SupabaseClient
+            supabase = SupabaseClient()
+            
+            # Get user email
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                print("[DEMO-RESET] No email found, using local file")
+                return self._check_demo_daily_reset_local()
+            
+            # Cek demo data dari Supabase
+            demo_result = supabase._make_request(
+                'GET',
+                f'/rest/v1/demo_usage?email=eq.{email}',
+                use_service_role=True
+            )
+            
+            if not demo_result or len(demo_result) == 0:
+                print("[DEMO-RESET] No demo data found in Supabase")
+                return False
+            
+            demo_data = demo_result[0]
+            demo_used = demo_data.get("demo_used", False)
+            demo_reset_at = demo_data.get("demo_reset_at")
+            
+            if not demo_used:
+                print("[DEMO-RESET] Demo not used yet, no need to reset")
+                return False
+            
+            print(f"[DEMO-RESET] Current demo_used: {demo_used}, reset_at: {demo_reset_at}")
+            
+            # Cek apakah sudah melewati reset time
+            import pytz
+            from datetime import datetime, date
+            
+            wib = pytz.timezone('Asia/Jakarta')
+            now_wib = datetime.now(wib)
+            
+            if demo_reset_at:
+                try:
+                    reset_datetime = datetime.fromisoformat(demo_reset_at.replace('Z', ''))
+                    if reset_datetime.tzinfo is None:
+                        reset_datetime = wib.localize(reset_datetime)
+                    else:
+                        reset_datetime = reset_datetime.astimezone(wib)
+                    
+                    # Jika sudah lewat reset time, reset demo
+                    if now_wib >= reset_datetime:
+                        print(f"[DEMO-RESET] RESETTING DEMO - Reset time: {reset_datetime.isoformat()}, Now: {now_wib.isoformat()}")
+                        
+                        # Update demo data di Supabase
+                        update_data = {
+                            "demo_used": False,
+                            "demo_duration_minutes": 30,
+                            "demo_reset_at": (now_wib + timedelta(days=1)).isoformat()
+                        }
+                        
+                        update_result = supabase._make_request(
+                            'PATCH',
+                            f'/rest/v1/demo_usage?email=eq.{email}',
+                            update_data,
+                            use_service_role=True
+                        )
+                        
+                        if update_result:
+                            print(f"[DEMO-RESET] Demo successfully reset in Supabase")
+                            
+                            # Update local file juga
+                            self._update_local_demo_reset()
+                            
+                            # Refresh UI button
+                            self.update_demo_button()
+                            
+                            return True
+                        else:
+                            print(f"[DEMO-RESET] Failed to reset demo in Supabase")
+                            return False
+                    else:
+                        print(f"[DEMO-RESET] No reset needed. Reset time: {reset_datetime.isoformat()}, Now: {now_wib.isoformat()}")
+                        return False
+                        
+                except Exception as e:
+                    print(f"[DEMO-RESET] Error parsing reset time: {e}")
+                    return False
+            
+            return False
+                
+        except Exception as e:
+            print(f"[DEMO-RESET] Error checking demo reset from Supabase: {e}")
+            # Fallback ke local file
+            return self._check_demo_daily_reset_local()
+    
+    def _check_demo_daily_reset_local(self):
+        """Fallback: Cek dan reset demo dari local file"""
+        try:
+            print("[DEMO-RESET] Using local file fallback...")
+            
             subscription_file = Path("config/subscription_status.json")
             if not subscription_file.exists():
                 print("[DEMO-RESET] No subscription file found, nothing to reset")
@@ -951,6 +1036,32 @@ class SubscriptionTab(QWidget):
             print(f"[DEMO-RESET] Error checking demo reset: {e}")
             import traceback
             print(traceback.format_exc())
+            return False
+    
+    def _update_local_demo_reset(self):
+        """Update local file setelah reset di Supabase"""
+        try:
+            subscription_file = Path("config/subscription_status.json")
+            if subscription_file.exists():
+                with open(subscription_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                # Reset status demo
+                data["status"] = "inactive"
+                data["demo_used"] = False
+                if "demo_expired_at" in data:
+                    del data["demo_expired_at"]
+                if "expire_date" in data:
+                    del data["expire_date"]
+                    
+                # Simpan file yang sudah direset
+                with open(subscription_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                
+                print(f"[DEMO-RESET] Local file updated after Supabase reset")
+                
+        except Exception as e:
+            print(f"[DEMO-RESET] Error updating local file: {e}")
             return False
 
     def update_demo_button(self):
@@ -1215,43 +1326,95 @@ class SubscriptionTab(QWidget):
             self.status_value.setText("Error")
 
     def update_status_display(self, data):
-        """Update UI dengan data subscription"""
-        status = data.get("status", "inactive")
-        package = data.get("package", "none")
-        credit_balance = float(data.get("credit_balance", data.get("hours_credit", 0)))
-        hours_used = float(data.get("hours_used", 0))
-        
-        # Update status
-        if status == "paid":
-            self.status_value.setText("✅ Active")
-            self.status_value.setStyleSheet(self.get_value_style("#4CAF50"))
-            self.demo_btn.setEnabled(False)
-            self.demo_btn.setText("Demo Not Available")
-        elif status == "demo":
-            self.status_value.setText("🎮 Demo Mode")
-            self.status_value.setStyleSheet(self.get_value_style("#FF9800"))
-            self.demo_btn.setEnabled(False)
-            self.demo_btn.setText("Demo Currently Active")
+        """Update status display dengan data terbaru"""
+        try:
+            status = data.get("status", "inactive")
+            package = data.get("package", "none")
+            credit_balance = float(data.get("credit_balance", data.get("hours_credit", 0)))
+            credit_used = float(data.get("credit_used", data.get("hours_used", 0)))
+            basic_credits = float(data.get("basic_credits", 0))
+            pro_credits = float(data.get("pro_credits", 0))
             
-            # Show expire time for demo
-            expire_date = data.get("expire_date")
-            if expire_date:
-                self.expire_label.setVisible(True)
-                self.expire_value.setVisible(True)
-                try:
-                    from datetime import datetime
-                    expire_dt = datetime.fromisoformat(expire_date.replace('Z', '+00:00'))
-                    remaining = expire_dt - datetime.now(expire_dt.tzinfo or None)
-                    if remaining.total_seconds() > 0:
-                        mins = int(remaining.total_seconds() / 60)
-                        self.expire_value.setText(f"{mins} minutes")
-                    else:
-                        self.expire_value.setText("Expired")
-                except Exception as e:
-                    self.expire_value.setText(expire_date)
-        else:
-            self.status_value.setText("❌ Inactive")
-            self.status_value.setStyleSheet(self.get_value_style("#D32F2F"))
+            # UPDATE STATUS: Aktif hanya jika ada Basic atau Pro credits
+            if basic_credits > 0 or pro_credits > 0:
+                status = "active"
+                self.status_value.setText("✅ Active")
+                self.status_value.setStyleSheet(self.get_value_style("#4CAF50"))
+            elif status == "demo":
+                self.status_value.setText("🎮 Demo Active")
+                self.status_value.setStyleSheet(self.get_value_style("#FF9800"))
+            else:
+                self.status_value.setText("❌ Inactive")
+                self.status_value.setStyleSheet(self.get_value_style("#D32F2F"))
+            
+            # UPDATE PACKAGE: Tampilkan mode yang memiliki credits
+            package_display = []
+            if basic_credits > 0:
+                package_display.append("Basic")
+            if pro_credits > 0:
+                package_display.append("Pro")
+            
+            if package_display:
+                package_text = ", ".join(package_display)
+                self.package_value.setText(package_text)
+                self.package_value.setStyleSheet(self.get_value_style("#2196F3"))
+            else:
+                self.package_value.setText("None")
+                self.package_value.setStyleSheet(self.get_value_style("#666666"))
+            
+            # UPDATE CREDITS: Tampilkan semua jenis kredit
+            total_credits = credit_balance + basic_credits + pro_credits
+            self.credits_value.setText(f"{total_credits:.1f} credits")
+            if total_credits > 0:
+                self.credits_value.setStyleSheet(self.get_value_style("#4CAF50"))
+            else:
+                self.credits_value.setStyleSheet(self.get_value_style("#D32F2F"))
+            
+            # UPDATE WALLET CREDITS
+            self.wallet_credits_value.setText(f"{credit_balance:.1f} credits")
+            if credit_balance > 0:
+                self.wallet_credits_value.setStyleSheet(self.get_value_style("#4CAF50"))
+            else:
+                self.wallet_credits_value.setStyleSheet(self.get_value_style("#666666"))
+            
+            # UPDATE BASIC CREDITS
+            self.basic_credits_value.setText(f"{basic_credits:.1f} credits")
+            if basic_credits > 0:
+                self.basic_credits_value.setStyleSheet(self.get_value_style("#FF9800"))
+            else:
+                self.basic_credits_value.setStyleSheet(self.get_value_style("#666666"))
+            
+            # UPDATE PRO CREDITS
+            self.pro_credits_value.setText(f"{pro_credits:.1f} credits")
+            if pro_credits > 0:
+                self.pro_credits_value.setStyleSheet(self.get_value_style("#2196F3"))
+            else:
+                self.pro_credits_value.setStyleSheet(self.get_value_style("#666666"))
+            
+            # UPDATE USAGE: Tampilkan sebagai data tracking (bukan batasan)
+            if status == "demo":
+                # Untuk demo, tampilkan waktu tersisa
+                expire_date = data.get("expire_date")
+                if expire_date:
+                    self.expire_label.setVisible(True)
+                    self.expire_value.setVisible(True)
+                    try:
+                        from datetime import datetime
+                        expire_dt = datetime.fromisoformat(expire_date.replace('Z', '+00:00'))
+                        remaining = expire_dt - datetime.now(expire_dt.tzinfo or None)
+                        if remaining.total_seconds() > 0:
+                            mins = int(remaining.total_seconds() / 60)
+                            self.usage_value.setText(f"Demo: {mins} minutes remaining")
+                        else:
+                            self.usage_value.setText("Demo: Expired")
+                    except Exception as e:
+                        self.usage_value.setText(f"Demo: {expire_date}")
+                else:
+                    self.usage_value.setText("Demo: 30 minutes")
+            else:
+                # Untuk mode aktif, tampilkan usage sebagai data tracking
+                self.usage_value.setText(f"Usage: {credit_used:.1f} credits used")
+                self.usage_value.setStyleSheet(self.get_value_style("#666666"))
             
             # Check if demo was used
             if data.get("demo_used", False):
@@ -1260,6 +1423,11 @@ class SubscriptionTab(QWidget):
             else:
                 self.demo_btn.setEnabled(True)
                 self.demo_btn.setText("🎮 Try Demo 30 Minutes")
+                
+        except Exception as e:
+            logger.error(f"Error updating status display: {e}")
+            self.status_value.setText("Error")
+            self.status_value.setStyleSheet(self.get_value_style("#D32F2F"))
         
         # UPDATE BASIC MODE BUTTON - BERDASARKAN KREDIT BASIC SAJA
         if hasattr(self, 'basic_mode_btn'):
@@ -1284,10 +1452,10 @@ class SubscriptionTab(QWidget):
                     }
                 """)
                 print(f"[DEBUG] Basic Mode Button: DISABLED (Demo Active)")
-            elif basic_credits >= 50:
-                # Enable jika kredit Basic cukup
+            else:
+                # Selalu enable tombol Basic mode, tampilkan real credits
                 self.basic_mode_btn.setEnabled(True)
-                self.basic_mode_btn.setText(f"🚀 Enter Basic Mode ({basic_credits:.1f} Basic credits)")
+                self.basic_mode_btn.setText(f"🚀 Enter Basic Mode ({basic_credits:.1f} credits)")
                 self.basic_mode_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #4CAF50;
@@ -1304,23 +1472,6 @@ class SubscriptionTab(QWidget):
                     }
                 """)
                 print(f"[DEBUG] Basic Mode Button: ENABLED (Basic Credits: {basic_credits:.1f})")
-            else:
-                # Disable jika kredit Basic tidak cukup
-                self.basic_mode_btn.setEnabled(False)
-                self.basic_mode_btn.setText(f"⚠️ Insufficient Basic Credits ({basic_credits:.1f}/50)")
-                self.basic_mode_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #CCCCCC;
-                        color: #666666;
-                        border: none;
-                        padding: 15px 30px;
-                        border-radius: 8px;
-                        font-size: 16px;
-                        font-weight: bold;
-                        min-width: 200px;
-                    }
-                """)
-                print(f"[DEBUG] Basic Mode Button: DISABLED (Insufficient Basic Credits: {basic_credits:.1f})")
         
         # UPDATE PRO MODE BUTTON - BERDASARKAN KREDIT PRO SAJA
         if hasattr(self, 'pro_mode_btn'):
@@ -1345,10 +1496,10 @@ class SubscriptionTab(QWidget):
                     }
                 """)
                 print(f"[DEBUG] Pro Mode Button: DISABLED (Demo Active)")
-            elif pro_credits >= 300000:
-                # Enable jika kredit Pro cukup
+            else:
+                # Selalu enable tombol Pro mode, tampilkan real credits
                 self.pro_mode_btn.setEnabled(True)
-                self.pro_mode_btn.setText(f"🚀 Enter Pro Mode ({pro_credits:,.0f} Pro credits)")
+                self.pro_mode_btn.setText(f"🚀 Enter Pro Mode ({pro_credits:,.0f} credits)")
                 self.pro_mode_btn.setStyleSheet("""
                     QPushButton {
                         background-color: #FF9800;
@@ -1365,61 +1516,6 @@ class SubscriptionTab(QWidget):
                     }
                 """)
                 print(f"[DEBUG] Pro Mode Button: ENABLED (Pro Credits: {pro_credits:.1f})")
-            else:
-                # Disable jika kredit Pro tidak cukup
-                self.pro_mode_btn.setEnabled(False)
-                self.pro_mode_btn.setText(f"⚠️ Insufficient Pro Credits ({pro_credits:,.0f}/300,000)")
-                self.pro_mode_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #CCCCCC;
-                        color: #666666;
-                        border: none;
-                        padding: 15px 30px;
-                        border-radius: 8px;
-                        font-size: 16px;
-                        font-weight: bold;
-                        min-width: 200px;
-                    }
-                """)
-                print(f"[DEBUG] Pro Mode Button: DISABLED (Insufficient Pro Credits: {pro_credits:.1f})")
-                
-        # Update package
-        self.package_value.setText(package.capitalize() if package != "none" else "None")
-        
-        # Update credits
-        self.credit_value.setText(f"{credit_balance:.1f} credits")
-        if credit_balance < 1:
-            self.credit_value.setStyleSheet(self.get_value_style("#D32F2F"))
-        elif credit_balance < 5:
-            self.credit_value.setStyleSheet(self.get_value_style("#FF9800"))
-        else:
-            self.credit_value.setStyleSheet(self.get_value_style("#4CAF50"))
-        
-        # 🎯 SISTEM BARU: Tampilan terpisah untuk kredit dan waktu akses
-        # Kredit = berdasarkan pemakaian fitur
-        # Waktu = akses harian maksimal 10 jam
-        try:
-            daily_stats = get_daily_usage_stats()
-            time_used = daily_stats.get("total_hours_used", 0.0)
-            time_remaining = daily_stats.get("remaining_hours", 10.0)
-            
-            usage_text = f"Daily access: {time_used:.1f}h / 10h"
-            if time_remaining <= 2.0:  # Warning jika sisa waktu kurang dari 2 jam
-                usage_text += f" ⚠️ ({time_remaining:.1f}h remaining)"
-                
-        except Exception as e:
-            # Fallback jika daily limit manager error
-            usage_text = "Daily access: 0h / 10h (safe mode)"
-        
-        self.usage_value.setText(usage_text)
-        
-        # Color coding untuk usage
-        if hours_used <= 0:
-            self.usage_value.setStyleSheet(self.get_value_style("#4CAF50"))  # Green - no usage
-        elif hours_used < 1:
-            self.usage_value.setStyleSheet(self.get_value_style("#FF9800"))  # Orange - low usage
-        else:
-            self.usage_value.setStyleSheet(self.get_value_style("#D32F2F"))  # Red - high usage
 
     def buy_package(self, package_name):
         """Proses pembelian paket dengan kredit yang sudah dimiliki."""
@@ -1460,7 +1556,7 @@ class SubscriptionTab(QWidget):
                 
                 data = credit_data.get("data", {})
                 current_balance = float(data.get("wallet_balance", 0))
-                required_credits = 300000  # 300,000 credits for Pro
+                required_credits = 100000  # 100,000 credits for Pro (consistent with Credit Wallet)
                 
                 if current_balance < required_credits:
                     QMessageBox.warning(
@@ -1547,7 +1643,7 @@ class SubscriptionTab(QWidget):
                 self.refresh_credits()
                 
                 # Activate Pro mode if parent available
-                if self.parent and hasattr(self.parent, 'pilih_paket'):
+                if self.parent and safe_attr_check(self.parent, 'pilih_paket'):
                     self.parent.pilih_paket("pro")
                 else:
                     self.package_activated.emit("pro")
@@ -2045,7 +2141,7 @@ class SubscriptionTab(QWidget):
                     if response == QMessageBox.StandardButton.Yes:
                         print("15. User chose to login first.")
                         # Redirect to login page/tab if available
-                        if self.parent and hasattr(self.parent, 'show_login_tab'):
+                        if self.parent and safe_attr_check(self.parent, 'show_login_tab'):
                             self.parent.show_login_tab()
                         return
                     else:
@@ -2144,7 +2240,10 @@ class SubscriptionTab(QWidget):
         )
 
         if ok and email:
-            if "@" in email and "." in email and len(email) >= 5:
+            # Simple but effective email validation
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if re.match(email_pattern, email):
                 # Save temporary email for session
                 self.email = email
                 print(f"[DEMO] Email validated and saved: {email}")
@@ -2205,14 +2304,88 @@ class SubscriptionTab(QWidget):
         now_wib = now_utc.astimezone(pytz.timezone('Asia/Jakarta'))
         expire_wib = now_wib + timedelta(minutes=30)
         
+        # ✅ PERBAIKAN: Demo mode sekarang mendukung Basic dan Pro
+        # Tanya user mode mana yang ingin diaktifkan
+        from PyQt6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+        
+        demo_mode_dialog = QDialog(self)
+        demo_mode_dialog.setWindowTitle("Choose Demo Mode 🚀")
+        demo_mode_dialog.setModal(True)
+        demo_mode_dialog.setStyleSheet("""
+            QDialog {
+                background-color: #f8f9fa;
+                border-radius: 10px;
+            }
+            QLabel {
+                font-size: 14px;
+                color: #2c3e50;
+            }
+            QPushButton {
+                padding: 15px 30px;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: bold;
+                min-width: 200px;
+            }
+        """)
+        
+        layout = QVBoxLayout(demo_mode_dialog)
+        
+        # Title
+        title = QLabel("Choose your demo mode:")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
+        layout.addWidget(title)
+        
+        # Basic mode button
+        basic_btn = QPushButton("🤖 Basic Mode Demo")
+        basic_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #45A049;
+            }
+        """)
+        basic_btn.clicked.connect(lambda: self._activate_demo_mode("basic", demo_mode_dialog, email, expire_wib, demo_info))
+        layout.addWidget(basic_btn)
+        
+        # Pro mode button
+        pro_btn = QPushButton("🚀 Pro Mode Demo")
+        pro_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+        """)
+        pro_btn.clicked.connect(lambda: self._activate_demo_mode("pro", demo_mode_dialog, email, expire_wib, demo_info))
+        layout.addWidget(pro_btn)
+        
+        # Info
+        info = QLabel("Both modes include 30-minute demo with full features!")
+        info.setStyleSheet("font-size: 12px; color: #666; margin-top: 10px;")
+        layout.addWidget(info)
+        
+        demo_mode_dialog.exec()
+    
+    def _activate_demo_mode(self, mode, dialog, email, expire_wib, demo_info):
+        """Activate specific demo mode"""
+        from datetime import datetime
+        
+        # Create subscription data based on mode
         subscription_data = {
             "email": email,
             "status": "demo",
-            "package": "basic",
+            "package": mode,
             "expire_date": expire_wib.isoformat(),
             "expire_date_wib": expire_wib.strftime("%Y-%m-%d %H:%M:%S WIB"),
             "demo_duration_minutes": demo_info.get("remaining_minutes", 30),
-            "activated_at": now_wib.isoformat(),
+            "activated_at": expire_wib.isoformat(),
             "updated_at": datetime.now().isoformat(),
             "hours_credit": 0,
             "hours_used": 0,
@@ -2220,24 +2393,75 @@ class SubscriptionTab(QWidget):
             "timezone": "Asia/Jakarta"
         }
         
+        # Add mode-specific data
+        if mode == "pro":
+            subscription_data.update({
+                "pro": {"active": True, "purchased_at": datetime.now().isoformat(), "email": email, "package": "pro"},
+                "basic": {"active": True, "purchased_at": datetime.now().isoformat(), "email": email, "package": "basic"}
+            })
+        else:  # basic
+            subscription_data.update({
+                "basic": {"active": True, "purchased_at": datetime.now().isoformat(), "email": email, "package": "basic"}
+            })
+        
+        # ✅ SIMPAN KE SUPABASE
+        try:
+            from modules_client.supabase_client import SupabaseClient
+            supabase = SupabaseClient()
+            
+            # Simpan demo data ke Supabase
+            demo_data = {
+                "email": email,
+                "demo_mode": mode,
+                "demo_started_at": datetime.now().isoformat(),
+                "demo_expires_at": expire_wib.isoformat(),
+                "demo_duration_minutes": demo_info.get("remaining_minutes", 30),
+                "demo_used": True,
+                "demo_reset_at": (expire_wib + timedelta(days=1)).isoformat()  # Reset setelah 24 jam
+            }
+            
+            # Insert atau update demo data
+            demo_result = supabase._make_request(
+                'POST',
+                '/rest/v1/demo_usage',
+                demo_data,
+                use_service_role=True
+            )
+            
+            if demo_result:
+                print(f"[DEBUG] Demo data saved to Supabase: {demo_result}")
+            else:
+                print(f"[DEBUG] Failed to save demo data to Supabase")
+                
+        except Exception as e:
+            print(f"[DEBUG] Error saving demo data to Supabase: {e}")
+        
+        # Save to file (local backup)
         subscription_file = Path("config/subscription_status.json")
         with open(subscription_file, "w", encoding="utf-8") as f:
             json.dump(subscription_data, f, indent=2, ensure_ascii=False)
 
+        # Activate the chosen mode
         if self.parent and hasattr(self.parent, 'pilih_paket'):
-            self.parent.pilih_paket("basic")
-        self.package_activated.emit("basic")
+            self.parent.pilih_paket(mode)
+        self.package_activated.emit(mode)
         
         self.demo_active = True
         self.demo_start_time = datetime.now()
         
+        # Close dialog
+        dialog.close()
+        
+        # Show success message
         expire_display = expire_wib.strftime("%H:%M WIB")
+        mode_name = "Pro" if mode == "pro" else "Basic"
         QMessageBox.information(
-            self, "Demo Activated! 🚀",
-            f"30-minute demo for <b>{email}</b> is now active! ✨<br><br>"
+            self, f"{mode_name} Demo Activated! 🚀",
+            f"30-minute {mode_name} demo for <b>{email}</b> is now active! ✨<br><br>"
             f"⏰ Duration: 30 minutes<br>"
-            f"🕐 Ends at: <b>{expire_display}</b><br><br>"
-            f"The Basic mode is now active. Go to the CoHost tab to start!"
+            f"🕐 Ends at: <b>{expire_display}</b><br>"
+            f"🎯 Mode: <b>{mode_name}</b><br><br>"
+            f"The {mode_name} mode is now active. Go to the CoHost tab to start!"
         )
         
         self.refresh_credits()
@@ -2255,16 +2479,16 @@ class SubscriptionTab(QWidget):
     def closeEvent(self, event):
         """Handle close event - OPTIMASI: Stop semua timer"""
         # Stop timer
-        if hasattr(self, 'credit_timer'):
+        if safe_attr_check(self, 'credit_timer'):
             self.credit_timer.stop()
-        if hasattr(self, 'demo_monitor_timer'):
+        if safe_attr_check(self, 'demo_monitor_timer'):
             self.demo_monitor_timer.stop()
         event.accept()
         
     def setVisible(self, visible):
         """OPTIMASI: Start/stop timer berdasarkan visibility dan refresh saat visible"""
         super().setVisible(visible)
-        if hasattr(self, 'credit_timer'):
+        if safe_attr_check(self, 'credit_timer'):
             if visible:
                 self.credit_timer.start()
                 # ✅ PERBAIKAN: Refresh credits saat tab visible untuk cek demo reset
@@ -2354,38 +2578,38 @@ class SubscriptionTab(QWidget):
         try:
             # Check credit availability (skip if bypass flag is set)
             if not bypass_credit_check:
-                credit_info = self.get_current_credit_info()
-                credit_balance = float(credit_info.get("credit_balance", credit_info.get("hours_credit", 0)))
+                # ✅ PERBAIKAN: Gunakan Supabase untuk cek kredit Basic
+                basic_credits = self._get_basic_credits()
                 MIN_CREDIT_REQUIRED = 50.0
-                if credit_balance < MIN_CREDIT_REQUIRED:
+                if basic_credits < MIN_CREDIT_REQUIRED:
                     QMessageBox.warning(
                         self, "Credits Insufficient",
                         f"Credits are insufficient for Basic Mode.\n\n"
-                        f"Current credits: {credit_balance:.1f}\n"
-                        f"Minimum required: {MIN_CREDIT_REQUIRED} credits\n\n"
-                        f"Please purchase credits first."
+                        f"Current Basic credits: {basic_credits:.1f}\n"
+                        f"Minimum required: {MIN_CREDIT_REQUIRED} Basic credits\n\n"
+                        f"Please purchase Basic package first."
                     )
                     return
                 # Konfirmasi masuk mode Basic
                 reply = QMessageBox.question(
                     self, "Enter Basic Mode",
                     f"Enter Basic Mode?\n\n"
-                    f"Credits available: {credit_balance:.1f}\n"
-                    f"Estimated: ~{int(credit_balance / 0.45)} auto-reply\n\n"
-                    f"Basic Mode will be active and start using credits.",
+                    f"Basic credits available: {basic_credits:.1f}\n"
+                    f"Estimated: ~{int(basic_credits / 0.45)} auto-reply\n\n"
+                    f"Basic Mode will be active and start using Basic credits.",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
                 if reply != QMessageBox.StandardButton.Yes:
                     return
             # ✅ PERBAIKAN UTAMA: Langsung panggil parent method
-            if self.parent and hasattr(self.parent, 'pilih_paket'):
+            if self.parent and safe_attr_check(self.parent, 'pilih_paket'):
                 print(f"[DEBUG] Calling parent.pilih_paket('basic') directly")
                 self.parent.pilih_paket("basic")
                 if not bypass_credit_check:
                     QMessageBox.information(
                         self, "Basic Mode Active",
                         f"Basic Mode successfully activated!\n\n"
-                        f"Credits available: {credit_balance:.1f}\n"
+                        f"Basic credits available: {basic_credits:.1f}\n"
                         f"The app will switch to Basic mode."
                     )
             else:
@@ -2395,7 +2619,7 @@ class SubscriptionTab(QWidget):
                     QMessageBox.information(
                         self, "Basic Mode Active",
                         f"Basic Mode successfully activated!\n\n"
-                        f"Credits available: {credit_balance:.1f}\n"
+                        f"Basic credits available: {basic_credits:.1f}\n"
                         f"Basic Mode activated."
                     )
         except Exception as e:
@@ -2414,7 +2638,7 @@ class SubscriptionTab(QWidget):
             # Check Pro credit availability (separate from Basic credits)
             if not bypass_credit_check:
                 pro_credits = self._get_pro_credits()
-                MIN_CREDIT_REQUIRED = 300000.0  # 300,000 credits for Pro
+                MIN_CREDIT_REQUIRED = 100000.0  # 100,000 credits for Pro (consistent with purchase price)
                 if pro_credits < MIN_CREDIT_REQUIRED:
                     QMessageBox.warning(
                         self, "Pro Credits Insufficient",
@@ -2436,7 +2660,7 @@ class SubscriptionTab(QWidget):
                 if reply != QMessageBox.StandardButton.Yes:
                     return
             # ✅ PERBAIKAN UTAMA: Langsung panggil parent method
-            if self.parent and hasattr(self.parent, 'pilih_paket'):
+            if self.parent and safe_attr_check(self.parent, 'pilih_paket'):
                 print(f"[DEBUG] Calling parent.pilih_paket('pro') directly")
                 self.parent.pilih_paket("pro")
                 if not bypass_credit_check:
@@ -2529,10 +2753,10 @@ class SubscriptionTab(QWidget):
 
     def setup_demo_monitoring(self):
         """Setup demo monitoring system."""
-        # Demo monitoring timer - cek setiap 10 detik (increased frequency for more reliable detection)
+        # Demo monitoring timer - optimized interval for less resource usage
         self.demo_monitor_timer = QTimer()
         self.demo_monitor_timer.timeout.connect(self.check_demo_status)
-        self.demo_monitor_timer.start(10000)  # Check every 10 seconds
+        self.demo_monitor_timer.start(120000)  # ✅ OPTIMASI: Check every 1 minute instead of 10 seconds
         
         print("[DEMO-MONITOR] Demo monitoring system initialized")
         # Check demo status on startup
@@ -2701,7 +2925,7 @@ class SubscriptionTab(QWidget):
 
     def show_topup_options(self):
         """Show top-up options dialog"""
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame, QMessageBox
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFrame, QMessageBox, QScrollArea, QWidget
         
         dialog = QDialog(self)
         dialog.setWindowTitle("💳 Top-up Credits")
@@ -2716,9 +2940,10 @@ class SubscriptionTab(QWidget):
             }
         """)
         
-        layout = QVBoxLayout(dialog)
-        layout.setSpacing(20)
-        layout.setContentsMargins(20, 20, 20, 20)
+        # Main layout
+        main_layout = QVBoxLayout(dialog)
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(20, 20, 20, 20)
         
         # Header
         header = QLabel("💰 Choose Top-up Package")
@@ -2730,7 +2955,7 @@ class SubscriptionTab(QWidget):
                 text-align: center;
             }
         """)
-        layout.addWidget(header)
+        main_layout.addWidget(header)
         
         # Info
         info = QLabel("💡 Top-up credits with real money via iPaymu payment gateway\n💰 1:1 ratio - Rp 50.000 = 50.000 credits, Rp 100.000 = 100.000 credits")
@@ -2744,7 +2969,35 @@ class SubscriptionTab(QWidget):
             }
         """)
         info.setWordWrap(True)
-        layout.addWidget(info)
+        main_layout.addWidget(info)
+        
+        # Scrollable content area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                background-color: #E0E0E0;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #BDBDBD;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #9E9E9E;
+            }
+        """)
+        
+        # Content widget for scroll area
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setSpacing(15)
         
         # Get packages - RASIO 1:1 (1 Rupiah = 1 Credit)
         try:
@@ -2753,7 +3006,8 @@ class SubscriptionTab(QWidget):
         except:
             packages = [
                 {"id": "starter", "name": "🎯 Starter Pack", "price_idr": 50000, "total_credits": 50000, "popular": False},
-                {"id": "regular", "name": "🚀 Regular Pack", "price_idr": 100000, "total_credits": 100000, "popular": True}
+                {"id": "regular", "name": "🚀 Regular Pack", "price_idr": 100000, "total_credits": 100000, "popular": True},
+                {"id": "premium", "name": "💎 Premium Pack", "price_idr": 300000, "total_credits": 300000, "popular": False}
             ]
         
         # Package cards
@@ -2820,7 +3074,11 @@ class SubscriptionTab(QWidget):
             topup_btn.clicked.connect(lambda checked, p=pkg: self.process_topup(p, dialog))
             card_layout.addWidget(topup_btn)
             
-            layout.addWidget(card)
+            content_layout.addWidget(card)
+        
+        # Set content widget to scroll area
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
         
         # Close button
         close_btn = QPushButton("❌ Close")
@@ -2838,7 +3096,7 @@ class SubscriptionTab(QWidget):
             }
         """)
         close_btn.clicked.connect(dialog.close)
-        layout.addWidget(close_btn)
+        main_layout.addWidget(close_btn)
         
         dialog.exec()
 

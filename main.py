@@ -144,18 +144,26 @@ except ImportError as e:
 
 # ========== GLOBAL EXCEPTION HANDLER ==========
 def handle_exception(exc_type, exc_value, exc_traceback):
-    """Global exception handler dengan logging yang lebih baik - Enhanced for stability"""
+    """Enhanced global exception handler dengan debug logging"""
+    # Skip keyboard interrupt
     if issubclass(exc_type, KeyboardInterrupt):
-        logger.info("Application interrupted by user (Ctrl+C)")
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
     
     # Format error message dengan full traceback
     error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     
-    # Log error
-    logger.critical(f"Uncaught Exception: {exc_type.__name__}: {exc_value}")
-    logger.critical(f"Traceback:\n{error_msg}")
+    # Enhanced logging dengan lebih banyak detail
+    logger.critical(f"[FORCE-CLOSE-DEBUG] Uncaught Exception: {exc_type.__name__}: {exc_value}")
+    logger.critical(f"[FORCE-CLOSE-DEBUG] Traceback:\n{error_msg}")
+    
+    # Print ke console untuk debugging real-time
+    print(f"\n[FORCE-CLOSE-DEBUG] ========== CRITICAL ERROR ==========")
+    print(f"[FORCE-CLOSE-DEBUG] Exception Type: {exc_type.__name__}")
+    print(f"[FORCE-CLOSE-DEBUG] Exception Value: {exc_value}")
+    print(f"[FORCE-CLOSE-DEBUG] Traceback:")
+    print(error_msg)
+    print(f"[FORCE-CLOSE-DEBUG] =====================================\n")
     
     # Save error to temp file untuk debugging
     error_log_path = Path(ROOT) / "temp" / "error_log.txt"
@@ -163,26 +171,33 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     
     try:
         with open(error_log_path, "a", encoding="utf-8") as f:
-            f.write(f"\n[{datetime.now().isoformat()}] CRITICAL ERROR:\n")
-            f.write(error_msg)
+            f.write(f"\n[{datetime.now().isoformat()}] FORCE-CLOSE-DEBUG:\n")
+            f.write(f"Exception Type: {exc_type.__name__}\n")
+            f.write(f"Exception Value: {exc_value}\n")
+            f.write(f"Traceback:\n{error_msg}")
             f.write("\n" + "="*80 + "\n")
-        logger.info(f"Error details saved to: {error_log_path}")
+        logger.info(f"[FORCE-CLOSE-DEBUG] Error details saved to: {error_log_path}")
+        print(f"[FORCE-CLOSE-DEBUG] Error details saved to: {error_log_path}")
     except Exception as log_error:
-        logger.error(f"Failed to write error log: {log_error}")
+        logger.error(f"[FORCE-CLOSE-DEBUG] Failed to write error log: {log_error}")
+        print(f"[FORCE-CLOSE-DEBUG] Failed to write error log: {log_error}")
     
     # Enhanced error handling - try to keep app alive for non-critical errors
     critical_errors = [
         'SystemError', 'MemoryError', 'KeyboardInterrupt', 
-        'SystemExit', 'GeneratorExit'
+        'SystemExit', 'GeneratorExit', 'RuntimeError'
     ]
     
     error_name = exc_type.__name__
     is_critical = error_name in critical_errors
     
+    print(f"[FORCE-CLOSE-DEBUG] Error classification: {'CRITICAL' if is_critical else 'NON-CRITICAL'}")
+    
     # Show error dialog jika QApplication sudah ada
     try:
         if QApplication.instance():
             if is_critical:
+                print(f"[FORCE-CLOSE-DEBUG] Showing critical error dialog and forcing exit")
                 reply = QMessageBox.critical(
                     None, 
                     "StreamMate AI - Critical Error",
@@ -195,6 +210,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
                 # Force exit for critical errors
                 QApplication.instance().quit()
             else:
+                print(f"[FORCE-CLOSE-DEBUG] Showing recoverable error dialog")
                 reply = QMessageBox.warning(
                     None, 
                     "StreamMate AI - Error Recovered",
@@ -205,11 +221,14 @@ def handle_exception(exc_type, exc_value, exc_traceback):
                     QMessageBox.StandardButton.Ok
                 )
                 # Try to continue for non-critical errors
+                print(f"[FORCE-CLOSE-DEBUG] Attempting to continue after non-critical error")
                 return
-    except Exception:
+    except Exception as dialog_error:
         # If even the error dialog fails, log it and exit gracefully
-        logger.error("Failed to show error dialog")
+        logger.error(f"[FORCE-CLOSE-DEBUG] Failed to show error dialog: {dialog_error}")
+        print(f"[FORCE-CLOSE-DEBUG] Failed to show error dialog: {dialog_error}")
         if is_critical:
+            print(f"[FORCE-CLOSE-DEBUG] Forcing exit due to critical error")
             sys.exit(1)
 
 # Install global exception handler
@@ -378,4 +397,4 @@ def main():
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
-    main() 
+    main()

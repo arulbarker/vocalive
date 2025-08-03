@@ -1,4 +1,4 @@
-# ui/rag_tab.py - RAG (Retrieval Augmented Generation) Tab
+# ui/rag_tab.py - RAG (Retrieval-Augmented Generation) Knowledge System Tab untuk Pro Mode
 import sys
 import os
 import json
@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QLineEdit, QComboBox, QCheckBox, QSpinBox,
     QGroupBox, QTabWidget, QProgressBar, QSlider, QFrame,
     QMessageBox, QFileDialog, QListWidget, QListWidgetItem,
-    QTableWidget, QTableWidgetItem
+    QTableWidget, QTableWidgetItem, QHeaderView, QSplitter, QFormLayout
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot
 from PyQt6.QtGui import QFont, QPixmap, QIcon
@@ -34,7 +34,7 @@ except ImportError as e:
 logger = setup_logger('RAGTab')
 
 class RAGTab(QWidget):
-    """RAG (Retrieval Augmented Generation) Tab untuk Pro Mode"""
+    """RAG (Retrieval-Augmented Generation) Knowledge System Tab untuk Pro Mode"""
     
     def __init__(self):
         super().__init__()
@@ -43,556 +43,469 @@ class RAGTab(QWidget):
         self.settings = self.config_manager.load_settings()
         
         # RAG settings
-        self.knowledge_base_path = Path("knowledge_bases")
-        self.knowledge_base_path.mkdir(exist_ok=True)
+        self.knowledge_base = {}
+        self.current_documents = []
+        self.rag_enabled = False
         
         self.setup_ui()
         self.load_settings()
-        
+    
     def setup_ui(self):
-        """Setup UI untuk RAG tab"""
-        layout = QVBoxLayout()
+        """Setup the main UI layout"""
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(15, 15, 15, 15)
         
-        # Header
-        header_layout = QHBoxLayout()
-        title_label = QLabel("📚 RAG - Knowledge Base Assistant")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #1877F2;")
-        header_layout.addWidget(title_label)
+        # Header section
+        header = self.create_header_section()
+        main_layout.addWidget(header)
         
-        status_label = QLabel("🟢 RAG Active")
-        status_label.setStyleSheet("color: #42B72A; font-weight: bold;")
-        header_layout.addWidget(status_label)
-        layout.addLayout(header_layout)
+        # Create splitter for main content
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # Main content dengan tabs
-        self.tab_widget = QTabWidget()
+        # Left panel - Knowledge Base Management
+        left_panel = self.create_knowledge_panel()
+        splitter.addWidget(left_panel)
         
-        # Tab 1: Knowledge Base Management
-        self.setup_knowledge_tab()
+        # Right panel - RAG Settings & Testing
+        right_panel = self.create_settings_panel()
+        splitter.addWidget(right_panel)
         
-        # Tab 2: RAG Query Interface
-        self.setup_query_tab()
+        # Set splitter proportions
+        splitter.setSizes([400, 350])
+        main_layout.addWidget(splitter)
         
-        # Tab 3: Document Processing
-        self.setup_document_tab()
-        
-        # Tab 4: RAG Analytics
-        self.setup_analytics_tab()
-        
-        layout.addWidget(self.tab_widget)
-        self.setLayout(layout)
-        
-    def setup_knowledge_tab(self):
-        """Setup knowledge base management tab"""
-        kb_widget = QWidget()
-        kb_layout = QVBoxLayout()
-        
-        # Knowledge Base List
-        kb_group = QGroupBox("📚 Knowledge Bases")
-        kb_layout_v = QVBoxLayout()
-        
-        self.kb_list = QListWidget()
-        self.kb_list.setStyleSheet("""
-            QListWidget {
-                background-color: #242526;
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
-                border-radius: 8px;
-                padding: 5px;
+        # Bottom controls
+        controls_widget = self.create_controls_section()
+        main_layout.addWidget(controls_widget)
+    
+    def create_header_section(self) -> QWidget:
+        """Create header with title and status"""
+        header = QFrame()
+        header.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                            stop:0 #9C27B0, stop:1 #7B1FA2);
+                border-radius: 10px;
+                padding: 20px;
             }
-            QListWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #3A3B3C;
-            }
-            QListWidget::item:selected {
-                background-color: #1877F2;
-            }
-        """)
-        kb_layout_v.addWidget(self.kb_list)
-        
-        # KB Controls
-        kb_controls = QHBoxLayout()
-        kb_controls.addWidget(QPushButton("➕ Add Knowledge Base"))
-        kb_controls.addWidget(QPushButton("✏️ Edit Knowledge Base"))
-        kb_controls.addWidget(QPushButton("🗑️ Delete Knowledge Base"))
-        kb_controls.addWidget(QPushButton("🔄 Refresh List"))
-        kb_layout_v.addLayout(kb_controls)
-        
-        kb_group.setLayout(kb_layout_v)
-        kb_layout.addWidget(kb_group)
-        
-        # Knowledge Base Details
-        details_group = QGroupBox("📋 Knowledge Base Details")
-        details_layout = QVBoxLayout()
-        
-        # KB Info
-        info_layout = QHBoxLayout()
-        info_layout.addWidget(QLabel("📁 Name:"))
-        self.kb_name_label = QLabel("No KB selected")
-        info_layout.addWidget(self.kb_name_label)
-        details_layout.addLayout(info_layout)
-        
-        info_layout2 = QHBoxLayout()
-        info_layout2.addWidget(QLabel("📄 Documents:"))
-        self.kb_docs_label = QLabel("0 documents")
-        info_layout2.addWidget(self.kb_docs_label)
-        details_layout.addLayout(info_layout2)
-        
-        info_layout3 = QHBoxLayout()
-        info_layout3.addWidget(QLabel("🧠 Embeddings:"))
-        self.kb_embeddings_label = QLabel("Not processed")
-        info_layout3.addWidget(self.kb_embeddings_label)
-        details_layout.addLayout(info_layout3)
-        
-        # Process button
-        self.process_btn = QPushButton("🧠 Process Knowledge Base")
-        self.process_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1877F2;
+            QLabel {
                 color: white;
-                border: none;
-                padding: 10px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #166FE5;
             }
         """)
-        self.process_btn.clicked.connect(self.process_knowledge_base)
-        details_layout.addWidget(self.process_btn)
         
-        details_group.setLayout(details_layout)
-        kb_layout.addWidget(details_group)
+        layout = QHBoxLayout(header)
         
-        kb_widget.setLayout(kb_layout)
-        self.tab_widget.addTab(kb_widget, "📚 Knowledge Base")
+        # Title and status
+        title_layout = QVBoxLayout()
         
-    def setup_query_tab(self):
-        """Setup RAG query interface tab"""
-        query_widget = QWidget()
-        query_layout = QVBoxLayout()
+        title = QLabel("📚 RAG Knowledge System")
+        title.setStyleSheet("font-size: 28px; font-weight: bold;")
+        title_layout.addWidget(title)
         
-        # Query Interface
-        query_group = QGroupBox("🔍 RAG Query Interface")
-        query_layout_v = QVBoxLayout()
+        # Status indicator
+        status_text = "🟢 Active" if self.rag_enabled else "🔴 Inactive"
+        status_label = QLabel(status_text)
+        status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFD700;")
+        title_layout.addWidget(status_label)
         
-        # Query input
-        query_label = QLabel("❓ Ask your knowledge base:")
-        self.query_input = QTextEdit()
-        self.query_input.setMaximumHeight(100)
-        self.query_input.setPlaceholderText("Enter your question here...")
-        query_layout_v.addWidget(query_label)
-        query_layout_v.addWidget(self.query_input)
+        layout.addLayout(title_layout)
+        layout.addStretch()
         
-        # Query options
-        options_layout = QHBoxLayout()
+        # Quick stats
+        stats_layout = QVBoxLayout()
+        stats_layout.addWidget(QLabel(f"📄 Documents: {len(self.current_documents)}"))
+        stats_layout.addWidget(QLabel(f"🧠 Knowledge Base: {len(self.knowledge_base)} entries"))
+        layout.addLayout(stats_layout)
         
-        self.semantic_search_check = QCheckBox("🔍 Semantic Search")
-        self.semantic_search_check.setChecked(True)
-        options_layout.addWidget(self.semantic_search_check)
+        return header
+    
+    def create_knowledge_panel(self) -> QWidget:
+        """Create left panel for knowledge base management"""
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
         
-        self.keyword_search_check = QCheckBox("🔑 Keyword Search")
-        self.keyword_search_check.setChecked(True)
-        options_layout.addWidget(self.keyword_search_check)
+        # Knowledge Base Management
+        kb_group = QGroupBox("📚 Knowledge Base Management")
+        kb_layout = QVBoxLayout(kb_group)
         
-        self.hybrid_search_check = QCheckBox("🔄 Hybrid Search")
-        self.hybrid_search_check.setChecked(True)
-        options_layout.addWidget(self.hybrid_search_check)
+        # Add document section
+        add_doc_layout = QHBoxLayout()
+        add_doc_layout.addWidget(QLabel("Add Document:"))
         
-        query_layout_v.addLayout(options_layout)
+        self.doc_path_edit = QLineEdit()
+        self.doc_path_edit.setPlaceholderText("Select document file...")
+        add_doc_layout.addWidget(self.doc_path_edit)
         
-        # Search parameters
-        params_layout = QHBoxLayout()
-        params_layout.addWidget(QLabel("📊 Top Results:"))
-        self.top_k_spin = QSpinBox()
-        self.top_k_spin.setRange(1, 20)
-        self.top_k_spin.setValue(5)
-        params_layout.addWidget(self.top_k_spin)
+        browse_btn = QPushButton("📁 Browse")
+        browse_btn.clicked.connect(self.browse_document)
+        add_doc_layout.addWidget(browse_btn)
         
-        params_layout.addWidget(QLabel("🎯 Similarity Threshold:"))
+        kb_layout.addLayout(add_doc_layout)
+        
+        # Document list
+        self.doc_list = QListWidget()
+        self.doc_list.setMaximumHeight(200)
+        kb_layout.addWidget(self.doc_list)
+        
+        # Document controls
+        doc_controls = QHBoxLayout()
+        
+        add_btn = QPushButton("➕ Add")
+        add_btn.clicked.connect(self.add_document)
+        doc_controls.addWidget(add_btn)
+        
+        remove_btn = QPushButton("➖ Remove")
+        remove_btn.clicked.connect(self.remove_document)
+        doc_controls.addWidget(remove_btn)
+        
+        clear_btn = QPushButton("🗑️ Clear All")
+        clear_btn.clicked.connect(self.clear_documents)
+        doc_controls.addWidget(clear_btn)
+        
+        kb_layout.addLayout(doc_controls)
+        
+        layout.addWidget(kb_group)
+        
+        # Knowledge Base Entries
+        entries_group = QGroupBox("🧠 Knowledge Entries")
+        entries_layout = QVBoxLayout(entries_group)
+        
+        # Entries table
+        self.entries_table = QTableWidget()
+        self.entries_table.setColumnCount(4)
+        self.entries_table.setHorizontalHeaderLabels([
+            "ID", "Content", "Source", "Added"
+        ])
+        
+        # Table styling
+        header = self.entries_table.horizontalHeader()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        
+        self.entries_table.setAlternatingRowColors(True)
+        self.entries_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        
+        entries_layout.addWidget(self.entries_table)
+        
+        # Entry controls
+        entry_controls = QHBoxLayout()
+        
+        add_entry_btn = QPushButton("➕ Add Entry")
+        add_entry_btn.clicked.connect(self.add_knowledge_entry)
+        entry_controls.addWidget(add_entry_btn)
+        
+        edit_entry_btn = QPushButton("✏️ Edit")
+        edit_entry_btn.clicked.connect(self.edit_knowledge_entry)
+        entry_controls.addWidget(edit_entry_btn)
+        
+        delete_entry_btn = QPushButton("🗑️ Delete")
+        delete_entry_btn.clicked.connect(self.delete_knowledge_entry)
+        entry_controls.addWidget(delete_entry_btn)
+        
+        entries_layout.addLayout(entry_controls)
+        
+        layout.addWidget(entries_group)
+        
+        return panel
+    
+    def create_settings_panel(self) -> QWidget:
+        """Create right panel for RAG settings and testing"""
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        
+        # RAG Settings
+        settings_group = QGroupBox("⚙️ RAG Settings")
+        settings_layout = QFormLayout(settings_group)
+        
+        # Enable RAG
+        self.rag_enabled_cb = QCheckBox("Enable RAG Knowledge System")
+        self.rag_enabled_cb.setChecked(self.rag_enabled)
+        self.rag_enabled_cb.toggled.connect(self.toggle_rag)
+        settings_layout.addRow("Status:", self.rag_enabled_cb)
+        
+        # Similarity threshold
         self.similarity_slider = QSlider(Qt.Orientation.Horizontal)
         self.similarity_slider.setRange(0, 100)
         self.similarity_slider.setValue(70)
         self.similarity_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.similarity_slider.setTickInterval(10)
-        params_layout.addWidget(self.similarity_slider)
+        settings_layout.addRow("Similarity Threshold:", self.similarity_slider)
         
-        self.similarity_label = QLabel("0.7")
-        self.similarity_slider.valueChanged.connect(
-            lambda v: self.similarity_label.setText(f"{v/100:.1f}")
-        )
-        params_layout.addWidget(self.similarity_label)
-        query_layout_v.addLayout(params_layout)
+        # Max results
+        self.max_results_spin = QSpinBox()
+        self.max_results_spin.setRange(1, 10)
+        self.max_results_spin.setValue(3)
+        settings_layout.addRow("Max Results:", self.max_results_spin)
         
-        # Search button
-        self.search_btn = QPushButton("🔍 Search Knowledge Base")
-        self.search_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #42B72A;
-                color: white;
-                border: none;
-                padding: 12px;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #36A420;
-            }
-        """)
-        self.search_btn.clicked.connect(self.search_knowledge_base)
-        query_layout_v.addWidget(self.search_btn)
+        # Context window
+        self.context_window_spin = QSpinBox()
+        self.context_window_spin.setRange(100, 2000)
+        self.context_window_spin.setValue(500)
+        self.context_window_spin.setSuffix(" tokens")
+        settings_layout.addRow("Context Window:", self.context_window_spin)
         
-        query_group.setLayout(query_layout_v)
-        query_layout.addWidget(query_group)
+        layout.addWidget(settings_group)
         
-        # Results Display
-        results_group = QGroupBox("📋 Search Results")
-        results_layout = QVBoxLayout()
+        # RAG Testing
+        test_group = QGroupBox("🧪 RAG Testing")
+        test_layout = QVBoxLayout(test_group)
         
+        # Query input
+        test_layout.addWidget(QLabel("Test Query:"))
+        self.query_edit = QTextEdit()
+        self.query_edit.setMaximumHeight(100)
+        self.query_edit.setPlaceholderText("Enter your question here...")
+        test_layout.addWidget(self.query_edit)
+        
+        # Test button
+        test_btn = QPushButton("🔍 Test RAG")
+        test_btn.clicked.connect(self.test_rag)
+        test_layout.addWidget(test_btn)
+        
+        # Results display
+        test_layout.addWidget(QLabel("Results:"))
         self.results_display = QTextEdit()
+        self.results_display.setMaximumHeight(200)
         self.results_display.setReadOnly(True)
-        self.results_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #242526;
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
+        test_layout.addWidget(self.results_display)
+        
+        layout.addWidget(test_group)
+        
+        return panel
+    
+    def create_controls_section(self) -> QWidget:
+        """Create bottom controls section"""
+        controls = QFrame()
+        controls.setStyleSheet("""
+            QFrame {
+                background-color: #f5f5f5;
                 border-radius: 8px;
                 padding: 10px;
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 13px;
             }
         """)
-        results_layout.addWidget(self.results_display)
         
-        results_group.setLayout(results_layout)
-        query_layout.addWidget(results_group)
+        layout = QHBoxLayout(controls)
         
-        query_widget.setLayout(query_layout)
-        self.tab_widget.addTab(query_widget, "🔍 RAG Query")
+        # Save settings button
+        save_btn = QPushButton("💾 Save Settings")
+        save_btn.clicked.connect(self.save_settings)
+        layout.addWidget(save_btn)
         
-    def setup_document_tab(self):
-        """Setup document processing tab"""
-        doc_widget = QWidget()
-        doc_layout = QVBoxLayout()
+        # Load settings button
+        load_btn = QPushButton("📂 Load Settings")
+        load_btn.clicked.connect(self.load_settings)
+        layout.addWidget(load_btn)
         
-        # Document Upload
-        upload_group = QGroupBox("📄 Document Upload")
-        upload_layout = QVBoxLayout()
+        # Export knowledge base
+        export_btn = QPushButton("📤 Export Knowledge Base")
+        export_btn.clicked.connect(self.export_knowledge_base)
+        layout.addWidget(export_btn)
         
-        # File selection
-        file_layout = QHBoxLayout()
-        file_layout.addWidget(QLabel("📁 Select Documents:"))
-        self.file_path_label = QLabel("No files selected")
-        file_layout.addWidget(self.file_path_label)
+        # Import knowledge base
+        import_btn = QPushButton("📥 Import Knowledge Base")
+        import_btn.clicked.connect(self.import_knowledge_base)
+        layout.addWidget(import_btn)
         
-        browse_btn = QPushButton("📂 Browse Files")
-        browse_btn.clicked.connect(self.browse_documents)
-        file_layout.addWidget(browse_btn)
-        upload_layout.addLayout(file_layout)
+        layout.addStretch()
         
-        # Supported formats
-        formats_label = QLabel("📋 Supported formats: PDF, TXT, DOCX, MD, JSON")
-        formats_label.setStyleSheet("color: #888; font-size: 12px;")
-        upload_layout.addWidget(formats_label)
+        # Status label
+        self.status_label = QLabel("Ready")
+        self.status_label.setStyleSheet("color: #666; font-style: italic;")
+        layout.addWidget(self.status_label)
         
-        # Upload button
-        self.upload_btn = QPushButton("📤 Upload to Knowledge Base")
-        self.upload_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #F5B800;
-                color: white;
-                border: none;
-                padding: 10px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #E6A800;
-            }
-        """)
-        self.upload_btn.clicked.connect(self.upload_documents)
-        upload_layout.addWidget(self.upload_btn)
+        return controls
+    
+    def browse_document(self):
+        """Browse for document files"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Document", "", 
+            "Text Files (*.txt);;PDF Files (*.pdf);;All Files (*)"
+        )
+        if file_path:
+            self.doc_path_edit.setText(file_path)
+    
+    def add_document(self):
+        """Add document to knowledge base"""
+        file_path = self.doc_path_edit.text()
+        if not file_path:
+            QMessageBox.warning(self, "Warning", "Please select a document first.")
+            return
         
-        upload_group.setLayout(upload_layout)
-        doc_layout.addWidget(upload_group)
+        try:
+            # Add to document list
+            item = QListWidgetItem(file_path)
+            self.doc_list.addItem(item)
+            self.current_documents.append(file_path)
+            
+            # Process document (placeholder)
+            self.status_label.setText(f"Added document: {Path(file_path).name}")
+            self.doc_path_edit.clear()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to add document: {e}")
+    
+    def remove_document(self):
+        """Remove selected document"""
+        current_item = self.doc_list.currentItem()
+        if current_item:
+            file_path = current_item.text()
+            self.doc_list.takeItem(self.doc_list.row(current_item))
+            self.current_documents.remove(file_path)
+            self.status_label.setText(f"Removed document: {Path(file_path).name}")
+    
+    def clear_documents(self):
+        """Clear all documents"""
+        reply = QMessageBox.question(
+            self, "Confirm Clear", 
+            "Are you sure you want to clear all documents?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         
-        # Document Processing
-        processing_group = QGroupBox("⚙️ Document Processing")
-        processing_layout = QVBoxLayout()
+        if reply == QMessageBox.StandardButton.Yes:
+            self.doc_list.clear()
+            self.current_documents.clear()
+            self.status_label.setText("Cleared all documents")
+    
+    def add_knowledge_entry(self):
+        """Add manual knowledge entry"""
+        # Placeholder for adding knowledge entry
+        QMessageBox.information(self, "Info", "Add knowledge entry feature coming soon!")
+    
+    def edit_knowledge_entry(self):
+        """Edit selected knowledge entry"""
+        # Placeholder for editing knowledge entry
+        QMessageBox.information(self, "Info", "Edit knowledge entry feature coming soon!")
+    
+    def delete_knowledge_entry(self):
+        """Delete selected knowledge entry"""
+        # Placeholder for deleting knowledge entry
+        QMessageBox.information(self, "Info", "Delete knowledge entry feature coming soon!")
+    
+    def toggle_rag(self, enabled: bool):
+        """Toggle RAG system on/off"""
+        self.rag_enabled = enabled
+        status = "🟢 Active" if enabled else "🔴 Inactive"
+        self.status_label.setText(f"RAG System: {status}")
+    
+    def test_rag(self):
+        """Test RAG system with query"""
+        query = self.query_edit.toPlainText().strip()
+        if not query:
+            QMessageBox.warning(self, "Warning", "Please enter a test query.")
+            return
         
-        # Processing options
-        options_layout = QVBoxLayout()
+        # Placeholder for RAG testing
+        self.results_display.setPlainText(
+            f"Query: {query}\n\n"
+            f"RAG System Test Results:\n"
+            f"• Similarity Threshold: {self.similarity_slider.value()}%\n"
+            f"• Max Results: {self.max_results_spin.value()}\n"
+            f"• Context Window: {self.context_window_spin.value()} tokens\n\n"
+            f"Status: {'Active' if self.rag_enabled else 'Inactive'}\n"
+            f"Knowledge Base Entries: {len(self.knowledge_base)}\n"
+            f"Documents Loaded: {len(self.current_documents)}"
+        )
         
-        self.chunk_text_check = QCheckBox("✂️ Chunk Text")
-        self.chunk_text_check.setChecked(True)
-        options_layout.addWidget(self.chunk_text_check)
+        self.status_label.setText("RAG test completed")
+    
+    def save_settings(self):
+        """Save RAG settings"""
+        settings = {
+            "rag_enabled": self.rag_enabled_cb.isChecked(),
+            "similarity_threshold": self.similarity_slider.value(),
+            "max_results": self.max_results_spin.value(),
+            "context_window": self.context_window_spin.value(),
+            "documents": self.current_documents,
+            "knowledge_base": self.knowledge_base
+        }
         
-        self.extract_metadata_check = QCheckBox("📊 Extract Metadata")
-        self.extract_metadata_check.setChecked(True)
-        options_layout.addWidget(self.extract_metadata_check)
-        
-        self.generate_embeddings_check = QCheckBox("🧠 Generate Embeddings")
-        self.generate_embeddings_check.setChecked(True)
-        options_layout.addWidget(self.generate_embeddings_check)
-        
-        self.index_documents_check = QCheckBox("🔍 Index Documents")
-        self.index_documents_check.setChecked(True)
-        options_layout.addWidget(self.index_documents_check)
-        
-        processing_layout.addLayout(options_layout)
-        
-        # Processing progress
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        processing_layout.addWidget(self.progress_bar)
-        
-        processing_group.setLayout(processing_layout)
-        doc_layout.addWidget(processing_group)
-        
-        # Document List
-        doc_list_group = QGroupBox("📚 Processed Documents")
-        doc_list_layout = QVBoxLayout()
-        
-        self.doc_table = QTableWidget()
-        self.doc_table.setColumnCount(4)
-        self.doc_table.setHorizontalHeaderLabels(["📄 Document", "📊 Size", "🧠 Status", "📅 Date"])
-        self.doc_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #242526;
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
-                border-radius: 8px;
-                gridline-color: #3A3B3C;
-            }
-            QTableWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #3A3B3C;
-            }
-            QTableWidget::item:selected {
-                background-color: #1877F2;
-            }
-            QHeaderView::section {
-                background-color: #3A3B3C;
-                color: #FFFFFF;
-                padding: 8px;
-                border: none;
-                border-bottom: 1px solid #4E4F50;
-            }
-        """)
-        doc_list_layout.addWidget(self.doc_table)
-        
-        doc_list_group.setLayout(doc_list_layout)
-        doc_layout.addWidget(doc_list_group)
-        
-        doc_widget.setLayout(doc_layout)
-        self.tab_widget.addTab(doc_widget, "📄 Document Processing")
-        
-    def setup_analytics_tab(self):
-        """Setup RAG analytics tab"""
-        analytics_widget = QWidget()
-        analytics_layout = QVBoxLayout()
-        
-        # RAG Statistics
-        stats_group = QGroupBox("📊 RAG Statistics")
-        stats_layout = QVBoxLayout()
-        
-        # Stats display
-        self.stats_display = QTextEdit()
-        self.stats_display.setReadOnly(True)
-        self.stats_display.setMaximumHeight(200)
-        self.stats_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #242526;
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Consolas', monospace;
-                font-size: 12px;
-            }
-        """)
-        stats_layout.addWidget(self.stats_display)
-        
-        # Update stats button
-        update_stats_btn = QPushButton("🔄 Update RAG Statistics")
-        update_stats_btn.clicked.connect(self.update_rag_analytics)
-        stats_layout.addWidget(update_stats_btn)
-        
-        stats_group.setLayout(stats_layout)
-        analytics_layout.addWidget(stats_group)
-        
-        # Performance Metrics
-        perf_group = QGroupBox("⚡ Performance Metrics")
-        perf_layout = QVBoxLayout()
-        
-        # Search metrics
-        search_layout = QHBoxLayout()
-        search_layout.addWidget(QLabel("🔍 Total Searches:"))
-        self.total_searches_label = QLabel("0")
-        search_layout.addWidget(self.total_searches_label)
-        perf_layout.addLayout(search_layout)
-        
-        # Response time
-        time_layout = QHBoxLayout()
-        time_layout.addWidget(QLabel("⏱️ Avg Search Time:"))
-        self.search_time_label = QLabel("0.0s")
-        time_layout.addWidget(self.search_time_label)
-        perf_layout.addLayout(time_layout)
-        
-        # Hit rate
-        hit_layout = QHBoxLayout()
-        hit_layout.addWidget(QLabel("🎯 Hit Rate:"))
-        self.hit_rate_label = QLabel("0%")
-        hit_layout.addWidget(self.hit_rate_label)
-        perf_layout.addLayout(hit_layout)
-        
-        # Knowledge base size
-        kb_size_layout = QHBoxLayout()
-        kb_size_layout.addWidget(QLabel("📚 KB Size:"))
-        self.kb_size_label = QLabel("0 documents")
-        kb_size_layout.addWidget(self.kb_size_label)
-        perf_layout.addLayout(kb_size_layout)
-        
-        perf_group.setLayout(perf_layout)
-        analytics_layout.addWidget(perf_group)
-        
-        analytics_widget.setLayout(analytics_layout)
-        self.tab_widget.addTab(analytics_widget, "📊 RAG Analytics")
-        
+        try:
+            settings_file = Path("config/rag_settings.json")
+            settings_file.parent.mkdir(exist_ok=True)
+            
+            with open(settings_file, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2)
+            
+            self.status_label.setText("Settings saved successfully")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save settings: {e}")
+    
     def load_settings(self):
         """Load RAG settings"""
         try:
-            # Load RAG-specific settings
-            self.similarity_slider.setValue(
-                int(self.settings.get("rag_similarity_threshold", 0.7) * 100)
-            )
-            self.top_k_spin.setValue(
-                self.settings.get("rag_top_k", 5)
-            )
-            
-        except Exception as e:
-            logger.error(f"Error loading RAG settings: {e}")
-            
-    def save_settings(self):
-        """Save RAG settings"""
-        try:
-            self.settings["rag_similarity_threshold"] = self.similarity_slider.value() / 100
-            self.settings["rag_top_k"] = self.top_k_spin.value()
-            self.settings["rag_semantic_search"] = self.semantic_search_check.isChecked()
-            self.settings["rag_keyword_search"] = self.keyword_search_check.isChecked()
-            self.settings["rag_hybrid_search"] = self.hybrid_search_check.isChecked()
-            
-            self.config_manager.save_settings()
+            settings_file = Path("config/rag_settings.json")
+            if settings_file.exists():
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                
+                # Apply settings
+                self.rag_enabled_cb.setChecked(settings.get("rag_enabled", False))
+                self.similarity_slider.setValue(settings.get("similarity_threshold", 70))
+                self.max_results_spin.setValue(settings.get("max_results", 3))
+                self.context_window_spin.setValue(settings.get("context_window", 500))
+                
+                # Load documents
+                self.current_documents = settings.get("documents", [])
+                self.doc_list.clear()
+                for doc in self.current_documents:
+                    self.doc_list.addItem(doc)
+                
+                # Load knowledge base
+                self.knowledge_base = settings.get("knowledge_base", {})
+                
+                self.status_label.setText("Settings loaded successfully")
+            else:
+                self.status_label.setText("No settings file found")
                 
         except Exception as e:
-            logger.error(f"Error saving RAG settings: {e}")
-            
-    def process_knowledge_base(self):
-        """Process knowledge base untuk embeddings"""
-        try:
-            self.progress_bar.setVisible(True)
-            self.progress_bar.setValue(0)
-            
-            # Simulate processing
-            for i in range(101):
-                self.progress_bar.setValue(i)
-                time.sleep(0.05)
-                
-            QMessageBox.information(self, "Success", "Knowledge base processed successfully!")
-            self.progress_bar.setVisible(False)
-            
-        except Exception as e:
-            logger.error(f"Error processing knowledge base: {e}")
-            QMessageBox.warning(self, "Error", f"Failed to process knowledge base: {e}")
-            
-    def search_knowledge_base(self):
-        """Search knowledge base dengan RAG"""
-        try:
-            query = self.query_input.toPlainText()
-            if not query.strip():
-                QMessageBox.warning(self, "Warning", "Please enter a query")
-                return
-                
-            # Simulate RAG search
-            results = f"""
-🔍 RAG Search Results for: "{query}"
-
-📚 Found 3 relevant documents:
-
-1. 📄 Document: "Gaming Strategy Guide"
-   🎯 Relevance: 95%
-   📝 Snippet: "Advanced MOBA strategies for competitive play..."
-   
-2. 📄 Document: "Streaming Best Practices"  
-   🎯 Relevance: 87%
-   📝 Snippet: "Professional streaming techniques and audience engagement..."
-   
-3. 📄 Document: "AI Integration Guide"
-   🎯 Relevance: 82%
-   📝 Snippet: "How to integrate AI assistants in live streaming..."
-   
-🧠 Generated Response:
-Based on the knowledge base, here's a comprehensive answer to your query about {query}...
-            """
-            
-            self.results_display.setPlainText(results)
-            
-        except Exception as e:
-            logger.error(f"Error searching knowledge base: {e}")
-            QMessageBox.warning(self, "Error", f"Failed to search knowledge base: {e}")
-            
-    def browse_documents(self):
-        """Browse untuk memilih dokumen"""
-        try:
-            files, _ = QFileDialog.getOpenFileNames(
-                self,
-                "Select Documents",
-                "",
-                "Documents (*.pdf *.txt *.docx *.md *.json);;All Files (*)"
-            )
-            
-            if files:
-                self.file_path_label.setText(f"{len(files)} files selected")
-                
-        except Exception as e:
-            logger.error(f"Error browsing documents: {e}")
-            
-    def upload_documents(self):
-        """Upload dokumen ke knowledge base"""
-        try:
-            QMessageBox.information(self, "Success", "Documents uploaded successfully!")
-            
-        except Exception as e:
-            logger.error(f"Error uploading documents: {e}")
-            QMessageBox.warning(self, "Error", f"Failed to upload documents: {e}")
-            
-    def update_rag_analytics(self):
-        """Update RAG analytics"""
-        try:
-            stats_text = """
-📊 RAG ANALYTICS
-================
-🔍 Total Searches: 1,847
-⏱️ Avg Search Time: 0.3s
-🎯 Hit Rate: 94.2%
-📚 KB Size: 1,247 documents
-🧠 Embeddings: 15,892 vectors
-📄 Documents Processed: 89
-⚡ Cache Hit Rate: 87.5%
-            """
-            
-            self.stats_display.setPlainText(stats_text)
-            self.total_searches_label.setText("1,847")
-            self.search_time_label.setText("0.3s")
-            self.hit_rate_label.setText("94.2%")
-            self.kb_size_label.setText("1,247 documents")
+            QMessageBox.critical(self, "Error", f"Failed to load settings: {e}")
+    
+    def export_knowledge_base(self):
+        """Export knowledge base to file"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Knowledge Base", "knowledge_base.json", 
+            "JSON Files (*.json)"
+        )
         
-        except Exception as e:
-            logger.error(f"Error updating RAG analytics: {e}")
-            
-    def closeEvent(self, event):
-        """Save settings when closing"""
-        self.save_settings()
-        super().closeEvent(event)
+        if file_path:
+            try:
+                export_data = {
+                    "knowledge_base": self.knowledge_base,
+                    "documents": self.current_documents,
+                    "export_date": datetime.now().isoformat()
+                }
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(export_data, f, indent=2)
+                
+                self.status_label.setText(f"Knowledge base exported to {Path(file_path).name}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to export: {e}")
+    
+    def import_knowledge_base(self):
+        """Import knowledge base from file"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Import Knowledge Base", "", 
+            "JSON Files (*.json)"
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    import_data = json.load(f)
+                
+                self.knowledge_base = import_data.get("knowledge_base", {})
+                self.current_documents = import_data.get("documents", [])
+                
+                # Update UI
+                self.doc_list.clear()
+                for doc in self.current_documents:
+                    self.doc_list.addItem(doc)
+                
+                self.status_label.setText(f"Knowledge base imported from {Path(file_path).name}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to import: {e}") 

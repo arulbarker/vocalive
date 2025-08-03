@@ -1,25 +1,47 @@
 {
-  "Akbar Septiajayadi": {
-    "first_seen": "2025-06-19T00:05:48.739792",
-    "last_seen": "2025-06-19T00:05:48.739792",
-    "comment_count": 1,
+  "ARL CRASHZONE": {
+    "first_seen": "2025-08-03T22:38:24.127165",
+    "last_seen": "2025-08-03T23:23:54.863599",
+    "comment_count": 3,
     "status": "new",
     "recent_interactions": [
       {
-        "time": "2025-06-19T00:05:48.739792",
-        "message": "mas electrikalnya ada yg di monster loncat\" mas",
-        "reply": "Akbar Septiajayadi Waduh Akbar Septiajayadi, itu efek skill pasif Layla bro kalo nembak monster bakal ada loncat ke musuh terdekat. Cocok buat farming cepat atau ngejar kill!",
+        "time": "2025-08-03T22:38:24.127165",
+        "message": "halo ketua",
+        "reply": "ARL CRASHZONE, what's up bro! Ready to dominate with Layla today?",
         "sentiment": "neutral",
         "mood_pattern": "new_viewer"
+      },
+      {
+        "time": "2025-08-03T23:06:25.541985",
+        "message": "mantap ketua",
+        "reply": "ARL CRASHZONE, thanks bro! Layla's popping off with crit build—berserker's fury and wind of nature for that insane late game damage.",
+        "sentiment": "excited",
+        "mood_pattern": "getting_to_know"
+      },
+      {
+        "time": "2025-08-03T23:23:54.863599",
+        "message": "halo master",
+        "reply": "ARL CRASHZONE Yo ARL CRASHZONE! What's up bro, ready to dominate the lane with Layla today?",
+        "sentiment": "neutral",
+        "mood_pattern": "getting_to_know"
       }
     ],
     "sentiment_history": [
       {
-        "time": "2025-06-19T00:05:48.739792",
+        "time": "2025-08-03T22:38:24.127165",
+        "sentiment": "neutral"
+      },
+      {
+        "time": "2025-08-03T23:06:25.541985",
+        "sentiment": "excited"
+      },
+      {
+        "time": "2025-08-03T23:23:54.863599",
         "sentiment": "neutral"
       }
     ],
-    "current_mood": "new_viewer",
+    "current_mood": "getting_to_know",
     "learning_data": {
       "successful_response_patterns": [],
       "preferred_topics": {},
@@ -30,249 +52,23 @@
       },
       "engagement_history": [
         {
-          "timestamp": "2025-06-19T00:05:48.739792",
-          "message_type": "general",
-          "response_length": 27,
+          "timestamp": "2025-08-03T22:38:24.127165",
+          "message_type": "greeting",
+          "response_length": 11,
           "engagement_score": 0.5,
           "topic": "general"
-        }
-      ]
-    }
-  },
-  "Billy Rado": {
-    "first_seen": "2025-06-19T00:06:00.245795",
-    "last_seen": "2025-06-19T00:06:00.245795",
-    "comment_count": 1,
-    "status": "new",
-    "recent_interactions": [
-      {
-        "time": "2025-06-19T00:06:00.245795",
-        "message": "pacul ada di goa mas, oh itu decul hohohoo",
-        "reply": "Billy Rado wah kocak banget nih, komennya bro! Tapi sini fokus dulu ke gameplay Layla biar push rank kita lancar.",
-        "sentiment": "neutral",
-        "mood_pattern": "new_viewer"
-      }
-    ],
-    "sentiment_history": [
-      {
-        "time": "2025-06-19T00:06:00.245795",
-        "sentiment": "neutral"
-      }
-    ],
-    "current_mood": "new_viewer",
-    "learning_data": {
-      "successful_response_patterns": [],
-      "preferred_topics": {},
-      "response_style_preferences": {
-        "length": "medium",
-        "formality": "casual",
-        "detail_level": "balanced"
-      },
-      "engagement_history": [
+        },
         {
-          "timestamp": "2025-06-19T00:06:00.245795",
-          "message_type": "general",
-          "response_length": 20,
-          "engagement_score": 0.5,
-          "topic": "general"
-        }
-      ]
-    }
-  },
-  "fixshiKT": {
-    "first_seen": "2025-06-19T00:06:38.679021",
-    "last_seen": "2025-06-19T00:06:38.679021",
-    "comment_count": 1,
-    "status": "new",
-    "recent_interactions": [
-      {
-        "time": "2025-06-19T00:06:38.679021",
-        "message": "itu monsternya sensitif suara mas jadi jangan berisik",
-        "reply": "FixshiKT wah bener banget nih, monster emang sensitif suara, makanya kita harus stealthy biar gak ketauan. Makasih tipsnya bro!",
-        "sentiment": "negative",
-        "mood_pattern": "new_viewer"
-      }
-    ],
-    "sentiment_history": [
-      {
-        "time": "2025-06-19T00:06:38.679021",
-        "sentiment": "negative"
-      }
-    ],
-    "current_mood": "new_viewer",
-    "learning_data": {
-      "successful_response_patterns": [],
-      "preferred_topics": {},
-      "response_style_preferences": {
-        "length": "medium",
-        "formality": "casual",
-        "detail_level": "balanced"
-      },
-      "engagement_history": [
-        {
-          "timestamp": "2025-06-19T00:06:38.679021",
-          "message_type": "general",
-          "response_length": 19,
-          "engagement_score": 0.5,
-          "topic": "general"
-        }
-      ]
-    }
-  },
-  "Dkazuma.": {
-    "first_seen": "2025-06-19T00:06:46.339845",
-    "last_seen": "2025-06-19T00:06:46.339845",
-    "comment_count": 1,
-    "status": "new",
-    "recent_interactions": [
-      {
-        "time": "2025-06-19T00:06:46.339845",
-        "message": "mas mada gawe sendirian itu mas",
-        "reply": "Dkazuma. Dkazuma wah main solo rank emang tantangan banget bro. Fokus farm dulu early game biar late game bisa carry sendiri.",
-        "sentiment": "negative",
-        "mood_pattern": "new_viewer"
-      }
-    ],
-    "sentiment_history": [
-      {
-        "time": "2025-06-19T00:06:46.339845",
-        "sentiment": "negative"
-      }
-    ],
-    "current_mood": "new_viewer",
-    "learning_data": {
-      "successful_response_patterns": [],
-      "preferred_topics": {},
-      "response_style_preferences": {
-        "length": "medium",
-        "formality": "casual",
-        "detail_level": "balanced"
-      },
-      "engagement_history": [
-        {
-          "timestamp": "2025-06-19T00:06:46.339845",
+          "timestamp": "2025-08-03T23:06:25.541985",
           "message_type": "general",
           "response_length": 21,
           "engagement_score": 0.5,
           "topic": "general"
-        }
-      ]
-    }
-  },
-  "Mukti Anugrah Pratama": {
-    "first_seen": "2025-06-19T00:36:27.157220",
-    "last_seen": "2025-06-19T00:36:27.157220",
-    "comment_count": 1,
-    "status": "new",
-    "recent_interactions": [
-      {
-        "time": "2025-06-19T00:36:27.157220",
-        "message": "bisa mas",
-        "reply": "Mukti Anugrah Pratama Wah Mukti Anugrah Pratama baru nih, di sini, bisa dong bro! Mau tanya apa soal Layla atau meta MOBA sekarang?",
-        "sentiment": "neutral",
-        "mood_pattern": "new_viewer"
-      }
-    ],
-    "sentiment_history": [
-      {
-        "time": "2025-06-19T00:36:27.157220",
-        "sentiment": "neutral"
-      }
-    ],
-    "current_mood": "new_viewer",
-    "learning_data": {
-      "successful_response_patterns": [],
-      "preferred_topics": {},
-      "response_style_preferences": {
-        "length": "medium",
-        "formality": "casual",
-        "detail_level": "balanced"
-      },
-      "engagement_history": [
+        },
         {
-          "timestamp": "2025-06-19T00:36:27.157220",
-          "message_type": "general",
-          "response_length": 23,
-          "engagement_score": 0.5,
-          "topic": "general"
-        }
-      ]
-    }
-  },
-  "Alfaaaaaa": {
-    "first_seen": "2025-06-19T00:36:42.265112",
-    "last_seen": "2025-06-19T00:36:42.265112",
-    "comment_count": 1,
-    "status": "new",
-    "recent_interactions": [
-      {
-        "time": "2025-06-19T00:36:42.265112",
-        "message": "itu tdi ada mas pas lu ketemu monster",
-        "reply": "Alfaaaaaa itu tadi minion jungle bro, buat nge farm gold dan exp biar levelnya cepet naik. Kalo mau efisien farmingnya, last hit aja biar dapet gold full.",
-        "sentiment": "neutral",
-        "mood_pattern": "new_viewer"
-      }
-    ],
-    "sentiment_history": [
-      {
-        "time": "2025-06-19T00:36:42.265112",
-        "sentiment": "neutral"
-      }
-    ],
-    "current_mood": "new_viewer",
-    "learning_data": {
-      "successful_response_patterns": [],
-      "preferred_topics": {},
-      "response_style_preferences": {
-        "length": "medium",
-        "formality": "casual",
-        "detail_level": "balanced"
-      },
-      "engagement_history": [
-        {
-          "timestamp": "2025-06-19T00:36:42.265112",
-          "message_type": "general",
-          "response_length": 27,
-          "engagement_score": 0.5,
-          "topic": "general"
-        }
-      ]
-    }
-  },
-  "Dyymmm": {
-    "first_seen": "2025-06-19T16:24:17.704335",
-    "last_seen": "2025-06-19T16:24:17.704335",
-    "comment_count": 1,
-    "status": "new",
-    "recent_interactions": [
-      {
-        "time": "2025-06-19T16:24:17.704335",
-        "message": "Masih pemanasan ini kan bob ? Yakan ? Wkwkkw",
-        "reply": "Dyymmm betul banget lagi pemanasan dulu nih, biar jari jari enggak kaku pas push rank nanti. Sambil nunggu match, mau coba build baru buat Layla atau mau liat gameplay tips dulu?",
-        "sentiment": "curious",
-        "mood_pattern": "new_viewer"
-      }
-    ],
-    "sentiment_history": [
-      {
-        "time": "2025-06-19T16:24:17.704335",
-        "sentiment": "curious"
-      }
-    ],
-    "current_mood": "new_viewer",
-    "learning_data": {
-      "successful_response_patterns": [],
-      "preferred_topics": {},
-      "response_style_preferences": {
-        "length": "medium",
-        "formality": "casual",
-        "detail_level": "balanced"
-      },
-      "engagement_history": [
-        {
-          "timestamp": "2025-06-19T16:24:17.704335",
-          "message_type": "question",
-          "response_length": 31,
+          "timestamp": "2025-08-03T23:23:54.863599",
+          "message_type": "greeting",
+          "response_length": 16,
           "engagement_score": 0.5,
           "topic": "general"
         }

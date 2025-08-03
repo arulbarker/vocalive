@@ -1,667 +1,343 @@
-# ui/translate_tab_pro.py - Advanced Translation Tab untuk Pro Mode
-import sys
-import os
-import json
-import time
-import threading
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+import threading, time, keyboard, json
+import sounddevice as sd, soundfile as sf
+import sys
+from pathlib import Path
 
-# PyQt6 imports
+# Setup path PENTING!
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QTextEdit, QLineEdit, QComboBox, QCheckBox, QSpinBox,
-    QGroupBox, QTabWidget, QProgressBar, QSlider, QFrame,
-    QMessageBox, QFileDialog, QListWidget, QListWidgetItem
+    QWidget, QVBoxLayout, QLabel, QComboBox,
+    QLineEdit, QPushButton, QHBoxLayout,
+    QTextEdit, QCheckBox
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QThread, pyqtSlot
-from PyQt6.QtGui import QFont, QPixmap, QIcon
 
-# Setup project root
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, ROOT)
-
-# Import modules
+# ─── ConfigManager ──────────────────────────────────────────────
+# ─── fallback modules_client & modules_server ───────────────────────
 try:
-    from modules_client.api import APIClient
     from modules_client.config_manager import ConfigManager
-    from modules_client.logger import setup_logger
-except ImportError as e:
-    print(f"Import error: {e}")
+    from modules_client.api import generate_reply
+    from modules_client.translate_stt import transcribe
+    from modules_server.tts_engine import speak
+    from modules_server.tts_google import speak_with_google_cloud
+    USE_GOOGLE_TTS = True
+except ImportError:
+    from modules_server.config_manager import ConfigManager
+    from modules_server.deepseek_ai import generate_reply
+    from modules_server.tts_engine import speak
+    # STT hanya ada di client; jika tidak ada, stub error:
+    def transcribe(*args, **kwargs):
+        raise NotImplementedError("Fitur STT hanya tersedia di environment client")
+    USE_GOOGLE_TTS = False
 
-logger = setup_logger('TranslateTabPro')
+# ─── Translator dynamic ──────────────────────────────────────────
+try:
+    # client pakai NLBB
+    from modules_client.nlbb_translator import translate_dynamic
+except ImportError:
+    from modules_server.api_translator import translate_dynamic
 
-class TranslateTabPro(QWidget):
-    """Advanced Translation Tab untuk Pro Mode"""
-    
+# ─── TTS speak ───────────────────────────────────────────────────
+try:
+    from modules_server.tts_engine import speak
+
+except ImportError:
+    from modules_server.tts_engine import speak
+
+# ─── STT transcribe ──────────────────────────────────────────────
+try:
+    from modules_client.translate_stt import transcribe
+except ImportError:
+    def transcribe(*args, **kwargs):
+        raise NotImplementedError("STT hanya tersedia di environment client")
+
+# pastikan folder temp ada
+temp_dir = Path("temp")
+temp_dir.mkdir(parents=True, exist_ok=True)
+
+class RecorderThread(QThread):
+    """Hold-to-talk: record → STT → translate → emit(src, tgt, err)"""
+    newTranscript = pyqtSignal(str, str, str)
+
+    def __init__(self, mic_idx: int, src_lang: str):
+        super().__init__()
+        self.mic_idx  = mic_idx
+        self.src_lang = src_lang
+        self.buffer   = []
+        self.running  = True
+
+    def run(self):
+        try:
+            with sd.InputStream(
+                samplerate=16000, channels=1, device=self.mic_idx,
+                callback=lambda indata, *_: self.buffer.extend(indata.copy())
+            ):
+                while self.running:
+                    time.sleep(0.05)
+        except Exception as e:
+            self.newTranscript.emit("", "", f"Mic error: {e}")
+            return
+
+        wav_path = temp_dir / "record.wav"
+        try:
+            sf.write(str(wav_path), self.buffer, 16000)
+            time.sleep(0.1)
+        except Exception as e:
+            self.newTranscript.emit("", "", f"Gagal simpan rekaman: {e}")
+            return
+
+        # STT (pakai Google untuk mode Pro)
+        use_google = True
+        src = transcribe(str(wav_path), self.src_lang, use_google) or ""
+        # filter out Whisper's blank-audio marker
+        clean_src = src.replace("[BLANK_AUDIO]", "").strip()
+        if not clean_src:
+            self.newTranscript.emit("", "", "STT kosong atau gagal")
+            return
+
+        # Translate via NLLB
+        try:
+            tgt = translate_dynamic(clean_src, src_lang=self.src_lang, tgt_lang="eng_Latn") or ""
+        except Exception as e:
+            self.newTranscript.emit(clean_src, "", f"Translate error: {e}")
+            return
+
+        if not tgt.strip():
+            self.newTranscript.emit(clean_src, "", "Translate gagal")
+        else:
+            self.newTranscript.emit(clean_src, tgt, "")
+
+
+class TranslateTab(QWidget):
+    ttsAboutToStart = pyqtSignal()
+    ttsFinished     = pyqtSignal()
     def __init__(self):
         super().__init__()
-        self.api_client = APIClient()
-        self.config_manager = ConfigManager()
-        self.settings = self.config_manager.load_settings()
-        
-        # Translation settings
-        self.supported_languages = {
-            "Indonesian": "id",
-            "English": "en", 
-            "Japanese": "ja",
-            "Korean": "ko",
-            "Chinese (Simplified)": "zh-CN",
-            "Chinese (Traditional)": "zh-TW",
-            "Spanish": "es",
-            "French": "fr",
-            "German": "de",
-            "Italian": "it",
-            "Portuguese": "pt",
-            "Russian": "ru",
-            "Arabic": "ar",
-            "Hindi": "hi",
-            "Thai": "th",
-            "Vietnamese": "vi"
+        self.cfg = ConfigManager("config/settings.json")
+        self.recorder = None
+        self.hotkey_enabled = True
+
+        # load voices
+        voices_cfg = json.loads(Path("config/voices.json").read_text(encoding="utf-8"))
+        gtts = voices_cfg.get("gtts_standard", {})
+        self.voice_map = {
+            f"{m['model']} ({lang})": {
+                "voice_name": m['model'],
+                "language_code": lang
+            }
+            for lang, ms in gtts.items() for m in ms
         }
-        
-        self.setup_ui()
-        self.load_settings()
-        
-    def setup_ui(self):
-        """Setup UI untuk advanced translation"""
-        layout = QVBoxLayout()
-        
-        # Header
-        header_layout = QHBoxLayout()
-        title_label = QLabel("🌍 Advanced Translation Pro")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #1877F2;")
-        header_layout.addWidget(title_label)
-        
-        status_label = QLabel("🟢 Pro Translation Active")
-        status_label.setStyleSheet("color: #42B72A; font-weight: bold;")
-        header_layout.addWidget(status_label)
-        layout.addLayout(header_layout)
-        
-        # Main content dengan tabs
-        self.tab_widget = QTabWidget()
-        
-        # Tab 1: Real-time Translation
-        self.setup_realtime_tab()
-        
-        # Tab 2: Batch Translation
-        self.setup_batch_tab()
-        
-        # Tab 3: Voice Translation
-        self.setup_voice_tab()
-        
-        # Tab 4: Translation Memory
-        self.setup_memory_tab()
-        
-        layout.addWidget(self.tab_widget)
-        self.setLayout(layout)
-        
-    def setup_realtime_tab(self):
-        """Setup real-time translation tab"""
-        realtime_widget = QWidget()
-        realtime_layout = QVBoxLayout()
-        
-        # Source Language
-        source_group = QGroupBox("📤 Source Language")
-        source_layout = QVBoxLayout()
-        
-        self.source_lang_combo = QComboBox()
-        self.source_lang_combo.addItems(list(self.supported_languages.keys()))
-        self.source_lang_combo.setCurrentText("Indonesian")
-        source_layout.addWidget(self.source_lang_combo)
-        
-        self.source_text = QTextEdit()
-        self.source_text.setMaximumHeight(150)
-        self.source_text.setPlaceholderText("Enter text to translate...")
-        source_layout.addWidget(self.source_text)
-        
-        source_group.setLayout(source_layout)
-        realtime_layout.addWidget(source_group)
-        
-        # Translation Options
-        options_group = QGroupBox("⚙️ Translation Options")
-        options_layout = QVBoxLayout()
-        
-        # Translation mode
-        mode_layout = QHBoxLayout()
-        mode_layout.addWidget(QLabel("🎯 Translation Mode:"))
-        self.translation_mode_combo = QComboBox()
-        self.translation_mode_combo.addItems([
-            "Neural Machine Translation",
-            "Statistical Translation", 
-            "Hybrid Translation",
-            "Context-Aware Translation",
-            "Professional Translation"
-        ])
-        mode_layout.addWidget(self.translation_mode_combo)
-        options_layout.addLayout(mode_layout)
-        
-        # Quality settings
-        quality_layout = QHBoxLayout()
-        quality_layout.addWidget(QLabel("⭐ Quality Level:"))
-        self.quality_slider = QSlider(Qt.Orientation.Horizontal)
-        self.quality_slider.setRange(1, 5)
-        self.quality_slider.setValue(4)
-        self.quality_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.quality_slider.setTickInterval(1)
-        quality_layout.addWidget(self.quality_slider)
-        
-        self.quality_label = QLabel("High Quality")
-        self.quality_slider.valueChanged.connect(self.update_quality_label)
-        quality_layout.addWidget(self.quality_label)
-        options_layout.addLayout(quality_layout)
-        
-        # Advanced options
-        advanced_layout = QVBoxLayout()
-        
-        self.preserve_formatting_check = QCheckBox("📝 Preserve Formatting")
-        self.preserve_formatting_check.setChecked(True)
-        advanced_layout.addWidget(self.preserve_formatting_check)
-        
-        self.context_aware_check = QCheckBox("🧠 Context-Aware Translation")
-        self.context_aware_check.setChecked(True)
-        advanced_layout.addWidget(self.context_aware_check)
-        
-        self.cultural_adaptation_check = QCheckBox("🌍 Cultural Adaptation")
-        self.cultural_adaptation_check.setChecked(True)
-        advanced_layout.addWidget(self.cultural_adaptation_check)
-        
-        self.technical_terms_check = QCheckBox("🔧 Technical Terms Dictionary")
-        self.technical_terms_check.setChecked(True)
-        advanced_layout.addWidget(self.technical_terms_check)
-        
-        options_layout.addLayout(advanced_layout)
-        options_group.setLayout(options_layout)
-        realtime_layout.addWidget(options_group)
-        
-        # Target Language
-        target_group = QGroupBox("📥 Target Language")
-        target_layout = QVBoxLayout()
-        
-        self.target_lang_combo = QComboBox()
-        self.target_lang_combo.addItems(list(self.supported_languages.keys()))
-        self.target_lang_combo.setCurrentText("English")
-        target_layout.addWidget(self.target_lang_combo)
-        
-        self.target_text = QTextEdit()
-        self.target_text.setMaximumHeight(150)
-        self.target_text.setReadOnly(True)
-        self.target_text.setPlaceholderText("Translation will appear here...")
-        target_layout.addWidget(self.target_text)
-        
-        target_group.setLayout(target_layout)
-        realtime_layout.addWidget(target_group)
-        
-        # Translate button
-        self.translate_btn = QPushButton("🌍 Translate")
-        self.translate_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1877F2;
-                color: white;
-                border: none;
-                padding: 12px;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #166FE5;
-            }
-        """)
-        self.translate_btn.clicked.connect(self.translate_text)
-        realtime_layout.addWidget(self.translate_btn)
-        
-        realtime_widget.setLayout(realtime_layout)
-        self.tab_widget.addTab(realtime_widget, "🌍 Real-time Translation")
-        
-    def setup_batch_tab(self):
-        """Setup batch translation tab"""
-        batch_widget = QWidget()
-        batch_layout = QVBoxLayout()
-        
-        # File Upload
-        upload_group = QGroupBox("📄 File Upload")
-        upload_layout = QVBoxLayout()
-        
-        # File selection
-        file_layout = QHBoxLayout()
-        file_layout.addWidget(QLabel("📁 Select Files:"))
-        self.batch_file_label = QLabel("No files selected")
-        file_layout.addWidget(self.batch_file_label)
-        
-        browse_btn = QPushButton("📂 Browse Files")
-        browse_btn.clicked.connect(self.browse_batch_files)
-        file_layout.addWidget(browse_btn)
-        upload_layout.addLayout(file_layout)
-        
-        # Supported formats
-        formats_label = QLabel("📋 Supported formats: TXT, DOCX, PDF, JSON, CSV")
-        formats_label.setStyleSheet("color: #888; font-size: 12px;")
-        upload_layout.addWidget(formats_label)
-        
-        upload_group.setLayout(upload_layout)
-        batch_layout.addWidget(upload_group)
-        
-        # Batch Settings
-        settings_group = QGroupBox("⚙️ Batch Settings")
-        settings_layout = QVBoxLayout()
-        
-        # Language pairs
-        lang_layout = QHBoxLayout()
-        lang_layout.addWidget(QLabel("📤 From:"))
-        self.batch_source_combo = QComboBox()
-        self.batch_source_combo.addItems(list(self.supported_languages.keys()))
-        self.batch_source_combo.setCurrentText("Indonesian")
-        lang_layout.addWidget(self.batch_source_combo)
-        
-        lang_layout.addWidget(QLabel("📥 To:"))
-        self.batch_target_combo = QComboBox()
-        self.batch_target_combo.addItems(list(self.supported_languages.keys()))
-        self.batch_target_combo.setCurrentText("English")
-        lang_layout.addWidget(self.batch_target_combo)
-        settings_layout.addLayout(lang_layout)
-        
-        # Batch options
-        batch_options_layout = QVBoxLayout()
-        
-        self.parallel_processing_check = QCheckBox("🔄 Parallel Processing")
-        self.parallel_processing_check.setChecked(True)
-        batch_options_layout.addWidget(self.parallel_processing_check)
-        
-        self.preserve_structure_check = QCheckBox("📋 Preserve Document Structure")
-        self.preserve_structure_check.setChecked(True)
-        batch_options_layout.addWidget(self.preserve_structure_check)
-        
-        self.quality_check_check = QCheckBox("✅ Quality Check")
-        self.quality_check_check.setChecked(True)
-        batch_options_layout.addWidget(self.quality_check_check)
-        
-        settings_layout.addLayout(batch_options_layout)
-        settings_group.setLayout(settings_layout)
-        batch_layout.addWidget(settings_group)
-        
-        # Progress
-        progress_group = QGroupBox("📊 Progress")
-        progress_layout = QVBoxLayout()
-        
-        self.batch_progress_bar = QProgressBar()
-        self.batch_progress_bar.setVisible(False)
-        progress_layout.addWidget(self.batch_progress_bar)
-        
-        self.batch_status_label = QLabel("Ready to process")
-        progress_layout.addWidget(self.batch_status_label)
-        
-        # Process button
-        self.batch_process_btn = QPushButton("🚀 Start Batch Translation")
-        self.batch_process_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #42B72A;
-                color: white;
-                border: none;
-                padding: 10px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #36A420;
-            }
-        """)
-        self.batch_process_btn.clicked.connect(self.start_batch_translation)
-        progress_layout.addWidget(self.batch_process_btn)
-        
-        progress_group.setLayout(progress_layout)
-        batch_layout.addWidget(progress_group)
-        
-        batch_widget.setLayout(batch_layout)
-        self.tab_widget.addTab(batch_widget, "📄 Batch Translation")
-        
-    def setup_voice_tab(self):
-        """Setup voice translation tab"""
-        voice_widget = QWidget()
-        voice_layout = QVBoxLayout()
-        
-        # Voice Input
-        input_group = QGroupBox("🎤 Voice Input")
-        input_layout = QVBoxLayout()
-        
-        # Source voice
-        source_voice_layout = QHBoxLayout()
-        source_voice_layout.addWidget(QLabel("🎤 Source Voice:"))
-        self.source_voice_combo = QComboBox()
-        self.source_voice_combo.addItems([
-            "Indonesian - Male",
-            "Indonesian - Female", 
-            "English - Male",
-            "English - Female",
-            "Japanese - Male",
-            "Japanese - Female"
-        ])
-        source_voice_layout.addWidget(self.source_voice_combo)
-        input_layout.addLayout(source_voice_layout)
-        
-        # Voice controls
-        voice_controls = QHBoxLayout()
-        
-        self.record_btn = QPushButton("🎙️ Record")
-        self.record_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FA383E;
-                color: white;
-                border: none;
-                padding: 10px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #E62E34;
-            }
-        """)
-        voice_controls.addWidget(self.record_btn)
-        
-        self.stop_btn = QPushButton("⏹️ Stop")
-        self.stop_btn.setEnabled(False)
-        voice_controls.addWidget(self.stop_btn)
-        
-        input_layout.addLayout(voice_controls)
-        
-        # Voice display
-        self.voice_display = QTextEdit()
-        self.voice_display.setMaximumHeight(100)
-        self.voice_display.setPlaceholderText("Voice input will appear here...")
-        input_layout.addWidget(self.voice_display)
-        
-        input_group.setLayout(input_layout)
-        voice_layout.addWidget(input_group)
-        
-        # Voice Translation
-        translation_group = QGroupBox("🌍 Voice Translation")
-        translation_layout = QVBoxLayout()
-        
-        # Target voice
-        target_voice_layout = QHBoxLayout()
-        target_voice_layout.addWidget(QLabel("🔊 Target Voice:"))
-        self.target_voice_combo = QComboBox()
-        self.target_voice_combo.addItems([
-            "Indonesian - Male",
-            "Indonesian - Female",
-            "English - Male", 
-            "English - Female",
-            "Japanese - Male",
-            "Japanese - Female"
-        ])
-        target_voice_layout.addWidget(self.target_voice_combo)
-        translation_layout.addLayout(target_voice_layout)
-        
-        # Translation display
-        self.voice_translation_display = QTextEdit()
-        self.voice_translation_display.setMaximumHeight(100)
-        self.voice_translation_display.setReadOnly(True)
-        self.voice_translation_display.setPlaceholderText("Translation will appear here...")
-        translation_layout.addWidget(self.voice_translation_display)
-        
-        # Voice translation button
-        self.voice_translate_btn = QPushButton("🌍 Translate Voice")
-        self.voice_translate_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1877F2;
-                color: white;
-                border: none;
-                padding: 10px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #166FE5;
-            }
-        """)
-        self.voice_translate_btn.clicked.connect(self.translate_voice)
-        translation_layout.addWidget(self.voice_translate_btn)
-        
-        translation_group.setLayout(translation_layout)
-        voice_layout.addWidget(translation_group)
-        
-        voice_widget.setLayout(voice_layout)
-        self.tab_widget.addTab(voice_widget, "🎤 Voice Translation")
-        
-    def setup_memory_tab(self):
-        """Setup translation memory tab"""
-        memory_widget = QWidget()
-        memory_layout = QVBoxLayout()
-        
-        # Translation Memory
-        memory_group = QGroupBox("🧠 Translation Memory")
-        memory_layout_v = QVBoxLayout()
-        
-        # Memory display
-        self.memory_display = QTextEdit()
-        self.memory_display.setReadOnly(True)
-        self.memory_display.setMaximumHeight(200)
-        self.memory_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #242526;
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
-                border-radius: 8px;
-                padding: 10px;
-                font-family: 'Consolas', monospace;
-                font-size: 12px;
-            }
-        """)
-        memory_layout_v.addWidget(self.memory_display)
-        
-        # Memory controls
-        memory_controls = QHBoxLayout()
-        memory_controls.addWidget(QPushButton("🧹 Clear Memory"))
-        memory_controls.addWidget(QPushButton("💾 Save Memory"))
-        memory_controls.addWidget(QPushButton("📂 Load Memory"))
-        memory_controls.addWidget(QPushButton("🔄 Update Memory"))
-        memory_layout_v.addLayout(memory_controls)
-        
-        memory_group.setLayout(memory_layout_v)
-        memory_layout.addWidget(memory_group)
-        
-        # Translation History
-        history_group = QGroupBox("📜 Translation History")
-        history_layout = QVBoxLayout()
-        
-        self.history_list = QListWidget()
-        self.history_list.setStyleSheet("""
-            QListWidget {
-                background-color: #242526;
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
-                border-radius: 8px;
-                padding: 5px;
-            }
-            QListWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #3A3B3C;
-            }
-            QListWidget::item:selected {
-                background-color: #1877F2;
-            }
-        """)
-        history_layout.addWidget(self.history_list)
-        
-        history_controls = QHBoxLayout()
-        history_controls.addWidget(QPushButton("📥 Export History"))
-        history_controls.addWidget(QPushButton("🗑️ Clear History"))
-        history_layout.addLayout(history_controls)
-        
-        history_group.setLayout(history_layout)
-        memory_layout.addWidget(history_group)
-        
-        memory_widget.setLayout(memory_layout)
-        self.tab_widget.addTab(memory_widget, "🧠 Translation Memory")
-        
-    def load_settings(self):
-        """Load translation settings"""
-        try:
-            # Load translation-specific settings
-            source_lang = self.settings.get("translation_source_lang", "Indonesian")
-            target_lang = self.settings.get("translation_target_lang", "English")
-            
-            source_index = self.source_lang_combo.findText(source_lang)
-            if source_index >= 0:
-                self.source_lang_combo.setCurrentIndex(source_index)
-                
-            target_index = self.target_lang_combo.findText(target_lang)
-            if target_index >= 0:
-                self.target_lang_combo.setCurrentIndex(target_index)
-                
-        except Exception as e:
-            logger.error(f"Error loading translation settings: {e}")
-            
-    def save_settings(self):
-        """Save translation settings"""
-        try:
-            self.settings["translation_source_lang"] = self.source_lang_combo.currentText()
-            self.settings["translation_target_lang"] = self.target_lang_combo.currentText()
-            self.settings["translation_mode"] = self.translation_mode_combo.currentText()
-            self.settings["translation_quality"] = self.quality_slider.value()
-            self.settings["translation_preserve_formatting"] = self.preserve_formatting_check.isChecked()
-            self.settings["translation_context_aware"] = self.context_aware_check.isChecked()
-            self.settings["translation_cultural_adaptation"] = self.cultural_adaptation_check.isChecked()
-            self.settings["translation_technical_terms"] = self.technical_terms_check.isChecked()
-            
-            self.config_manager.save_settings()
-            
-        except Exception as e:
-            logger.error(f"Error saving translation settings: {e}")
-            
-    def update_quality_label(self, value):
-        """Update quality label berdasarkan slider value"""
-        quality_labels = {
-            1: "Basic",
-            2: "Standard", 
-            3: "Good",
-            4: "High Quality",
-            5: "Professional"
+
+        # source-language map
+        self.lang_map = {
+            "Bahasa Indonesia": "ind_Latn",
+            "日本語 (Jepang)":    "jpn_Jpan",
+            "中文 (Mandarin)":    "zho_Hans",
+            "한국어 (Korea)":     "kor_Hang",
+            "العربية (Arab)":    "arb_Arab"
         }
-        self.quality_label.setText(quality_labels.get(value, "Unknown"))
-        
-    def translate_text(self):
-        """Translate text dengan advanced features"""
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("🎤 Translate (Hold-to-Talk)"))
+
+        # Mic selector
+        row = QHBoxLayout(); row.addWidget(QLabel("Mic:"))
+        self.mic = QComboBox()
+        for i, d in enumerate(sd.query_devices()):
+            if d["max_input_channels"] > 0:
+                self.mic.addItem(f"{i} | {d['name']}", i)
+        idx = self.cfg.get("selected_mic_index", 0)
+        self.mic.setCurrentIndex(self.mic.findData(idx))
+        row.addWidget(self.mic)
+        row.addWidget(self._btn("Test Mic", self.test_mic))
+        row.addWidget(self._btn("Save Mic", self.save_mic))
+        layout.addLayout(row)
+
+        # Bahasa source
+        row = QHBoxLayout(); row.addWidget(QLabel("Bahasa Sumber:"))
+        self.lang_combo = QComboBox()
+        for lbl in self.lang_map:
+            self.lang_combo.addItem(lbl)
+        self.lang_combo.setCurrentText("Bahasa Indonesia")
+        row.addWidget(self.lang_combo)
+        layout.addLayout(row)
+
+        # Voice selector
+        row = QHBoxLayout(); row.addWidget(QLabel("Voice:"))
+        self.voice_cb = QComboBox()
+        for lbl in self.voice_map:
+            self.voice_cb.addItem(lbl)
+        stored = self.cfg.get("voice_model", "")
+        for i, lbl in enumerate(self.voice_map):
+            if self.voice_map[lbl]["voice_name"] == stored:
+                self.voice_cb.setCurrentIndex(i)
+                break
+        row.addWidget(self.voice_cb)
+        row.addWidget(self._btn("Preview", self.preview_voice))
+        row.addWidget(self._btn("Save Voice", self.save_voice))
+        layout.addLayout(row)
+
+        # Hotkey Translate
+        row = QHBoxLayout(); row.addWidget(QLabel("Hotkey Translate:"))
+        self.chk_ctrl  = QCheckBox("Ctrl");  row.addWidget(self.chk_ctrl)
+        self.chk_alt   = QCheckBox("Alt");   row.addWidget(self.chk_alt)
+        self.chk_shift = QCheckBox("Shift"); row.addWidget(self.chk_shift)
+        self.key_combo = QComboBox()
+        for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789":
+            self.key_combo.addItem(c)
+        row.addWidget(self.key_combo)
+        self.hk = QLineEdit(self.cfg.get("translate_hotkey", "Ctrl+Alt+X"))
+        self.hk.setReadOnly(True); row.addWidget(self.hk)
+        row.addWidget(self._btn("Save", self.save_hotkey))
+        self.toggle_btn = QPushButton("🔔 Translate: ON")
+        self.toggle_btn.setCheckable(True)
+        self.toggle_btn.setChecked(True)
+        self.toggle_btn.clicked.connect(self.toggle_hotkey)
+        row.addWidget(self.toggle_btn)
+        layout.addLayout(row)
+
+        # Status / Output / Log
+        self.status = QLabel("Ready"); layout.addWidget(self.status)
+        self.txtbox = QLabel(""); self.txtbox.setWordWrap(True); layout.addWidget(self.txtbox)
+        layout.addWidget(QLabel("Log:"))
+        self.log = QTextEdit(); self.log.setReadOnly(True); layout.addWidget(self.log)
+
+        # load + start hotkey loop
+        self._load_hotkey()
+        threading.Thread(target=self._hotkey_loop, daemon=True).start()
+
+    def _btn(self, text, fn):
+        b = QPushButton(text); b.clicked.connect(fn); return b
+
+    def _load_hotkey(self):
+        th = self.cfg.get("translate_hotkey", "Ctrl+Alt+X")
+        for p in th.split("+"):
+            if p == "Ctrl":    self.chk_ctrl.setChecked(True)
+            elif p == "Alt":   self.chk_alt.setChecked(True)
+            elif p == "Shift": self.chk_shift.setChecked(True)
+            else:
+                i = self.key_combo.findText(p)
+                if i >= 0: self.key_combo.setCurrentIndex(i)
+        self.hk.setText(th)
+
+    def save_hotkey(self):
+        mods = [m for cb,m in [
+            (self.chk_ctrl,"Ctrl"),
+            (self.chk_alt,"Alt"),
+            (self.chk_shift,"Shift")
+        ] if cb.isChecked()]
+        key = self.key_combo.currentText()
+        hot = "+".join(mods + [key]) if key else ""
+        self.cfg.set("translate_hotkey", hot)
+        self.hk.setText(hot)
+        self.log.append(f"[Save] Translate Hotkey → {hot}")
+
+    def toggle_hotkey(self):
+        ok = self.toggle_btn.isChecked()
+        self.toggle_btn.setText("🔔 Translate: ON" if ok else "🔕 Translate: OFF")
+        self.hotkey_enabled = ok
+
+    def test_mic(self):
+        duration = 1.0  # durasi rekam dalam detik
+        mic_idx  = self.mic.currentData()
+        sr       = self.cfg.get("mic_sample_rate", 16000)
+
+        self.log.append(f"[Test Mic] Rekam {duration}s dari mic idx {mic_idx}…")
         try:
-            source_text = self.source_text.toPlainText()
-            if not source_text.strip():
-                QMessageBox.warning(self, "Warning", "Please enter text to translate")
+            # rekam singkat
+            data = sd.rec(int(duration * sr), samplerate=sr,
+                          channels=1, device=mic_idx)
+            sd.wait()
+
+            self.log.append("[Test Mic] Putar ulang…")
+            # play ulang hasil rekaman
+            sd.play(data, samplerate=sr)
+            sd.wait()
+
+            self.log.append("[Test Mic] Selesai.")
+        except Exception as e:
+            self.log.append(f"[Test Mic] Error: {e}")
+
+
+    def save_mic(self):
+        self.cfg.set("selected_mic_index", self.mic.currentData())
+        self.log.append("[Save] Mic index")
+
+    def preview_voice(self):
+        lbl = self.voice_cb.currentText()
+        cfg = self.voice_map[lbl]
+        self.cfg.set("voice_model", cfg["voice_name"])
+        self.log.append(f"[Preview] {lbl}")
+        speak("wow arul is very handsome", cfg["language_code"], cfg["voice_name"])  
+
+    def save_voice(self):
+        lbl = self.voice_cb.currentText()
+        cfg = self.voice_map[lbl]
+        self.cfg.set("voice_model", cfg["voice_name"])
+        self.log.append("[Save] Voice model")
+
+    def _is_pressed(self, hotkey: str) -> bool:
+        return all(keyboard.is_pressed(p.lower()) for p in hotkey.split("+") if p)
+
+    def _hotkey_loop(self):
+        prev = False
+        while True:
+            time.sleep(0.05)
+            if not self.hotkey_enabled:
+                prev = False
+                continue
+
+            hot = self.cfg.get("translate_hotkey", "Ctrl+Alt+X")
+            pressed = self._is_pressed(hot)
+            if pressed and not prev:
+                prev = True
+                self.status.setText("🔴 Recording…")
+                lang = self.lang_map[self.lang_combo.currentText()]
+                self.recorder = RecorderThread(self.mic.currentData(), lang)
+                self.recorder.newTranscript.connect(self.on_translate)
+                self.recorder.start()
+            elif not pressed and prev:
+                prev = False
+                if self.recorder:
+                    self.recorder.running = False
+                self.status.setText("⏳ Processing…")
+
+    def on_translate(self, src: str, tgt: str, err: str):
+        # kembalikan status UI
+        self.status.setText("Ready")
+
+        if err:
+            self.txtbox.setText(f"⚠️ {err}")
+            self.log.append(f"[Translate] ERROR: {err}")
             return
 
-            source_lang = self.supported_languages.get(self.source_lang_combo.currentText(), "id")
-            target_lang = self.supported_languages.get(self.target_lang_combo.currentText(), "en")
-            mode = self.translation_mode_combo.currentText()
-            quality = self.quality_slider.value()
-            
-            # Simulate advanced translation
-            translation = f"""
-🌍 Advanced Translation Result
+        # tampilkan hasil
+        self.txtbox.setText(f"📝 {src}\n\n🌐 {tgt}")
+        self.log.append(f"[Translate] {src} → {tgt}")
 
-📤 Source ({self.source_lang_combo.currentText()}): {source_text}
-📥 Target ({self.target_lang_combo.currentText()}): "This is a professional translation with advanced features including context awareness, cultural adaptation, and technical term optimization."
+        # sinyal: CoHost non-aktif sebelum TTS
+        self.ttsAboutToStart.emit()
 
-⚙️ Translation Details:
-- Mode: {mode}
-- Quality: {quality}/5 stars
-- Context-Aware: {'Yes' if self.context_aware_check.isChecked() else 'No'}
-- Cultural Adaptation: {'Yes' if self.cultural_adaptation_check.isChecked() else 'No'}
-- Technical Terms: {'Yes' if self.technical_terms_check.isChecked() else 'No'}
-            """
-            
-            self.target_text.setPlainText(translation)
-            
-            # Add to history
-            self.add_to_history(source_text, translation)
-            
-        except Exception as e:
-            logger.error(f"Error translating text: {e}")
-            QMessageBox.warning(self, "Error", f"Failed to translate text: {e}")
-            
-    def browse_batch_files(self):
-        """Browse untuk memilih file batch"""
-        try:
-            files, _ = QFileDialog.getOpenFileNames(
-                self,
-                "Select Files for Batch Translation",
-                "",
-                "Documents (*.txt *.docx *.pdf *.json *.csv);;All Files (*)"
-            )
-            
-            if files:
-                self.batch_file_label.setText(f"{len(files)} files selected")
-                
-        except Exception as e:
-            logger.error(f"Error browsing batch files: {e}")
-            
-    def start_batch_translation(self):
-        """Start batch translation process"""
-        try:
-            self.batch_progress_bar.setVisible(True)
-            self.batch_progress_bar.setValue(0)
-            self.batch_status_label.setText("Processing files...")
-            self.batch_process_btn.setEnabled(False)
-            
-            # Simulate batch processing
-            for i in range(101):
-                self.batch_progress_bar.setValue(i)
-                self.batch_status_label.setText(f"Processing file {i+1}/100...")
-                time.sleep(0.05)
-                
-            self.batch_status_label.setText("Batch translation completed!")
-            self.batch_process_btn.setEnabled(True)
-            self.batch_progress_bar.setVisible(False)
-            
-            QMessageBox.information(self, "Success", "Batch translation completed successfully!")
-            
-        except Exception as e:
-            logger.error(f"Error in batch translation: {e}")
-            QMessageBox.warning(self, "Error", f"Failed to process batch translation: {e}")
-            
-    def translate_voice(self):
-        """Translate voice input"""
-        try:
-            voice_input = self.voice_display.toPlainText()
-            if not voice_input.strip():
-                QMessageBox.warning(self, "Warning", "Please record or enter voice input")
-            return
-
-            # Simulate voice translation
-            translation = f"""
-🎤 Voice Translation Result
-
-🎙️ Source Voice: {self.source_voice_combo.currentText()}
-🔊 Target Voice: {self.target_voice_combo.currentText()}
-
-📝 Original: "{voice_input}"
-🌍 Translation: "This is a professional voice translation with advanced speech recognition and natural language processing."
-
-⚙️ Features Used:
-- Speech-to-Text
-- Neural Translation
-- Text-to-Speech
-- Voice Cloning
-            """
-            
-            self.voice_translation_display.setPlainText(translation)
-            
+        def _do_tts(text, lang_code, voice_name):
+                try:
+                        print(f"[DEBUG] Speak → voice={voice_name}, lang={lang_code}, text={text}")
+                        speak(text, lang_code, voice_name)
                 except Exception as e:
-            logger.error(f"Error translating voice: {e}")
-            QMessageBox.warning(self, "Error", f"Failed to translate voice: {e}")
-            
-    def add_to_history(self, source, translation):
-        """Add translation ke history"""
-        try:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            history_item = f"[{timestamp}] {source[:50]}... → {translation[:50]}..."
-            
-            self.history_list.addItem(history_item)
-            
-        except Exception as e:
-            logger.error(f"Error adding to history: {e}")
-            
-    def closeEvent(self, event):
-        """Save settings when closing"""
-        self.save_settings()
-        super().closeEvent(event)
+                        print(f"❌ TTS Error: {e}")
+                finally:
+                        self.ttsFinished.emit()
+
+
+        # siapkan parameter suara
+        lbl = self.voice_cb.currentText()
+        cfg = self.voice_map[lbl]
+
+        # jalankan TTS di thread terpisah
+        threading.Thread(
+            target=_do_tts,
+            args=(tgt, cfg["language_code"], cfg["voice_name"]),
+            daemon=True
+        ).start()
 

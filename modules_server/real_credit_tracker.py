@@ -114,13 +114,13 @@ class RealCreditTracker:
         cost_key = f"stt_{stt_type}"
         unit_cost = self.costs.get(cost_key, 0.1)  # ✅ DINAIKKAN: 0.01 → 0.1
         
-        # Mode Pro = 5x lipat lebih mahal
+        # ✅ PERBAIKAN: Mode Pro = 5x lipat lebih mahal dari Basic
         mode_multiplier = 5.0 if mode == "pro" else 1.0
         credits = duration_seconds * unit_cost * self.multiplier * mode_multiplier
         
         self.add_usage("stt_seconds", duration_seconds, credits)
         
-        logger.info(f"STT Usage: {duration_seconds}s ({stt_type}) [{mode.upper()}] = {credits:.4f} credits")
+        logger.info(f"STT Usage: {duration_seconds}s ({stt_type}) [{mode.upper()}] = {credits:.4f} credits (multiplier: {mode_multiplier}x)")
         return credits
 
     def track_tts_usage(self, text: str, tts_type: str = "gtts", mode: str = "basic") -> float:
@@ -132,13 +132,13 @@ class RealCreditTracker:
         cost_key = f"tts_{tts_type}"
         unit_cost = self.costs.get(cost_key, 0.05)  # ✅ DINAIKKAN: 0.005 → 0.05 (10x lipat)
         
-        # Mode Pro = 5x lipat lebih mahal
+        # ✅ PERBAIKAN: Mode Pro = 5x lipat lebih mahal dari Basic
         mode_multiplier = 5.0 if mode == "pro" else 1.0
         credits = char_count * unit_cost * self.multiplier * mode_multiplier
         
         self.add_usage("tts_characters", char_count, credits)
         
-        logger.info(f"TTS Usage: {char_count} chars ({tts_type}) [{mode.upper()}] = {credits:.4f} credits")
+        logger.info(f"TTS Usage: {char_count} chars ({tts_type}) [{mode.upper()}] = {credits:.4f} credits (multiplier: {mode_multiplier}x)")
         return credits
 
     def track_ai_usage(self, tokens_used: int = 100, mode: str = "basic") -> float:
@@ -149,14 +149,14 @@ class RealCreditTracker:
         base_cost = self.costs.get("ai_reply_base", 0.5)     # ✅ DINAIKKAN: 0.1 → 0.5 (5x lipat)
         token_cost = tokens_used * self.costs.get("ai_reply_token", 0.005)  # ✅ DINAIKKAN: 0.001 → 0.005 (5x lipat)
         
-        # Mode Pro = 5x lipat lebih mahal
+        # ✅ PERBAIKAN: Mode Pro = 5x lipat lebih mahal dari Basic
         mode_multiplier = 5.0 if mode == "pro" else 1.0
         total_cost = (base_cost + token_cost) * self.multiplier * mode_multiplier
         
         self.add_usage("ai_requests", 1, base_cost * self.multiplier * mode_multiplier)
         self.add_usage("ai_tokens", tokens_used, token_cost * self.multiplier * mode_multiplier)
         
-        logger.info(f"AI Usage: 1 request + {tokens_used} tokens [{mode.upper()}] = {total_cost:.4f} credits")
+        logger.info(f"AI Usage: 1 request + {tokens_used} tokens [{mode.upper()}] = {total_cost:.4f} credits (multiplier: {mode_multiplier}x)")
         return total_cost
 
     def track_translate_usage(self, word_count: int) -> float:
@@ -379,6 +379,9 @@ class RealCreditTracker:
                 
                 if response.status_code == 200:
                     logger.debug(f"Usage synced to VPS successfully: +{hours_used:.4f}h")
+                elif response.status_code == 500:
+                    # Server database issue - log but don't spam warnings
+                    logger.debug(f"VPS database temporarily unavailable (500), usage tracking continues locally")
                 else:
                     logger.warning(f"VPS usage sync failed: {response.status_code} - {response.text}")
                     
@@ -391,7 +394,7 @@ class RealCreditTracker:
         sync_thread.start()
 
     def get_daily_usage(self) -> Dict[str, Any]:
-        """Dapatkan penggunaan hari ini"""
+        """Dapatkan penggunaan hari ini (data tracking only, bukan batasan)"""
         try:
             if self.usage_file.exists():
                 with open(self.usage_file, 'r', encoding='utf-8') as f:
@@ -400,19 +403,21 @@ class RealCreditTracker:
                 return {
                     "total_hours": usage.get("total_hours", 0),
                     "total_credits": usage.get("total_credits", 0),
-                    "limit_hours": self.daily_limit,
-                    "remaining_hours": max(0, self.daily_limit - usage.get("total_hours", 0)),
+                    "limit_hours": 0,  # No limit - data tracking only
+                    "remaining_hours": 0,  # No limit - data tracking only
                     "components": usage.get("components", {}),
-                    "enabled": self.enabled
+                    "enabled": self.enabled,
+                    "is_tracking_only": True  # Flag untuk UI
                 }
             else:
                 return {
                     "total_hours": 0,
                     "total_credits": 0,
-                    "limit_hours": self.daily_limit,
-                    "remaining_hours": self.daily_limit,
+                    "limit_hours": 0,  # No limit - data tracking only
+                    "remaining_hours": 0,  # No limit - data tracking only
                     "components": {},
-                    "enabled": self.enabled
+                    "enabled": self.enabled,
+                    "is_tracking_only": True  # Flag untuk UI
                 }
                 
         except Exception as e:
@@ -586,7 +591,7 @@ def force_credit_deduction(credits_used: float, description: str = "Auto-reply u
 credit_tracker = RealCreditTracker()
 
 def get_current_credit_balance() -> float:
-    """Get current credit balance - prioritize LOCAL file for accuracy"""
+    """Get current credit balance - use Supabase for latest balance"""
     try:
         from modules_client.config_manager import ConfigManager
         cfg = ConfigManager("config/settings.json")
@@ -595,6 +600,30 @@ def get_current_credit_balance() -> float:
         
         if not email:
             return 0.0
+        
+        # Check if in Supabase-only mode
+        backend_type = cfg.get("backend_type", "")
+        force_supabase = cfg.get("force_supabase", False)
+        
+        if backend_type == "supabase_only" or force_supabase:
+            print(f"[CREDIT] Using Supabase backend for credits")
+            try:
+                from modules_client.supabase_client import SupabaseClient
+                supabase_client = SupabaseClient()
+                balance_result = supabase_client.get_credit_balance(email)
+                
+                if balance_result.get("status") == "success":
+                    data = balance_result.get("data", {})
+                    total_credits = float(data.get("total_credits", 0))
+                    hours_equivalent = total_credits / 60  # Convert credits to hours (60 credits = 1 hour)
+                    
+                    print(f"[CREDIT] Supabase total credits: {total_credits:,.0f} ({hours_equivalent:.2f} hours)")
+                    return hours_equivalent
+                else:
+                    print(f"[CREDIT] Supabase error: {balance_result.get('message', 'Unknown error')}")
+            except Exception as e:
+                print(f"[CREDIT] Supabase connection failed: {e}")
+                # Fall through to local/VPS check
         
         # PRIORITAS 1: Gunakan data lokal yang akurat (hasil real deduction)
         subscription_file = Path("config/subscription_status.json")

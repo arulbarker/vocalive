@@ -39,7 +39,6 @@ except ImportError:
 # Import modules lainnya
 from modules_client.cache_manager import CacheManager
 from modules_client.spam_detector import SpamDetector
-from modules_client.supabase_client import SupabaseClient
 from modules_client.viewer_memory import ViewerMemory
 
 # Import API functions dengan fallback
@@ -60,17 +59,107 @@ except ImportError:
 # Import the new EXE-compatible handler
 from modules_client.pytchat_exe_fixed import PyTchatEXEFix, PyTchatListenerEXE
 
+# 🚀 LIGHTWEIGHT IMPORTS: Import optimized components
+from listeners.pytchat_listener_lightweight import start_improved_lightweight_pytchat_listener
+from modules_client.lightweight_ai import generate_reply_lightweight, get_lightweight_ai_generator
+
 # ✅ FIX: Impor fungsi path helper
 from utils.path_util import get_app_data_path
+# from modules_client.real_credit_tracker import RealCreditTracker  # Removed to fix import error
+
+# Import register_activity dengan fallback
+try:
+    from modules_server.subscription_checker import register_activity
+except ImportError:
+    def register_activity(*args, **kwargs):
+        """Fallback register_activity function"""
+        pass
+
+# Import credit tracking functions
+try:
+    from modules_server.real_credit_tracker import track_usage_with_forced_deduction
+except ImportError:
+    def track_usage_with_forced_deduction(*args, **kwargs):
+        """Fallback track_usage_with_forced_deduction function"""
+        return True
+
+# ====================================================================
+#  Utility Functions for Code Simplification
+# ====================================================================
+
+def clean_text_for_tts(text):
+    """
+    Enhanced: Membersihkan teks untuk TTS agar tidak mengucapkan emoji dan mengurangi jeda tidak natural
+    """
+    if not text:
+        return ""
+    
+    import re
+    
+    # Remove emojis (comprehensive Unicode ranges)
+    emoji_pattern = re.compile("["
+        u"\U0001F600-\U0001F64F"  # emoticons
+        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+        u"\U0001F680-\U0001F6FF"  # transport & map
+        u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        u"\U00002500-\U00002BEF"  # chinese char
+        u"\U00002702-\U000027B0"
+        u"\U000024C2-\U0001F251"
+        u"\U0001f926-\U0001f937"
+        u"\U00010000-\U0010ffff"
+        u"\u2640-\u2642" 
+        u"\u2600-\u2B55"
+        u"\u200d"
+        u"\u23cf"
+        u"\u23e9"
+        u"\u231a"
+        u"\ufe0f"  # dingbats
+        u"\u3030"
+        "]+", re.UNICODE)
+    
+    text = emoji_pattern.sub('', text)
+    
+    # Remove markdown/formatting
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # bold **text**
+    text = re.sub(r'\*(.+?)\*', r'\1', text)      # italic *text*
+    text = re.sub(r'_(.+?)_', r'\1', text)        # underline _text_
+    text = re.sub(r'~~(.+?)~~', r'\1', text)      # strikethrough ~~text~~
+    
+    # Replace multiple spaces with single space
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Remove line breaks that cause unnatural pauses
+    text = text.replace('\\n', ' ').replace('\n', ' ')
+    
+    # Clean up punctuation for better speech flow
+    text = re.sub(r'\.{2,}', '.', text)  # Multiple dots to single
+    text = re.sub(r'\?{2,}', '?', text)  # Multiple question marks
+    text = re.sub(r'!{2,}', '!', text)   # Multiple exclamation marks
+    
+    return text.strip()
+
+def safe_attr_check(obj, attr_name):
+    """Helper function to safely check if object has attribute and it's truthy"""
+    try:
+        return hasattr(obj, attr_name) and getattr(obj, attr_name)
+    except Exception:
+        return False
+
+def safe_timer_check(obj, timer_name):
+    """Helper function to safely check if timer exists and is active"""
+    return (safe_attr_check(obj, timer_name) and 
+            getattr(obj, timer_name) and 
+            getattr(obj, timer_name).isActive())
 
 # ====================================================================
 #  ReplyThread for AI Reply Generation
 # ====================================================================
+
 class ReplyThread(QThread):
     finished = pyqtSignal(str, str, str)
 
     def __init__(self, author: str, message: str, personality: str, 
-                 voice_model: str, language_code: str, lang_out: str, viewer_memory=None):
+                 voice_model: str, language_code: str, lang_out: str):
         super().__init__()
         self.author = author
         self.message = message
@@ -78,139 +167,100 @@ class ReplyThread(QThread):
         self.voice_model = voice_model
         self.language_code = language_code
         self.lang_out = lang_out
-        self.viewer_memory = viewer_memory
 
     def run(self):
+        """🚀 OPTIMIZED: Fast AI reply generation dengan minimal overhead"""
         try:
-            # Load configuration
+            # ⚡ FAST CONFIG: Direct config access
             cfg = ConfigManager("config/settings.json")
             extra = cfg.get("custom_context", "").strip()
             lang_label = "Bahasa Indonesia" if self.lang_out == "Indonesia" else "English"
 
-            # Get viewer memory
-            viewer_status = "new"
-            viewer_context = ""
-            
-            if self.viewer_memory:
-                viewer_info = self.viewer_memory.get_viewer_info(self.author)
-                if viewer_info:
-                    viewer_status = viewer_info.get("status", "new")
-                    viewer_context = self.viewer_memory.get_recent_context(self.author, limit=3)
+            # ⚡ SIMPLIFIED: No complex viewer tracking
+            # All viewers treated equally for better performance
 
-            # Analyze message for relevant response
+            # ⚡ FAST QUESTION DETECTION: Simplified categorization
             message_lower = self.message.lower()
-            
-            # Detect question category
             question_type = "general"
-            if any(word in message_lower for word in ["kabar", "apa kabar", "gimana"]):
+            
+            if any(word in message_lower for word in ["kabar", "gimana", "halo", "hai"]):
                 question_type = "greeting"
-            elif any(word in message_lower for word in ["makan", "udah makan", "belum makan"]):
+            elif any(word in message_lower for word in ["makan", "udah makan"]):
                 question_type = "eating"
-            elif any(word in message_lower for word in ["build", "item", "gear", "equipment"]):
+            elif any(word in message_lower for word in ["build", "item", "gear"]):
                 question_type = "gaming_build"
-            elif any(word in message_lower for word in ["main", "game", "mabar", "rank", "push"]):
+            elif any(word in message_lower for word in ["main", "game", "rank"]):
                 question_type = "gaming_play"
-            elif any(word in message_lower for word in ["halo", "hai", "hello", "assalamualaikum"]):
-                question_type = "greeting"
 
-            # 🔥 ENHANCED: Get viewer context for natural responses
-            viewer_context = ""
-            viewer_status = "new"
-            
-            if self.viewer_memory:
-                try:
-                    viewer_info = self.viewer_memory.get_viewer_info(self.author)
-                    if viewer_info:
-                        viewer_status = viewer_info.get("status", "new")
-                        viewer_context = self.viewer_memory.get_recent_context(self.author, limit=2)
-                except Exception:
-                    pass  # Fallback gracefully
-            
-            # Build AI prompt
-            normalized_author = self.author.replace('.', '').replace('_', '').lower()
+            # 🚀 FAST PLATFORM DETECTION: Simplified detection
             display_author = self.author
-
-            # Deteksi platform dari format nama
-            is_tiktok = (
-                self.author.islower() or
-                ('.' not in self.author and '_' not in self.author and len(self.author) <= 15)
-            )
+            is_tiktok = (self.author.islower() or len(self.author) <= 15)
             platform_context = "TikTok Live" if is_tiktok else "YouTube Live"
 
-            # 🔥 ENHANCED: Build prompt with viewer context
+            # ⚡ OPTIMIZED PROMPT: Simplified prompt building
             prompt = (
                 f"Kamu adalah AI Co-Host yang sedang live streaming {platform_context}. "
-                f"Informasi tentang streamer dan karaktermu: {extra}. "
-                f"Penonton {display_author} (status: {viewer_status}) bertanya: '{self.message}'. "
+                f"Informasi: {extra}. "
+                f"Penonton {display_author} bertanya: '{self.message}'. "
             )
-            
-            # Add viewer context if available
-            if viewer_context:
-                prompt += f"Konteks percakapan sebelumnya: {viewer_context}. "
 
-            # 🔥 ENHANCED: Add context-aware instructions
+            # 🚀 FAST RESPONSE INSTRUCTIONS: Simplified instructions based on type
             if question_type == "greeting":
-                if viewer_status == "vip":
-                    prompt += f"Sapa {self.author} dengan antusias sebagai viewer setia. Ceritakan update terbaru tentang streaming. "
-                elif viewer_status == "regular":  
-                    prompt += f"Sapa {self.author} dengan ramah dan familiar. Tanyakan kabar atau aktivitas terbaru. "
-                else:
-                    prompt += f"Sambut {self.author} dengan hangat sebagai viewer baru. Ceritakan sedikit tentang stream ini. "
+                prompt += f"Sapa {self.author} dengan ramah. "
             elif question_type == "eating":
-                prompt += f"Jawab tentang makan dengan santai. Bisa share pengalaman makanan atau rekomendasi. "
+                prompt += f"Jawab tentang makan dengan santai. "
             elif question_type == "gaming_build":
-                prompt += f"Berikan saran build/item yang practical. Jelaskan singkat kenapa bagus untuk gameplay. "
+                prompt += f"Berikan saran build singkat. "
             elif question_type == "gaming_play":
-                prompt += f"Ceritakan tentang game saat ini - hero, strategy, atau situasi match yang menarik. "
+                prompt += f"Ceritakan tentang game saat ini. "
             else:
-                if viewer_status in ["vip", "regular"]:
-                    prompt += f"Jawab dengan personal touch, mengingat {self.author} adalah penonton aktif. "
-                else:
-                    prompt += f"Jawab informatif dan welcoming untuk menarik engagement viewer baru. "
+                prompt += f"Jawab dengan informatif. "
 
-            # Add response format instructions
+            # ✅ STANDARD FORMAT: Consistent format instructions
             prompt += (
-                f"Awali dengan menyebut nama {self.author} sekali saja di awal kalimat. "
-                f"Jawab dalam {lang_label} dengan maksimal 2 kalimat pendek. "
-                f"Gaya bicara santai seperti streamer pada umumnya. "
-                f"Jangan gunakan emoji, huruf tebal atau tanda baca berlebihan. "
-                f"Pastikan jawaban singkat dan relevan dengan pertanyaan. "
+                f"Awali dengan nama {self.author}. "
+                f"Jawab dalam {lang_label} maksimal 2 kalimat pendek. "
+                f"Gaya santai tanpa emoji berlebihan. "
             )
 
-            # Generate AI reply
+            # 🚀 GENERATE REPLY: Fast AI generation
             try:
+                print(f"[REPLY_THREAD] Calling generate_reply for {self.author}: {self.message}")
                 reply = generate_reply(prompt)
+                print(f"[REPLY_THREAD] generate_reply returned: {reply}")
                 
                 if not reply:
-                    reply = f"Hai {self.author} sorry koneksi lagi bermasalah"
+                    print(f"[REPLY_THREAD] No reply received, using fallback")
+                    reply = f"Hai {self.author} sorry koneksi bermasalah"
                 else:
-                    # 🎯 ENHANCED: Clean reply with comprehensive TTS-friendly cleaning
+                    print(f"[REPLY_THREAD] Processing reply: {reply[:50]}...")
+                    # ⚡ ENHANCED CLEANING: Use clean_text_for_tts function
                     reply = clean_text_for_tts(reply.strip())
                     
                     # Ensure starts with author name
                     if not reply.lower().startswith(self.author.lower()):
                         reply = f"{self.author} {reply}"
                 
-                    # Limit length - increased for better responses
-                    if len(reply) > 300:
-                        # Find natural break point instead of hard cut
-                        last_sentence = reply.rfind('.', 0, 297)
-                        last_comma = reply.rfind(',', 0, 297)
-                        
-                        if last_sentence > 250:  # Good sentence break
-                            reply = reply[:last_sentence + 1]
-                        elif last_comma > 250:  # Good comma break
-                            reply = reply[:last_comma + 1]
-                        else:  # Hard cut as fallback
-                            reply = reply[:297] + "..."
+                    # ⚡ FAST LENGTH LIMIT: Quick truncation
+                    if len(reply) > 250:  # Reduced limit untuk performa
+                        # Find natural break point
+                        last_dot = reply.rfind('.', 0, 247)
+                        if last_dot > 200:
+                            reply = reply[:last_dot + 1]
+                        else:
+                            reply = reply[:247] + "..."
                         
             except Exception as e:
-                reply = f"Hai {self.author} sorry ada error: {str(e)[:50]}..."
+                reply = f"Hai {self.author} sorry ada error teknis"
 
+            print(f"[REPLY_THREAD] About to emit finished signal...")
+            print(f"[REPLY_THREAD] Signal parameters: author={self.author}, message={self.message}, reply={reply[:50]}...")
+            print(f"[REPLY_THREAD] Emitting finished signal now...")
             self.finished.emit(self.author, self.message, reply)
+            print(f"[REPLY_THREAD] ✅ Finished signal emitted successfully!")
             
         except Exception as e:
-            error_reply = f"Hai {self.author} maaf ada error teknis"
+            error_reply = f"Hai {self.author} maaf ada error"
             self.finished.emit(self.author, self.message, error_reply)
 
 # ====================================================================
@@ -279,7 +329,7 @@ class PytchatListenerThread(QThread):
                 if self._is_valid_new_message(msg):
                     # Track message frequency untuk deteksi cache dump
                     current_second = int(current_time)
-                    if not hasattr(self, 'recent_messages_per_second'):
+                    if not safe_attr_check(self, 'recent_messages_per_second'):
                         self.recent_messages_per_second = {}
                     
                     self.recent_messages_per_second[current_second] = self.recent_messages_per_second.get(current_second, 0) + 1
@@ -336,7 +386,7 @@ class PytchatListenerThread(QThread):
                         last_stream_check = current_time
                         
                     # ✅ PERBAIKAN: Deteksi pola pesan cache - jika terlalu banyak pesan berturut-turut
-                    if hasattr(self, 'last_message_time') and self.last_message_time > 0:
+                    if safe_attr_check(self, 'last_message_time') and self.last_message_time > 0:
                         time_since_last_msg = current_time - self.last_message_time
                         
                         # Jika tidak ada pesan baru dalam 2 menit, cek ulang
@@ -348,7 +398,7 @@ class PytchatListenerThread(QThread):
                         # Hapus kode timeout 5 menit di sini - biarkan streamer menghentikan secara manual
                     
                     # ✅ PERBAIKAN BARU: Deteksi flood messages dari cache
-                    if hasattr(self, 'recent_messages_per_second'):
+                    if safe_attr_check(self, 'recent_messages_per_second'):
                         msgs_this_second = self.recent_messages_per_second.get(int(current_time), 0)
                         if msgs_this_second > 20:  # Lebih dari 20 pesan per detik = kemungkinan cache dump
                             suspicious_message_count += 1
@@ -482,6 +532,49 @@ class PytchatListenerThread(QThread):
             # Jika ada error dalam validasi, tetap proses pesan
             return True
 
+    def _stop_lightweight(self):
+        """Lightweight stop untuk startup yang cepat - tanpa blocking operations"""
+        try:
+            # Stop timers only
+            if safe_attr_check(self, 'credit_timer'):
+                self.credit_timer.stop()
+            
+            # Set flags untuk stop threads tanpa wait
+            self.reply_busy = False
+            
+            # Stop threads tanpa wait (non-blocking)
+            if safe_attr_check(self, 'pytchat_listener_thread'):
+                self.pytchat_listener_thread.stop()
+                self.pytchat_listener_thread.quit()
+                # SKIP wait() untuk menghindari blocking
+                self.pytchat_listener_thread = None
+            
+            if safe_attr_check(self, 'tiktok_listener_thread'):
+                self.tiktok_listener_thread.stop()
+                self.tiktok_listener_thread.quit()
+                # SKIP wait() untuk menghindari blocking
+                self.tiktok_listener_thread = None
+            
+            # Terminate process tanpa join
+            if self.yt_listener_process and self.yt_listener_process.is_alive():
+                self.yt_listener_process.terminate()
+                # SKIP join() untuk menghindari blocking
+                self.yt_listener_process = None
+            
+            # Quick cleanup tanpa blocking operations
+            if safe_attr_check(self, 'queue_monitor_thread'):
+                self.queue_monitor_thread.stop()
+                self.queue_monitor_thread = None
+                
+            if safe_attr_check(self, 'log_monitor_thread'):
+                self.log_monitor_thread.stop()
+                self.log_monitor_thread = None
+            
+            self.log_debug("Lightweight stop completed")
+            
+        except Exception as e:
+            self.log_debug(f"Error in lightweight stop: {e}")
+
     def stop(self):
         self.logMessage.emit("INFO", "Stopping enhanced Pytchat listener thread...")
         self._is_running = False
@@ -494,7 +587,7 @@ class PytchatListenerThread(QThread):
         self.skip_old_comments = True
         self.connection_established = False
         self.seen_messages.clear()
-        if hasattr(self, 'recent_messages_per_second'):
+        if safe_attr_check(self, 'recent_messages_per_second'):
             self.recent_messages_per_second.clear()
         self.logMessage.emit("INFO", "🔄 YouTube listener reset - akan skip komentar lama")
 
@@ -577,7 +670,7 @@ class GoogleSTTThread(QThread):
         if self.use_super_direct:
             print(f"[STT] ⚡ Starting SUPER DIRECT Google STT (ZERO overhead)...")
             
-            if hasattr(self, 'super_direct_thread'):
+            if safe_attr_check(self, 'super_direct_thread'):
                 self.super_direct_thread.mic_index = self.mic_index
                 self.super_direct_thread.language = self.language
                 self.super_direct_thread.recording = self.recording
@@ -741,7 +834,7 @@ class GoogleSTTThread(QThread):
     def start_recording(self):
         """Start recording audio"""
         self.recording = True
-        if self.use_super_direct and hasattr(self, 'super_direct_thread'):
+        if self.use_super_direct and safe_attr_check(self, 'super_direct_thread'):
             self.super_direct_thread.recording = True
         if not self.isRunning():
             self.start()
@@ -749,7 +842,7 @@ class GoogleSTTThread(QThread):
     def stop_recording(self):
         """Stop recording audio"""
         self.recording = False
-        if self.use_super_direct and hasattr(self, 'super_direct_thread'):
+        if self.use_super_direct and safe_attr_check(self, 'super_direct_thread'):
             self.super_direct_thread.recording = False
     
     def stop(self):
@@ -841,7 +934,7 @@ class TikTokListenerThread(QThread):
                     time_since_start = current_time - self.autoreply_start_time
                     if time_since_start < self.old_comments_skip_duration:
                         # Skip komentar dalam durasi awal (kemungkinan komentar lama)
-                        self.logMessage.emit("DEBUG", f"⏭️ Skipping old comment from {event.user.nickname if hasattr(event.user, 'nickname') else event.user.unique_id} (startup period)")
+                        self.logMessage.emit("DEBUG", f"⏭️ Skipping old comment from {event.user.nickname if safe_attr_check(event.user, 'nickname') else event.user.unique_id} (startup period)")
                         return
                     else:
                         # Setelah durasi skip, matikan flag dan mulai proses normal
@@ -849,7 +942,7 @@ class TikTokListenerThread(QThread):
                             self.skip_old_comments = False
                             self.logMessage.emit("INFO", f"✅ Auto-reply sekarang aktif untuk komentar baru!")
                     
-                author = event.user.nickname if hasattr(event.user, 'nickname') else str(event.user.unique_id)
+                author = event.user.nickname if safe_attr_check(event.user, 'nickname') else str(event.user.unique_id)
                 message = event.comment
                 
                 # Avoid duplicates dengan timestamp yang lebih akurat
@@ -948,57 +1041,38 @@ class CohostTabBasic(QWidget):
             self.log_debug(f"Failed to initialize auto cache manager: {e}")
             self.auto_cache_manager = None
         
-        # Process management
-        self.pytchat_listener_thread = None # DEFINITIVE: Replaces self.proc
-        self.tiktok_thread = None
+        # Process management - consolidated
+        self.pytchat_listener_thread = None
+        self.tiktok_listener_thread = None
+        self.tiktok_thread = None  # Legacy compatibility
+        self.stt_thread = None
         self.threads = []
         
-        # State management
+        # State management - consolidated
         self.reply_queue = []
         self.reply_busy = False
         self.processing_batch = False
         self.batch_counter = 0
         self.tts_active = False
         self.recent_messages = []
-        
-        # Enhanced listener threads
-        self.pytchat_listener_thread = None
-        self.tiktok_listener_thread = None
-        
-        # Streamer communication
-        self.stt_thread = None
+        self.is_in_cooldown = False
         self.conversation_active = False
         self.hotkey_enabled = True
-        self.tiktok_thread = None  # Legacy compatibility
         
-        # Settings
+        # Settings - consolidated from config
         self.cooldown_duration = 10
         self.max_queue_size = 5
-        self.is_in_cooldown = False
-        self.reply_delay = 3000  # 3 detik
+        self.reply_delay = 3000
         self.batch_size = 3
         self.message_history_limit = 10
         self.daily_message_limit = self.cfg.get("daily_message_limit", 5)
-
-        # TAMBAHAN: Cooldown settings dari config
-        self.viewer_cooldown_minutes = self.cfg.get("viewer_cooldown_minutes", 3) * 60  # Convert ke detik
-        self.viewer_daily_limit = self.cfg.get("viewer_daily_limit", 5)     
-        
-        # 🔧 Topic cooldown settings
-        self.topic_cooldown_minutes = self.cfg.get("topic_cooldown_minutes", 10) * 60  # Convert to seconds
+        self.viewer_cooldown_minutes = self.cfg.get("viewer_cooldown_minutes", 3) * 60
+        self.viewer_daily_limit = self.cfg.get("viewer_daily_limit", 5)
+        self.topic_cooldown_minutes = self.cfg.get("topic_cooldown_minutes", 10) * 60
         self.topic_blocking_enabled = self.cfg.get("enable_topic_blocking", True)
-
-        # Hotkey settings
-        self.hotkey_enabled = True
-        self.conversation_active = False
-        self.stt_thread = None
         
-        # Filter statistics
-        self.filter_stats = {
-            "toxic": 0, "short": 0, "emoji": 0, "spam": 0, "numeric": 0
-        }
-
-        # TAMBAHAN: Daily interactions tracking per viewer
+        # Tracking data - consolidated
+        self.filter_stats = {"toxic": 0, "short": 0, "emoji": 0, "spam": 0, "numeric": 0}
         self.viewer_daily_interactions = {}
         self.viewer_cooldowns = {}
         self.spam_threshold_hours = 24
@@ -1012,9 +1086,10 @@ class CohostTabBasic(QWidget):
         self.batch_timer.setSingleShot(True)
         self.batch_timer.timeout.connect(self._process_next_in_batch)
         
-        self.usage_timer = QTimer()
-        self.usage_timer.setInterval(60_000)
-        self.usage_timer.timeout.connect(self._track_usage)
+        # DISABLED: Heavy usage timer that causes performance issues
+        # self.usage_timer = QTimer()
+        # self.usage_timer.setInterval(60_000)
+        # self.usage_timer.timeout.connect(self._track_usage)
         
         # Credit tracking - FIXED: Replace undefined class
         class SimpleHourTracker:
@@ -1058,17 +1133,24 @@ class CohostTabBasic(QWidget):
         self.log_user("🎙️ Streamer communication ready! Hold hotkey to talk with AI CoHost.", "✅")
 
     def log_user(self, message, icon="ℹ️"):
-        """Log pesan untuk user dengan format yang konsisten - PERBAIKAN UI DISPLAY"""
+        """Log pesan untuk user dengan format yang konsisten - ROBUST DIRECT UPDATE"""
+        from datetime import datetime
+        
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] {icon} {message}"
         
-        # ✅ PERBAIKAN UTAMA: Tampilkan di UI log_view 
-        if hasattr(self, 'log_view'):
-            self.log_view.append(formatted_message)
-            # Auto-scroll ke bawah jika ada log baru
-            self.log_view.ensureCursorVisible()
+        # 🔧 FIX: Direct update with minimal processing to prevent issues
+        try:
+            if hasattr(self, 'log_view') and self.log_view is not None:
+                # Direct append without complex queuing
+                self.log_view.append(formatted_message)
+                self.log_view.ensureCursorVisible()
+            else:
+                print(f"[WARNING] log_view not available: {formatted_message}")
+        except Exception as e:
+            print(f"[ERROR] Failed to update UI: {e}")
         
-        # Juga print ke terminal untuk debugging
+        # Always print to terminal for debugging
         print(f"[{timestamp}] [CoHost] {message}")
 
     def log_debug(self, message):
@@ -1085,8 +1167,53 @@ class CohostTabBasic(QWidget):
         """Log error ke terminal dan opsional ke UI."""
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"[{timestamp}] [ERROR] [CoHost] {message}")
-        if show_user and hasattr(self, 'log_view'):
+        if show_user and safe_attr_check(self, 'log_view'):
             self.log_user(f"❌ Error: {message}", "❌")
+
+    
+    def _start_ui_refresh_timer(self):
+        """DISABLED: UI refresh timer to improve performance"""
+        # DISABLED: Periodic UI refresh causes performance issues
+        # try:
+        #     from PyQt6.QtCore import QTimer
+        #     if not hasattr(self, 'ui_refresh_timer'):
+        #         self.ui_refresh_timer = QTimer()
+        #         self.ui_refresh_timer.timeout.connect(self._refresh_ui)
+        #         self.ui_refresh_timer.start(1000)  # Refresh every second
+        #         self.log_debug("UI refresh timer started")
+        # except Exception as e:
+        #     self.log_debug(f"Failed to start UI refresh timer: {e}")
+        pass
+    
+    def _refresh_ui(self):
+        """Periodic UI refresh"""
+        try:
+            from PyQt6.QtCore import QCoreApplication
+            if hasattr(self, 'log_view') and self.log_view:
+                QCoreApplication.processEvents()
+        except Exception as e:
+            pass  # Silent fail for periodic refresh
+
+    
+    def _setup_listener_callback(self):
+        """Setup proper listener callback for real-time display"""
+        def enhanced_callback(author, message):
+            """Enhanced callback that ensures UI display"""
+            try:
+                # Always call _enqueue_lightweight for display
+                self._enqueue_lightweight(author, message)
+            except Exception as e:
+                self.log_debug(f"Callback error: {e}")
+                # Fallback: direct display
+                try:
+                    if not hasattr(self, "comment_counter"):
+                        self.comment_counter = 0
+                    self.comment_counter += 1
+                    self.log_user(f"💬 [{self.comment_counter}] {author}: {message}", "👁️")
+                except Exception as e2:
+                    print(f"Fallback display error: {e2}")
+        
+        return enhanced_callback
 
     def init_ui(self):
         """Initialize UI dengan layout yang proper"""
@@ -2013,21 +2140,12 @@ Current context: Digital products sales expert"""
             if hasattr(main_window, 'license_validator') and main_window.license_validator.testing_mode:
                 return True
             
-            # Check current credit balance from Supabase
+            # Check current credit balance using simple credit tracker
             try:
-                email = self.cfg.get("user_data", {}).get("email", "")
-                if email:
-                    supabase = SupabaseClient()
-                    credit_data = supabase.get_credit_balance(email)
-                    if credit_data and credit_data.get("status") == "success":
-                        data = credit_data.get("data", {})
-                        current_credits = float(data.get("wallet_balance", 0))
-                    else:
-                        current_credits = 0
-                else:
-                    current_credits = 0
+                from modules_server.real_credit_tracker import get_current_credit_balance
+                current_credits = get_current_credit_balance()
             except Exception as e:
-                print(f"Error getting credits from Supabase: {e}")
+                print(f"Error getting credits: {e}")
                 current_credits = 0
             
             if current_credits < required_credits:
@@ -2054,7 +2172,7 @@ Current context: Digital products sales expert"""
     def load_voices(self):
         """Load suara yang tersedia untuk CoHost berdasarkan bahasa"""
         try:
-            if not hasattr(self, 'voice_cb'):
+            if not safe_attr_check(self, 'voice_cb'):
                 print("[WARNING] voice_cb not initialized yet")
                 return
                 
@@ -2078,7 +2196,7 @@ Current context: Digital products sales expert"""
                 print(f"[DEBUG] Using fallback voice loading method")
                 voices_path = Path("config/voices.json")
                 voices_data = json.loads(voices_path.read_text(encoding="utf-8"))
-            lang = self.out_lang.currentText() if hasattr(self, 'out_lang') else "Indonesia"
+            lang = self.out_lang.currentText() if safe_attr_check(self, 'out_lang') else "Indonesia"
             
             # Basic mode menggunakan gTTS standard voices
             if lang == "Indonesia":
@@ -2116,7 +2234,7 @@ Current context: Digital products sales expert"""
         except Exception as e:
             print(f"[ERROR] Load voices failed: {e}")
             # Emergency fallback
-            if hasattr(self, 'voice_cb'):
+            if safe_attr_check(self, 'voice_cb'):
                 self.voice_cb.clear()
                 self.voice_cb.addItem("Default Voice", "default")
 
@@ -2218,7 +2336,7 @@ Current context: Digital products sales expert"""
         current_time = time.time()
         
         # Inisialisasi tracker jika belum ada
-        if not hasattr(self, 'author_last_time'):
+        if not safe_attr_check(self, 'author_last_time'):
             self.author_last_time = {}
         
         last_time = self.author_last_time.get(author_lower, 0)
@@ -2386,7 +2504,7 @@ Current context: Digital products sales expert"""
                     break
         
         # FILTER 4: Batasi frekuensi per author dengan cooldown custom
-        if not hasattr(self, 'author_last_time'):
+        if not safe_attr_check(self, 'author_last_time'):
             self.author_last_time = {}
 
         author_lower = author.lower().strip()
@@ -2571,7 +2689,7 @@ Current context: Digital products sales expert"""
 
         # Hitung berapa yang sedang diblock
         blocked_count = 0
-        if hasattr(self, 'viewer_daily_interactions'):
+        if safe_attr_check(self, 'viewer_daily_interactions'):
             current_time = time.time()
             for author, data in self.viewer_daily_interactions.items():
                 if data.get("blocked_until", 0) > current_time:
@@ -2580,7 +2698,7 @@ Current context: Digital products sales expert"""
             self.viewer_daily_interactions.clear()
 
         # Reset old system juga jika ada
-        if hasattr(self, 'viewer_cooldowns'):
+        if safe_attr_check(self, 'viewer_cooldowns'):
             blocked_count += sum(1 for data in self.viewer_cooldowns.values() if data.get("blocked_until", 0) > time.time())
             self.viewer_cooldowns.clear()
             self.log_view.append(f"[RESET] {blocked_count} spam blocks removed, all viewers can ask questions again")
@@ -2693,20 +2811,15 @@ Current context: Digital products sales expert"""
                 self.log_user("❌ Insufficient credits for streamer communication", "💳")
                 return
             
-            # Deduct credits for STT usage - FIXED: Use Supabase
+            # Deduct credits for STT usage - Simplified tracking
             try:
-                from modules_client.supabase_client import SupabaseClient
-                supabase = SupabaseClient()
+                from modules_server.real_credit_tracker import deduct_credits
                 email = self.cfg.get("user_data", {}).get("email", "")
                 if email:
-                    supabase.deduct_credits(
-                        email=email,
-                        amount=stt_cost,
-                        description="Streamer Communication (Google STT)"
-                    )
-                self.log_user(f"💳 STT Cost: {stt_cost} credits deducted", "📊")
+                    deduct_credits(email, stt_cost, "STT", "Streamer Communication (Google STT)")
+                self.log_user(f"💳 Basic Mode STT Cost: {stt_cost} credits deducted", "📊")
             except Exception as e:
-                self.log_error(f"STT credit deduction failed: {e}")
+                self.log_error(f"Basic Mode STT credit deduction failed: {e}")
             
         except Exception as e:
             self.log_error(f"Credit deduction failed: {e}")
@@ -2780,20 +2893,15 @@ Current context: Digital products sales expert"""
                 self.log_error(f"AI generation failed: {ai_error}")
                 reply = "Maaf, ada masalah dengan AI response"
             
-            # Deduct credits for AI usage - FIXED: Use Supabase
+            # Deduct credits for AI usage - Simplified tracking
             try:
-                from modules_client.supabase_client import SupabaseClient
-                supabase = SupabaseClient()
+                from modules_server.real_credit_tracker import deduct_credits
                 email = self.cfg.get("user_data", {}).get("email", "")
                 if email:
-                    supabase.deduct_credits(
-                        email=email,
-                        amount=ai_cost,
-                        description="Streamer AI Response"
-                    )
-                self.log_user(f"💳 AI Cost: {ai_cost} credits deducted", "📊")
+                    deduct_credits(email, ai_cost, "AI", "Streamer AI Response")
+                self.log_user(f"💳 Basic Mode AI Cost: {ai_cost} credits deducted", "📊")
             except Exception as credit_error:
-                self.log_error(f"AI credit deduction failed: {credit_error}")
+                self.log_error(f"Basic Mode AI credit deduction failed: {credit_error}")
             
             # 🔥 ENHANCED: Prepare text for TTS using new method
             tts_reply = self._prepare_text_for_tts(reply)
@@ -2833,20 +2941,15 @@ Current context: Digital products sales expert"""
                         self.log_error(f"Backup TTS also failed: {backup_error}")
                         # Continue without TTS rather than crashing
                 
-                # Deduct TTS credits after successful completion - FIXED: Use Supabase
+                # Deduct TTS credits after successful completion - Simplified tracking
                 try:
-                    from modules_client.supabase_client import SupabaseClient
-                    supabase = SupabaseClient()
+                    from modules_server.real_credit_tracker import deduct_credits
                     email = self.cfg.get("user_data", {}).get("email", "")
                     if email:
-                        supabase.deduct_credits(
-                            email=email,
-                            amount=tts_cost,
-                            description="Streamer TTS Response"
-                        )
-                    self.log_user(f"💳 TTS Cost: {tts_cost} credits deducted", "📊")
+                        deduct_credits(email, tts_cost, "TTS", "Streamer TTS Response")
+                    self.log_user(f"💳 Basic Mode TTS Cost: {tts_cost} credits deducted", "📊")
                 except Exception as tts_credit_error:
-                    self.log_error(f"TTS credit deduction failed: {tts_credit_error}")
+                    self.log_error(f"Basic Mode TTS credit deduction failed: {tts_credit_error}")
                 
                 self.log_user("✅ AI response delivered", "🔊")
                 
@@ -2923,198 +3026,71 @@ Current context: Digital products sales expert"""
         return "general"
     
     def _build_indonesian_prompt(self, original_text, cohost_name, personality, custom_context, intent):
-        """Build contextual Indonesian prompt based on intent"""
+        """⚡ SIMPLIFIED: Build streamlined Indonesian prompt"""
         
         base_context = (
-            f"Kamu adalah {cohost_name}, AI Co-Host profesional dengan kepribadian {personality}. "
-            f"PENTING: Yang bicara adalah STREAMER (bos kamu), bukan penonton. "
+            f"Kamu adalah {cohost_name}, AI Co-Host dengan kepribadian {personality}. "
             f"Streamer berkata: \"{original_text}\""
         )
         
         if custom_context:
-            base_context += f"\n\nInformasi streamer: {custom_context}"
+            base_context += f" Info: {custom_context}"
         
-        # Intent-specific responses
-        if intent == "speak_to_viewers":
+        # ⚡ SIMPLIFIED: Only 3 main intent categories
+        if intent in ["speak_to_viewers", "greeting"]:
             instruction = (
-                "\n\nStreamer meminta kamu untuk berbicara langsung ke PENONTON/VIEWERS, bukan ke streamer. "
-                "Respond seolah-olah kamu sedang menyapa atau berbicara langsung dengan audience yang sedang menonton. "
-                "Gunakan kata ganti 'kalian', 'teman-teman', atau 'viewers' untuk menyapa penonton. "
-                "Buat sambutan yang hangat dan mengundang interaksi dari chat."
+                "\n\nBerbicara langsung ke penonton dengan ramah. "
+                "Gunakan 'kalian' atau 'teman-teman' untuk menyapa audience."
             )
-        
-        elif intent == "greeting":
+        elif intent in ["asking_suggestion", "technical", "gaming", "content"]:
             instruction = (
-                "\n\nRespond sebagai AI assistant yang ramah dan supportive. "
-                "Balas sapaan dengan antusias dan tanyakan bagaimana kondisi stream hari ini. "
-                "Berikan semangat untuk streaming session."
+                "\n\nBerikan saran praktis dan berguna. "
+                "Fokus pada solusi yang bisa langsung diterapkan."
             )
-        
-        elif intent == "asking_suggestion":
+        else:  # general, personal, question, request
             instruction = (
-                "\n\nStreamer meminta saran. Berikan rekomendasi yang praktis dan berguna. "
-                "Pertimbangkan audience, waktu streaming, dan trend saat ini. "
-                "Berikan 1-2 saran konkret yang bisa langsung diterapkan."
-            )
-        
-        elif intent == "about_viewers":
-            instruction = (
-                "\n\nStreamer bertanya tentang viewers/penonton. Berikan insight tentang engagement, "
-                "cara berinteraksi dengan audience, atau saran untuk meningkatkan viewer experience. "
-                "Fokus pada tips praktis untuk community building."
-            )
-        
-        elif intent == "technical":
-            instruction = (
-                "\n\nStreamer ada masalah teknis. Berikan solusi praktis dan mudah dipahami. "
-                "Prioritaskan solusi yang cepat dan tidak mengganggu stream. "
-                "Gunakan bahasa yang simpel dan step-by-step jika perlu."
-            )
-        
-        elif intent == "gaming":
-            instruction = (
-                "\n\nTopic tentang gaming. Berikan advice yang relevant tentang gameplay, "
-                "strategi, atau entertainment value untuk viewers. "
-                "Pertimbangkan apa yang menarik untuk ditonton audience."
-            )
-        
-        elif intent == "content":
-            instruction = (
-                "\n\nStreamer membahas konten creation. Berikan saran kreatif dan praktis "
-                "untuk membuat konten yang engaging. Fokus pada ide yang executable "
-                "dan sesuai dengan platform streaming."
-            )
-        
-        elif intent == "personal":
-            instruction = (
-                "\n\nStreamer sharing hal personal. Respond dengan empati dan care. "
-                "Berikan saran yang supportive tentang work-life balance atau self-care. "
-                "Tunjukkan bahwa kamu peduli dengan well-being streamer."
-            )
-        
-        elif intent == "question":
-            instruction = (
-                "\n\nStreamer bertanya. Analisa pertanyaan dengan baik dan berikan jawaban "
-                "yang informatif dan helpful. Jika tidak yakin, katakan akan cari info "
-                "atau minta klarifikasi yang lebih spesifik."
-            )
-        
-        elif intent == "request":
-            instruction = (
-                "\n\nStreamer meminta bantuan. Respond secara proaktif dan helpful. "
-                "Berikan langkah-langkah konkret atau tawari assistance yang relevan. "
-                "Tunjukkan ready to help attitude."
-            )
-        
-        else:  # general
-            instruction = (
-                "\n\nRespond sebagai AI assistant yang supportive dan profesional. "
-                "Pahami konteks dan berikan respon yang relevan dengan situation saat ini. "
-                "Fokus pada membantu kelancaran streaming."
+                "\n\nRespond sebagai AI assistant yang supportive. "
+                "Berikan respon yang relevan dan membantu."
             )
         
         final_instruction = (
-            "\n\nJawab dalam Bahasa Indonesia yang natural dan conversational. "
-            "Maksimal 2 kalimat yang padat dan berguna. Hindari emoji berlebihan. "
-            "Prioritaskan memberikan value dan insight yang membantu streamer."
+            "\n\nJawab dalam Bahasa Indonesia natural, maksimal 2 kalimat. "
+            "Hindari emoji berlebihan."
         )
         
         return base_context + instruction + final_instruction
     
     def _build_english_prompt(self, original_text, cohost_name, personality, custom_context, intent):
-        """Build contextual English prompt based on intent"""
+        """⚡ SIMPLIFIED: Build streamlined English prompt"""
         
         base_context = (
-            f"You are {cohost_name}, a professional AI Co-Host with {personality} personality. "
-            f"IMPORTANT: You're talking to the STREAMER (your boss), not viewers. "
+            f"You are {cohost_name}, AI Co-Host with {personality} personality. "
             f"Streamer said: \"{original_text}\""
         )
         
         if custom_context:
-            base_context += f"\n\nStreamer info: {custom_context}"
+            base_context += f" Info: {custom_context}"
         
-        # Intent-specific responses
-        if intent == "speak_to_viewers":
+        # ⚡ SIMPLIFIED: Only 3 main intent categories
+        if intent in ["speak_to_viewers", "greeting"]:
             instruction = (
-                "\n\nStreamer is asking you to speak directly to the VIEWERS/AUDIENCE, not to the streamer. "
-                "Respond as if you're speaking directly to the audience who are watching. "
-                "Use words like 'everyone', 'guys', 'viewers', or 'chat' to address the audience. "
-                "Create a warm greeting that encourages chat interaction."
+                "\n\nSpeak directly to viewers warmly. "
+                "Use 'everyone', 'guys', or 'chat' to address the audience."
             )
-        
-        elif intent == "greeting":
+        elif intent in ["asking_suggestion", "technical", "gaming", "content"]:
             instruction = (
-                "\n\nRespond as a supportive AI assistant. Reply to the greeting enthusiastically "
-                "and ask about today's streaming session. Give encouragement for the stream."
+                "\n\nProvide practical and useful suggestions. "
+                "Focus on solutions that can be implemented immediately."
             )
-        
-        elif intent == "asking_suggestion":
+        else:  # general, personal, question, request
             instruction = (
-                "\n\nStreamer is asking for suggestions. Provide practical and useful recommendations. "
-                "Consider the audience, streaming time, and current trends. "
-                "Give 1-2 concrete suggestions that can be implemented immediately."
-            )
-        
-        elif intent == "about_viewers":
-            instruction = (
-                "\n\nStreamer is asking about viewers/audience. Provide insights about engagement, "
-                "ways to interact with audience, or suggestions to improve viewer experience. "
-                "Focus on practical tips for community building."
-            )
-        
-        elif intent == "technical":
-            instruction = (
-                "\n\nStreamer has technical issues. Provide practical, easy-to-understand solutions. "
-                "Prioritize quick fixes that won't disrupt the stream. "
-                "Use simple language and step-by-step if needed."
-            )
-        
-        elif intent == "gaming":
-            instruction = (
-                "\n\nTopic is about gaming. Give relevant advice about gameplay, "
-                "strategy, or entertainment value for viewers. "
-                "Consider what would be interesting for the audience to watch."
-            )
-        
-        elif intent == "content":
-            instruction = (
-                "\n\nStreamer is discussing content creation. Provide creative and practical suggestions "
-                "for creating engaging content. Focus on executable ideas "
-                "that fit the streaming platform."
-            )
-        
-        elif intent == "personal":
-            instruction = (
-                "\n\nStreamer is sharing something personal. Respond with empathy and care. "
-                "Give supportive advice about work-life balance or self-care. "
-                "Show that you care about the streamer's well-being."
-            )
-        
-        elif intent == "question":
-            instruction = (
-                "\n\nStreamer is asking a question. Analyze the question carefully and provide "
-                "informative and helpful answers. If unsure, say you'll look for info "
-                "or ask for more specific clarification."
-            )
-        
-        elif intent == "request":
-            instruction = (
-                "\n\nStreamer is asking for help. Respond proactively and helpfully. "
-                "Provide concrete steps or offer relevant assistance. "
-                "Show a ready-to-help attitude."
-            )
-        
-        else:  # general
-            instruction = (
-                "\n\nRespond as a supportive and professional AI assistant. "
-                "Understand the context and give relevant responses to the current situation. "
-                "Focus on helping the stream run smoothly."
+                "\n\nRespond as a supportive AI assistant. "
+                "Give relevant and helpful responses."
             )
         
         final_instruction = (
-            "\n\nAnswer in natural and conversational English. "
-            "Maximum 2 sentences that are concise and useful. Avoid excessive emojis. "
-            "Prioritize providing value and insights that help the streamer."
+            "\n\nAnswer in natural English, maximum 2 sentences. "
+            "Avoid excessive emojis."
         )
         
         return base_context + instruction + final_instruction
@@ -3193,50 +3169,74 @@ Current context: Digital products sales expert"""
         self.log_debug(f"Batch size: 3, Delay: 3s, Cooldown: 10s")
 
         # TAMBAHAN: Reset spam tracking
-        if hasattr(self, 'author_last_time'):
+        if safe_attr_check(self, 'author_last_time'):
             self.author_last_time.clear()
 
-        # 6. CLEANUP EXISTING STATE
-        self.stop() # Use the main stop function for cleanup
+        # 6. CLEANUP EXISTING STATE - OPTIMIZED VERSION
+        self._stop_lightweight() # Use lightweight stop for faster startup
         
         # ✅ PERBAIKAN BARU: Clear PyTchat cache dan reset tracking
         self._clear_pytchat_cache()
         
         # Reset message tracking untuk session baru
-        if hasattr(self, 'recent_messages'):
+        if safe_attr_check(self, 'recent_messages'):
             self.recent_messages.clear()
-        if hasattr(self, 'viewer_daily_interactions'):
+        if safe_attr_check(self, 'viewer_daily_interactions'):
             self.viewer_daily_interactions.clear()
 
         # ✅ PERBAIKAN KRITIKAL: Set reply_busy = True SETELAH cleanup untuk aktivasi auto-reply
         self.reply_busy = True
 
-        # 7. START NEW LISTENER - ENHANCED THREAD-BASED APPROACH
+        # 7. START NEW LISTENER - 🚀 LIGHTWEIGHT APPROACH untuk mengatasi UI freeze
         try:
             if plat == "YouTube":
                 vid = self.cfg.get("video_id", "").strip()
                 if not vid or len(vid) != 11:
                     self.log_error("Invalid YouTube Video ID.")
                     return
+
+                self.log_user("🚀 Starting REAL-TIME YouTube listener...", "⚡")
+
+                # 🚀 REAL-TIME: Pass trigger words and use "All" mode for real-time viewing
+                trigger_words = self.cfg.get("trigger_words", [])
                 
-                if not PyTchatEXEFix.is_available():
-                    self.log_error("Cannot start: Pytchat library not found.")
+                # Import the function properly
+                from listeners.pytchat_listener_lightweight import start_improved_lightweight_pytchat_listener
+                
+                # Use "All" mode to show all comments in real-time, but only respond to triggers
+                # Enhanced callback wrapper for better error handling
+                def enhanced_callback(author, message):
+                    try:
+                        self.log_debug(f"[CALLBACK] Received: {author}: {message}")
+                        # 🔧 FIX: Direct call with proper thread safety using Qt signals
+                        try:
+                            self.log_debug(f"[CALLBACK] Processing directly: {author}: {message}")
+                            self._enqueue_lightweight(author, message)
+                            self.log_debug(f"[CALLBACK] Processing completed: {author}: {message}")
+                        except Exception as e:
+                            self.log_debug(f"[CALLBACK] Processing error: {e}")
+                            import traceback
+                            self.log_debug(f"[CALLBACK] Traceback: {traceback.format_exc()}")
+                        
+                    except Exception as e:
+                        self.log_debug(f"[CALLBACK] Error: {e}")
+                        import traceback
+                        self.log_debug(f"[CALLBACK] Traceback: {traceback.format_exc()}")
+                
+                self.lightweight_listener = start_improved_lightweight_pytchat_listener(
+                    vid, 
+                    enhanced_callback, 
+                    trigger_words=trigger_words,
+                    reply_mode="All"  # Show all comments for real-time viewing
+                )
+                
+                if self.lightweight_listener:
+                    self.log_user("✅ Real-time PyTchat listener started successfully!", "🚀")
+                    self.log_user("⚡ All comments will be displayed in real-time!", "⚡")
+                    self.log_user(f"🎯 Auto-reply active for triggers: {', '.join(trigger_words)}", "🎯")
+                else:
+                    self.log_error("Failed to start lightweight listener")
                     return
-
-                self.log_user("Starting enhanced YouTube listener...", "🚀")
-
-                # Use the enhanced PytchatListenerThread
-                self.pytchat_listener_thread = PytchatListenerThread(vid)
-                
-                # 🔥 PERBAIKAN UTAMA: Reset untuk session baru (YouTube)
-                self.pytchat_listener_thread.reset_for_new_session()
-                
-                self.pytchat_listener_thread.newComment.connect(self._enqueue)
-                self.pytchat_listener_thread.logMessage.connect(self.handle_thread_log)
-                self.pytchat_listener_thread.start()
-
-                self.log_user("✅ Enhanced PyTchat listener started successfully!", "🚀")
-                self.log_user("⏳ Menunggu 3 detik untuk skip komentar lama...", "🔄")
 
             else:  # TikTok
                 nick = self.cfg.get("tiktok_nickname", "").strip()
@@ -3246,7 +3246,7 @@ Current context: Digital products sales expert"""
                 
                 self.log_user(f"Starting TikTok listener for @{nick}...", "🚀")
                 
-                # Use the TikTok listener thread
+                # Use the TikTok listener thread (keep existing for TikTok)
                 self.tiktok_listener_thread = TikTokListenerThread(nick)
                 
                 # 🔥 PERBAIKAN UTAMA: Reset untuk session baru
@@ -3267,7 +3267,7 @@ Current context: Digital products sales expert"""
             return
 
         # 8. SETUP BUFFER CLEANING TIMER
-        if hasattr(self, "buffer_timer"):
+        if safe_attr_check(self, "buffer_timer"):
             self.buffer_timer.stop()
 
         self.buffer_timer = QTimer(self)
@@ -3290,13 +3290,24 @@ Current context: Digital products sales expert"""
                 self.stop()
                 return
 
-            self._track_usage()
-            self.usage_timer.start()
+            # DISABLED: Heavy usage tracking that causes performance issues
+            # self._track_usage()
+            # self.usage_timer.start()
 
         # Final status
-        self.log_user("🤖 Auto-Reply siap! (Process-Based Mode) Menunggu komentar dengan trigger...", "✅")
-        self.status.setText("✅ Auto-Reply Active (Process-Based)")
-        self.log_system("Auto-Reply Basic ready with isolated process.")
+        # ✅ ENHANCED: Initialize comment counter
+        if not hasattr(self, 'comment_counter'):
+            self.comment_counter = 0
+        
+        self.log_user("🤖 Real-time comment viewer active! All comments will be displayed.", "✅")
+        self.log_user("🎯 Auto-Reply will respond only to trigger words.", "🎯")
+        self.log_user("📊 Comment counter initialized. Waiting for comments...", "📈")
+        
+        # ✅ ENHANCED: Start UI refresh timer
+        self._start_ui_refresh_timer()
+        
+        self.status.setText("✅ Real-time Comments Active")
+        self.log_system("Real-time comment viewer ready with AI auto-reply for triggers.")
 
     def _clean_buffer(self):
         """Bersihkan buffer chat lebih efisien"""
@@ -3328,46 +3339,135 @@ Current context: Digital products sales expert"""
             self.log_view.append(f"[WARN] Gagal bersihkan buffer: {e}")
 
     def _clear_pytchat_cache(self):
-        """Clear PyTchat cache dan temporary files untuk memastikan fresh start"""
+        """Clear PyTchat cache dan temporary files untuk memastikan fresh start - OPTIMIZED VERSION"""
         try:
-            import shutil
-            import tempfile
+            # 🚀 PERBAIKAN PERFORMA: Hanya clear file yang benar-benar diperlukan
+            # Tidak lagi melakukan shutil.rmtree yang berat
             
-            # Clear common PyTchat cache locations
-            cache_dirs = [
-                Path.home() / ".cache" / "pytchat",
-                Path(tempfile.gettempdir()) / "pytchat", 
-                Path("temp") / "pytchat_cache",
-                Path("cache") / "pytchat"
-            ]
-            
-            for cache_dir in cache_dirs:
-                if cache_dir.exists():
-                    try:
-                        shutil.rmtree(cache_dir)
-                        self.log_debug(f"Cleared cache: {cache_dir}")
-                    except Exception as e:
-                        self.log_debug(f"Failed to clear cache {cache_dir}: {e}")
-            
-            # Clear local buffer files
+            # Clear hanya buffer files yang kecil
             buffer_files = [
                 CHAT_BUFFER,
                 Path("temp") / "chat_history.json",
                 Path("temp") / "message_buffer.txt"
             ]
             
+            cleared_count = 0
             for buffer_file in buffer_files:
                 if buffer_file.exists():
                     try:
                         buffer_file.unlink()
-                        self.log_debug(f"Cleared buffer: {buffer_file}")
+                        cleared_count += 1
                     except Exception as e:
                         self.log_debug(f"Failed to clear buffer {buffer_file}: {e}")
-                        
-            self.log_user("🧹 PyTchat cache cleared for new session", "🗑️")
+            
+            if cleared_count > 0:
+                self.log_debug(f"Cleared {cleared_count} buffer files")
+            
+            # 🚀 SKIP operasi berat shutil.rmtree untuk cache directories
+            # Cache akan dibersihkan secara natural oleh PyTchat
+            
+            # Jalankan pembersihan cache berat di background thread
+            self._clear_pytchat_cache_async()
             
         except Exception as e:
-            self.log_debug(f"Error clearing PyTchat cache: {e}")
+            self.log_debug(f"Error clearing buffers: {e}")
+
+    def _clear_pytchat_cache_async(self):
+        """Clear PyTchat cache secara asinkron untuk tidak blocking UI"""
+        def clear_cache_worker():
+            try:
+                import shutil
+                import tempfile
+                
+                # Clear common PyTchat cache locations di background
+                cache_dirs = [
+                    Path.home() / ".cache" / "pytchat",
+                    Path(tempfile.gettempdir()) / "pytchat", 
+                    Path("temp") / "pytchat_cache",
+                    Path("cache") / "pytchat"
+                ]
+                
+                for cache_dir in cache_dirs:
+                    if cache_dir.exists():
+                        try:
+                            shutil.rmtree(cache_dir)
+                        except Exception:
+                            pass  # Silent fail untuk background operation
+                            
+            except Exception:
+                pass  # Silent fail untuk background operation
+        
+        # Jalankan di thread terpisah
+        from threading import Thread
+        cache_thread = Thread(target=clear_cache_worker, daemon=True)
+        cache_thread.start()
+
+    def _is_process_active(self):
+        """Helper method to check if yt_listener_process is active"""
+        return (safe_attr_check(self, 'yt_listener_process') and 
+                self.yt_listener_process and 
+                self.yt_listener_process.is_alive())
+
+    def _stop_lightweight(self):
+        """🚀 LIGHTWEIGHT: Stop untuk startup yang cepat - tanpa blocking operations"""
+        try:
+            # Stop timers only
+            if safe_attr_check(self, 'credit_timer'):
+                self.credit_timer.stop()
+            
+            # Set flags untuk stop threads tanpa wait
+            self.reply_busy = False
+            
+            # ⚡ FAST: Stop lightweight listener
+            if safe_attr_check(self, 'lightweight_listener') and self.lightweight_listener:
+                try:
+                    self.lightweight_listener.stop()
+                    self.lightweight_listener = None
+                    self.log_debug("Lightweight listener stopped")
+                except Exception as e:
+                    self.log_debug(f"Error stopping lightweight listener: {e}")
+            
+            # ⚡ FAST: Stop lightweight threads
+            if safe_attr_check(self, 'lightweight_threads'):
+                for thread in self.lightweight_threads:
+                    if thread.isRunning():
+                        thread.quit()
+                        thread.wait(100)  # Quick wait
+                self.lightweight_threads.clear()
+                self.log_debug("Lightweight threads stopped")
+            
+            # Stop threads tanpa wait (non-blocking)
+            if safe_attr_check(self, 'pytchat_listener_thread'):
+                self.pytchat_listener_thread.stop()
+                self.pytchat_listener_thread.quit()
+                # SKIP wait() untuk menghindari blocking
+                self.pytchat_listener_thread = None
+            
+            if safe_attr_check(self, 'tiktok_listener_thread'):
+                self.tiktok_listener_thread.stop()
+                self.tiktok_listener_thread.quit()
+                # SKIP wait() untuk menghindari blocking
+                self.tiktok_listener_thread = None
+            
+            # Terminate process tanpa join
+            if self._is_process_active():
+                self.yt_listener_process.terminate()
+                # SKIP join() untuk menghindari blocking
+                self.yt_listener_process = None
+            
+            # Quick cleanup tanpa blocking operations
+            if safe_attr_check(self, 'queue_monitor_thread'):
+                self.queue_monitor_thread.stop()
+                self.queue_monitor_thread = None
+                
+            if safe_attr_check(self, 'log_monitor_thread'):
+                self.log_monitor_thread.stop()
+                self.log_monitor_thread = None
+            
+            self.log_debug("Lightweight stop completed")
+            
+        except Exception as e:
+            self.log_debug(f"Error in lightweight stop: {e}")
 
     def stop(self):
         """Stop all running background processes and threads."""
@@ -3375,11 +3475,11 @@ Current context: Digital products sales expert"""
         self.status.setText("⏹️ Stopped")
         
         # Stop credit timer
-        if hasattr(self, 'credit_timer'):
+        if safe_attr_check(self, 'credit_timer'):
             self.credit_timer.stop()
 
         # Stop enhanced pytchat listener thread
-        if hasattr(self, 'pytchat_listener_thread') and self.pytchat_listener_thread:
+        if safe_attr_check(self, 'pytchat_listener_thread'):
             self.pytchat_listener_thread.stop()
             self.pytchat_listener_thread.quit()
             self.pytchat_listener_thread.wait(3000)
@@ -3387,13 +3487,13 @@ Current context: Digital products sales expert"""
             self.log_user("Enhanced PyTchat listener stopped", "⏹️")
 
         # Stop queue monitoring threads (legacy)
-        if hasattr(self, 'queue_monitor_thread') and self.queue_monitor_thread:
+        if safe_attr_check(self, 'queue_monitor_thread'):
             self.queue_monitor_thread.stop()
             self.queue_monitor_thread.quit()
             self.queue_monitor_thread.wait(1000)
             self.queue_monitor_thread = None
         
-        if hasattr(self, 'log_monitor_thread') and self.log_monitor_thread:
+        if safe_attr_check(self, 'log_monitor_thread'):
             self.log_monitor_thread.stop()
             self.log_monitor_thread.quit()
             self.log_monitor_thread.wait(1000)
@@ -3416,7 +3516,7 @@ Current context: Digital products sales expert"""
             self.log_queue.join_thread()
         
         # Stop TikTok listener thread
-        if hasattr(self, 'tiktok_listener_thread') and self.tiktok_listener_thread:
+        if safe_attr_check(self, 'tiktok_listener_thread'):
             self.tiktok_listener_thread.stop()
             self.tiktok_listener_thread.quit()
             self.tiktok_listener_thread.wait(3000)
@@ -3436,11 +3536,27 @@ Current context: Digital products sales expert"""
 
     def closeEvent(self, event: QCloseEvent):
         """Ensure threads are cleaned up on window close."""
-        self.log_debug("CohostTab close event triggered. Stopping threads.")
-        # 🔧 Clean up all reply threads first
-        self._cleanup_all_threads()
-        self.stop()
-        super().closeEvent(event)
+        try:
+            print("[FORCE-CLOSE-DEBUG] CohostTab closeEvent triggered")
+            self.log_debug("[FORCE-CLOSE-DEBUG] CohostTab close event triggered. Stopping threads.")
+            
+            # 🔧 Clean up all reply threads first
+            print("[FORCE-CLOSE-DEBUG] Cleaning up reply threads...")
+            self._cleanup_all_threads()
+            
+            # Stop all processes
+            print("[FORCE-CLOSE-DEBUG] Stopping all processes...")
+            self.stop()
+            
+            print("[FORCE-CLOSE-DEBUG] CohostTab closeEvent completed successfully")
+            super().closeEvent(event)
+            
+        except Exception as e:
+            print(f"[FORCE-CLOSE-DEBUG] Error in CohostTab closeEvent: {e}")
+            import traceback
+            print(f"[FORCE-CLOSE-DEBUG] Traceback: {traceback.format_exc()}")
+            # Force accept event even if cleanup fails
+            event.accept()
 
     def handle_thread_log(self, level, message):
         """Receives log messages from the listener thread."""
@@ -3455,15 +3571,43 @@ Current context: Digital products sales expert"""
         """Check if message contains any trigger word"""
         message_lower = message.lower().strip()
         trigger_words = self.cfg.get("trigger_words", [])
+        
+        # Debug logging untuk troubleshooting
+        self.log_debug(f"[TRIGGER-DEBUG] Original message: '{message}'")
+        self.log_debug(f"[TRIGGER-DEBUG] Cleaned message: '{message_lower}'")
+        self.log_debug(f"[TRIGGER-DEBUG] Trigger words from config: {trigger_words}")
+        self.log_debug(f"[TRIGGER-DEBUG] Config type: {type(trigger_words)}")
 
         if not trigger_words:
             trigger_word = self.cfg.get("trigger_word", "").lower().strip()
+            self.log_debug(f"[TRIGGER-DEBUG] Using single trigger_word: '{trigger_word}'")
             if trigger_word and trigger_word in message_lower:
+                self.log_debug(f"[TRIGGER-DEBUG] ✅ Single trigger matched: '{trigger_word}'")
+                self.log_user(f"🎯 TRIGGER DETECTED: '{trigger_word}' in '{message}'", "🔔")
                 return True
         else:
-            for trigger in trigger_words:
-                if trigger.lower() in message_lower:
+            self.log_debug(f"[TRIGGER-DEBUG] Checking {len(trigger_words)} trigger words...")
+            for i, trigger in enumerate(trigger_words):
+                trigger_clean = str(trigger).lower().strip()
+                self.log_debug(f"[TRIGGER-DEBUG] [{i+1}] Checking trigger: '{trigger_clean}' in '{message_lower}'")
+                
+                # Enhanced matching: exact word, substring, or fuzzy match
+                if trigger_clean and (
+                    trigger_clean in message_lower or 
+                    any(word.startswith(trigger_clean) for word in message_lower.split()) or
+                    any(trigger_clean in word for word in message_lower.split()) or
+                    # Fuzzy matching for similar words (like "ketua" in "ketuwa")
+                    any(abs(len(word) - len(trigger_clean)) <= 2 and 
+                        sum(c1 != c2 for c1, c2 in zip(word, trigger_clean)) <= 2
+                        for word in message_lower.split() if len(word) >= 3)
+                ):
+                    self.log_debug(f"[TRIGGER-DEBUG] ✅ Trigger matched: '{trigger_clean}'")
+                    self.log_user(f"🎯 TRIGGER DETECTED: '{trigger_clean}' in '{message}'", "🔔")
                     return True
+                else:
+                    self.log_debug(f"[TRIGGER-DEBUG] ❌ No match for: '{trigger_clean}'")
+        
+        self.log_debug(f"[TRIGGER-DEBUG] ❌ No trigger found in message: '{message_lower}'")
         return False
 
     def _prepare_text_for_tts(self, text):
@@ -3516,27 +3660,90 @@ Current context: Digital products sales expert"""
             return cleaned_text
 
     def _save_interaction(self, author, message, reply):
-        """Simpan interaksi ke log dan viewer memory dengan logging yang lebih baik"""
+        """🚀 OPTIMIZED: Simpan interaksi ke local storage dengan async operations"""
         try:
-            # PERBAIKAN: Pastikan folder log ada
-            COHOST_LOG.parent.mkdir(exist_ok=True)
+            # 🚀 PRIMARY STORAGE: Local storage (async, non-blocking)
+            from modules_client.local_viewer_storage import get_local_storage
+            local_storage = get_local_storage()
             
-            # PERBAIKAN: Simpan dengan timestamp untuk tracking yang lebih baik
+            # Analyze sentiment untuk learning
+            sentiment = self._analyze_basic_sentiment(message)
+            
+            # Save to local storage (async)
+            local_storage.save_comment_async(
+                viewer_name=author,
+                message=message,
+                reply=reply,
+                sentiment=sentiment,
+                platform='youtube'
+            )
+            
+            # ✅ LIGHTWEIGHT LOG: Minimal file logging
+            try:
+                COHOST_LOG.parent.mkdir(exist_ok=True)
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                with open(str(COHOST_LOG), "a", encoding="utf-8") as f:
+                    f.write(f"{timestamp}\t{author}\t{message}\t{reply}\n")
+            except Exception:
+                pass  # Silent fail untuk performa
+            
+            # 🚀 OPTIMIZED VIEWER MEMORY: Lightweight update
+            if safe_attr_check(self, 'viewer_memory'):
+                try:
+                    # Simple add interaction tanpa heavy operations
+                    self.viewer_memory.add_interaction(author, message, reply)
+                except Exception:
+                    pass  # Silent fail untuk performa
+            
+            # ✅ UI LOG: Simplified logging
+            self.log_user(f"💾 Saved: {author} → {reply[:30]}...", "📝")
+                
+        except Exception as e:
+            # Fallback ke method lama jika ada error
+            self.log_debug(f"Local storage error, using fallback: {e}")
+            self._save_interaction_fallback(author, message, reply)
+    
+    def _save_interaction_fallback(self, author, message, reply):
+        """Fallback method jika local storage gagal"""
+        try:
+            COHOST_LOG.parent.mkdir(exist_ok=True)
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             with open(str(COHOST_LOG), "a", encoding="utf-8") as f:
                 f.write(f"{timestamp}\t{author}\t{message}\t{reply}\n")
                 
-            # PERBAIKAN: Log ke UI dengan format yang jelas
-            self.log_user(f"💾 Interaction saved: {author} → {reply[:50]}...", "📝")
+            if safe_attr_check(self, 'viewer_memory'):
+                self.viewer_memory.add_interaction(author, message, reply)
+                
+            self.log_user(f"💾 Fallback saved: {author}", "📝")
             
         except Exception as e:
-            self.log_view.append(f"[WARN] Gagal save log: {e}")
-
-        # Update viewer memory
-        if self.viewer_memory:
-            self.viewer_memory.add_interaction(author, message, reply)
+            self.log_debug(f"Fallback save error: {e}")
+    
+    def _analyze_basic_sentiment(self, text):
+        """🚀 FAST: Basic sentiment analysis untuk local storage"""
+        text_lower = text.lower()
+        
+        # Quick positive check
+        if any(word in text_lower for word in ["bagus", "keren", "mantap", "seru", "wow", "love", "good", "great"]):
+            return "positive"
+        
+        # Quick negative check  
+        elif any(word in text_lower for word in ["boring", "bosan", "jelek", "bad", "buruk", "tidak", "ga"]):
+            return "negative"
+        
+        # Quick excited check
+        elif any(word in text_lower for word in ["hype", "excited", "gokil", "epic", "insane"]):
+            return "excited"
+        
+        # Quick question check
+        elif "?" in text or any(word in text_lower for word in ["apa", "what", "gimana", "how"]):
+            return "curious"
+        
+        return "neutral"
 
         # Update recent messages untuk spam prevention
         self.recent_messages.append((author, message))
@@ -3550,12 +3757,31 @@ Current context: Digital products sales expert"""
         except Exception as e:
             self.log_error(f"Error emitting replyGenerated signal: {e}")
 
+    def _handle_reply_immediately(self, author, message, reply):
+        """IMMEDIATE: Handle reply without delays or complex processing"""
+        print(f"[HANDLE_REPLY_IMMEDIATE] ✅ SIGNAL RECEIVED!")
+        print(f"[HANDLE_REPLY_IMMEDIATE] Author: {author}")
+        print(f"[HANDLE_REPLY_IMMEDIATE] Message: {message}")
+        print(f"[HANDLE_REPLY_IMMEDIATE] Reply: {reply[:50]}...")
+        
+        try:
+            print(f"[HANDLE_REPLY_IMMEDIATE] Calling _on_reply...")
+            # Direct call to _on_reply
+            self._on_reply(author, message, reply)
+            print(f"[HANDLE_REPLY_IMMEDIATE] ✅ Successfully processed reply")
+        except Exception as e:
+            print(f"[HANDLE_REPLY_IMMEDIATE] ❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def _on_reply(self, author, message, reply):
         """Handle reply dengan logging dan tracking yang lebih baik"""
         self.log_debug(f"_on_reply called: {author} - {reply}")
+        print(f"[ON_REPLY] Called with author: {author}, message: {message}, reply: {reply}")
 
         if not reply:
             self.log_user("⚠️ Failed to generate reply", "❌")
+            print(f"[ON_REPLY] No reply received, processing next batch")
             QTimer.singleShot(self.reply_delay, self._process_next_in_batch)
             return
 
@@ -3572,8 +3798,8 @@ Current context: Digital products sales expert"""
                 # Track AI usage dengan sistem kredit baru
                 from modules_server.real_credit_tracker import credit_tracker
                 estimated_tokens = len(reply.split()) * 1.3
-                credits_used = credit_tracker.track_ai_usage(int(estimated_tokens), mode="basic")
-                logger.info(f"AI Reply tracked [BASIC]: {len(reply)} chars, ~{estimated_tokens:.0f} tokens = {credits_used:.4f} credits")
+                credits_used = credit_tracker.track_ai_usage(int(estimated_tokens))
+                logger.info(f"AI Reply tracked: {len(reply)} chars, ~{estimated_tokens:.0f} tokens = {credits_used:.4f} credits")
             except Exception as tracking_error:
                 logger.error(f"Error tracking AI usage: {tracking_error}")
                 # Jangan gagalkan reply hanya karena tracking error
@@ -3589,13 +3815,18 @@ Current context: Digital products sales expert"""
             tts_reply = self._prepare_text_for_tts(reply)
             
             # PERBAIKAN: Tampilkan interaction detail dengan format yang jelas
+            print(f"[ON_REPLY] Displaying user message: {author}: {message}")
             self.log_user(f"👤 {author}: {message}", "💬")
+            print(f"[ON_REPLY] Displaying AI reply: {full_reply}")
             self.log_user(f"🤖 AI Reply: {full_reply}", "🎯")
             
             # Update overlay with full text
-            if hasattr(self.window(), "overlay_tab"):
+            if safe_attr_check(self.window(), "overlay_tab"):
                 self.window().overlay_tab.update_overlay(author, full_reply)
+                print(f"[ON_REPLY] Overlay updated")
 
+            print(f"[ON_REPLY] Starting TTS with text: {tts_reply[:50]}...")
+            print(f"[ON_REPLY] TTS text length: {len(tts_reply)} characters")
             self.log_debug(f"Starting TTS...")
             self.ttsAboutToStart.emit()
 
@@ -3603,10 +3834,12 @@ Current context: Digital products sales expert"""
             self.current_reply_char_count = len(tts_reply)
 
             # TTS dengan text yang sudah di-truncate khusus untuk TTS
+            print(f"[ON_REPLY] Calling _do_async_tts...")
             self._do_async_tts(tts_reply)
+            print(f"[ON_REPLY] _do_async_tts called successfully")
 
             # PERBAIKAN: Track activity untuk license tracking
-            print("[USAGE] Activity registered (dummy log)")
+            register_activity("cohost_basic")
 
         except Exception as e:
             self.log_error(f"Error in _on_reply: {e}", show_user=False)
@@ -3626,12 +3859,16 @@ Current context: Digital products sales expert"""
 
     def _do_async_tts(self, text):
         """TTS asynchronous dengan queue control yang ketat"""
+        print(f"[TTS] _do_async_tts called with text: {text[:50]}...")
         import threading
         from PyQt6.QtCore import QTimer
 
         # 🎯 ENHANCED: Clean text for TTS before processing
+        print(f"[TTS] Cleaning text for TTS...")
         cleaned_text = clean_text_for_tts(text)
+        print(f"[TTS] Cleaned text: {cleaned_text[:50]}... (length: {len(cleaned_text)})")
         if not cleaned_text:
+            print(f"[TTS] Text became empty after cleaning, skipping TTS")
             self.log_debug("Text became empty after cleaning, skipping TTS")
             self._handle_tts_complete()
             return
@@ -3639,9 +3876,14 @@ Current context: Digital products sales expert"""
         def tts_worker():
             """Worker function untuk TTS di thread terpisah"""
             try:
+                print(f"[TTS_WORKER] TTS worker started")
                 code = "id-ID" if self.out_lang.currentText() == "Indonesia" else "en-US"
                 voice_model = self.voice_cb.currentData()
 
+                print(f"[TTS_WORKER] Language code: {code}")
+                print(f"[TTS_WORKER] Voice model: {voice_model}")
+                print(f"[TTS_WORKER] Text to speak: {cleaned_text[:50]}...")
+                
                 self.log_debug(f"TTS worker started: {cleaned_text[:30]}...")
                 self.log_debug(f"Using voice from UI: {voice_model}")
 
@@ -3649,17 +3891,21 @@ Current context: Digital products sales expert"""
                 self.tts_active = True
 
                 # Import speak di dalam worker untuk menghindari conflict
+                print(f"[TTS_WORKER] Importing speak function...")
                 from modules_server.tts_engine import speak
 
                 # TTS blocking call, tapi di thread terpisah
                 # PERBAIKAN KRITIKAL: Panggil speak tanpa callback seperti di kode lama yang work
                 # Callback akan ditangani di worker thread setelah speak selesai
+                print(f"[TTS_WORKER] Calling speak function...")
                 speak(cleaned_text, code, voice_model)
+                print(f"[TTS_WORKER] Speak function completed successfully")
                 
                 self.log_debug(f"TTS worker completed")
                 
                 # PERBAIKAN KRITIKAL: Callback ke main thread menggunakan QTimer
                 # Ini adalah kunci dari perbaikan yang bekerja di kode lama
+                print(f"[TTS_WORKER] Scheduling TTS complete callback...")
                 QTimer.singleShot(0, self._handle_tts_complete)
                 
                 self.log_debug(f"TTS worker completed (waiting for callback)")
@@ -3672,15 +3918,18 @@ Current context: Digital products sales expert"""
                 self.tts_active = False
 
         # PERBAIKAN: Cek apakah sedang ada TTS yang berjalan
-        if hasattr(self, 'tts_active') and self.tts_active:
+        if safe_attr_check(self, 'tts_active'):
             self.log_debug("TTS masih berjalan, menunda...")
             # PERBAIKAN: Tunggu lebih lama untuk memastikan TTS sebelumnya selesai
             QTimer.singleShot(1000, lambda: self._do_async_tts(text))
             return
 
         # Jalankan TTS di thread daemon terpisah
+        print(f"[TTS] Creating TTS thread...")
         tts_thread = threading.Thread(target=tts_worker, daemon=True)
+        print(f"[TTS] Starting TTS thread...")
         tts_thread.start()
+        print(f"[TTS] TTS thread started successfully")
 
         self.log_debug(f"TTS thread started for: {text[:30]}...")
 
@@ -3728,7 +3977,7 @@ Current context: Digital products sales expert"""
             self.log_user(f"⏳ Waiting {self.cooldown_duration}s before processing next queue ({queue_size} items)...", "⏱️")
             
             # PERBAIKAN KRITIKAL: Pastikan batch_timer tidak aktif sebelum memulai timer baru
-            if hasattr(self, 'batch_timer') and self.batch_timer.isActive():
+            if safe_timer_check(self, 'batch_timer'):
                 self.batch_timer.stop()
                 
             # Gunakan QTimer.singleShot untuk memastikan timer berjalan dengan benar
@@ -3750,7 +3999,7 @@ Current context: Digital products sales expert"""
         self.tts_active = False
         self.reply_busy = False
 
-        if hasattr(self, 'tts_safety_timer') and self.tts_safety_timer.isActive():
+        if safe_timer_check(self, 'tts_safety_timer'):
             self.tts_safety_timer.stop()
 
         # PERBAIKAN: Tunggu lebih cepat sebelum memproses pesan berikutnya
@@ -3758,7 +4007,7 @@ Current context: Digital products sales expert"""
 
     def _cleanup_spam_tracking(self):
         """Bersihkan data tracking spam yang sudah lama"""
-        if not hasattr(self, 'author_last_time'):
+        if not safe_attr_check(self, 'author_last_time'):
             return
             
         import time
@@ -3777,65 +4026,75 @@ Current context: Digital products sales expert"""
             self.log_view.append(f"[CLEANUP] Removed tracking for {len(expired_authors)} old authors")
 
     def _track_usage(self):
-        """Track usage dengan Supabase credit deduction - pastikan kredit berkurang real-time"""
+        """Track usage dengan FORCE credit deduction - pastikan kredit berkurang real-time"""
         try:
             # Cek apakah debug mode (skip tracking)
             if self.cfg.get("debug_mode", False):
                 self.log_user("Developer Mode: credits not enforced", "🔧")
                 return
             
-            # 🔥 FORCE immediate credit deduction untuk AI dan TTS usage (MODE BASIC)
+            # 🔥 FORCE immediate credit deduction untuk AI dan TTS usage
             tts_chars = getattr(self, 'current_reply_char_count', 100)
             tts_credits = tts_chars * 1.0 / 100    # ✅ DINAIKKAN: 0.2 → 1.0 kredit per 100 karakter (5x lipat)
             ai_credits = 100 * 1.5 / 100          # ✅ DINAIKKAN: 0.3 → 1.5 kredit per 100 token (5x lipat)
             total_credits = tts_credits + ai_credits
             
-            self.log_debug(f"💳 FORCING credit deduction [BASIC]: TTS={tts_credits:.4f}, AI={ai_credits:.4f}, Total={total_credits:.4f}")
+            self.log_debug(f"💳 FORCING credit deduction: TTS={tts_credits:.4f}, AI={ai_credits:.4f}, Total={total_credits:.4f}")
             
-            # Get user email
-            email = self.cfg.get("user_data", {}).get("email", "")
-            if not email:
-                self.log_error("❌ No email found for credit deduction")
-                return
-            
-            # Force TTS deduction via Supabase
+            # Force TTS deduction
             if tts_credits > 0:
-                try:
-                    supabase = SupabaseClient()
-                    tts_success = supabase.deduct_credits(
-                        email=email,
-                        amount=tts_credits,
-                        description=f"TTS processing {tts_chars} characters"
-                    )
-                    if not tts_success or tts_success.get("status") != "success":
-                        self.log_error("❌ TTS credit deduction FAILED!")
-                except Exception as e:
-                    self.log_error(f"❌ TTS credit deduction error: {e}")
+                tts_success = track_usage_with_forced_deduction(
+                    "TTS", 
+                    tts_credits, 
+                    f"TTS processing {tts_chars} characters"
+                )
+                if not tts_success:
+                    self.log_error("❌ TTS credit deduction FAILED!")
             
-            # Force AI deduction via Supabase
+            # Force AI deduction
             if ai_credits > 0:
-                try:
-                    supabase = SupabaseClient()
-                    ai_success = supabase.deduct_credits(
-                        email=email,
-                        amount=ai_credits,
-                        description="AI reply generation (100 tokens)"
-                    )
-                    if not ai_success or ai_success.get("status") != "success":
-                        self.log_error("❌ AI credit deduction FAILED!")
-                except Exception as e:
-                    self.log_error(f"❌ AI credit deduction error: {e}")
+                ai_success = track_usage_with_forced_deduction(
+                    "AI", 
+                    ai_credits, 
+                    "AI reply generation (100 tokens)"
+                )
+                if not ai_success:
+                    self.log_error("❌ AI credit deduction FAILED!")
             
             # Update session stats
-            if not hasattr(self, 'session_usage'):
+            if not safe_attr_check(self, 'session_usage'):
                 self.session_usage = {"tts_chars": 0, "ai_requests": 0, "total_credits_used": 0}
             
             self.session_usage["tts_chars"] += tts_chars
             self.session_usage["ai_requests"] += 1
             self.session_usage["total_credits_used"] += total_credits
             
+            # Get updated usage from credit tracker
+            try:
+                from modules_server.real_credit_tracker import credit_tracker
+                usage = credit_tracker.get_daily_usage()
+            except ImportError:
+                usage = {"total_hours": 0, "limit_hours": 10, "components": {}}
+            used_hours = usage.get("total_hours", 0)
+            limit_hours = usage.get("limit_hours", 10)
+            remaining = limit_hours - used_hours
+            
+            # Log penggunaan saat ini dengan lebih detail
+            components = usage.get("components", {})
+            self.log_user(
+                f"📊 Usage: {used_hours:.2f}/{limit_hours}h "
+                f"(STT: {components.get('stt_seconds', 0):.0f}s, "
+                f"TTS: {components.get('tts_characters', 0)} chars, "
+                f"AI: {components.get('ai_requests', 0)} req)",
+                "📈"
+            )
+            
             # Log session totals
             self.log_debug(f"💰 Session total: {self.session_usage.get('total_credits_used', 0):.4f} credits used")
+            
+            # Warning jika mendekati limit
+            if remaining < 1:  # Kurang dari 1 jam
+                self.log_user(f"⚠️ Remaining time: {remaining:.1f} hours", "⏰")
             
             # Force UI credit update
             self._force_credit_display_update()
@@ -3845,34 +4104,20 @@ Current context: Digital products sales expert"""
             self.log_user("Error in force usage tracking", "⚠️")
 
     def _force_credit_display_update(self):
-        """Force update credit display in UI with latest balance from Supabase"""
+        """Force update credit display in UI with latest balance"""
         try:
-            # Get user email
-            email = self.cfg.get("user_data", {}).get("email", "")
-            if not email:
-                self.log_user("❌ No email found for credit display", "⚠️")
-                return
+            from modules_server.real_credit_tracker import get_current_credit_balance
             
-            # Get fresh balance from Supabase
-            supabase = SupabaseClient()
-            credit_data = supabase.get_credit_balance(email)
+            # Get fresh balance from VPS or local
+            current_balance = get_current_credit_balance()
             
-            if credit_data and credit_data.get("status") == "success":
-                data = credit_data.get("data", {})
-                current_balance = float(data.get("wallet_balance", 0))
-                
-                if current_balance > 0:
-                    self.log_user(f"💰 Current credits: {current_balance:.2f} credits", "💳")
-                else:
-                    self.log_user("❌ Credits depleted! Please top up", "⚠️")
+            if current_balance > 0:
+                self.log_user(f"💰 Current credits: {current_balance:.2f} credits", "💳")
             else:
-                self.log_user("❌ Error getting credit balance", "⚠️")
+                self.log_user("❌ Credits depleted! Please top up", "⚠️")
                 
-        except Exception as e:
-            self.log_error(f"Error updating credit display: {e}")
-            
             # Update any credit display widgets if they exist
-            if hasattr(self, 'credit_label'):
+            if safe_attr_check(self, 'credit_label'):
                 self.credit_label.setText(f"Credits: {current_balance:.2f} credits")
                 
             # Force update profile tab if exists
@@ -3885,7 +4130,7 @@ Current context: Digital products sales expert"""
 
     def show_memory_stats(self):
         """Tampilkan statistik viewer memory"""
-        if not hasattr(self, 'viewer_memory'):
+        if not safe_attr_check(self, 'viewer_memory'):
             self.log_view.append("[ERROR] Viewer memory not available")
             return
         
@@ -3947,20 +4192,32 @@ Current context: Digital products sales expert"""
                     self.log_error(f"Error parsing demo expire date: {e}")
                     return False # Jangan izinkan jika tanggal demo error
 
-            # KASUS 2: Status berbayar (paid atau active)
+            # KASUS 2: Cek paket basic/pro yang aktif (PERBAIKAN UTAMA)
+            basic_package = data.get("basic", {})
+            pro_package = data.get("pro", {})
+            
+            # Jika ada paket basic atau pro yang aktif, izinkan akses
+            if basic_package.get("active", False) or pro_package.get("active", False):
+                if basic_package.get("active", False):
+                    self.log_user("✅ Basic package is active", "🎯")
+                if pro_package.get("active", False):
+                    self.log_user("✅ Pro package is active", "🚀")
+                return True
+
+            # KASUS 3: Status berbayar (paid atau active) dengan kredit
             elif status in ["paid", "active"]:
                 credits = float(data.get("credit_balance", data.get("hours_credit", 0)))
-                if credits >= 50:  # Minimal 50 kredit untuk Basic Mode
+                if credits >= 1:  # Minimal 1 kredit untuk Basic Mode (dikurangi dari 50)
                     self.log_user(f"💰 Credits available: {credits:.1f} credits", "✅")
                     return True
                 elif credits > 0:
-                    QMessageBox.warning(self, "Insufficient Credits", f"You have {credits:.1f} credits, but need at least 50 credits to use Basic Mode.\nPlease purchase more credits to continue.")
+                    QMessageBox.warning(self, "Insufficient Credits", f"You have {credits:.1f} credits, but need at least 1 credit to use Basic Mode.\nPlease purchase more credits to continue.")
                     return False
                 else:
                     QMessageBox.warning(self, "Credits Depleted", "Your credits have been depleted.\nPlease purchase more to continue.")
                     return False
             
-            # KASUS 3: Status lain (pending, expired, dll)
+            # KASUS 4: Status lain (pending, expired, dll)
             else:
                 QMessageBox.warning(self, "Subscription Required", f"Your account status is '{status}'.\nPlease activate a demo or purchase credits to use this feature.")
                 return False
@@ -4024,7 +4281,15 @@ Current context: Digital products sales expert"""
                         # Demo tanpa expire date, tetap lanjutkan
                         return
                 
-                # KASUS 2: Status paid - cek kredit normal
+                # KASUS 2: Cek paket basic/pro yang aktif (PERBAIKAN UTAMA)
+                basic_package = subscription_data.get("basic", {})
+                pro_package = subscription_data.get("pro", {})
+                
+                # Jika ada paket basic atau pro yang aktif, lanjutkan tanpa cek kredit
+                if basic_package.get("active", False) or pro_package.get("active", False):
+                    return  # Paket aktif, lanjutkan auto-reply
+                
+                # KASUS 3: Status paid - cek kredit normal
                 elif status == "paid":
                     hours_credit = float(subscription_data.get("hours_credit", 0))
                     if hours_credit <= 0:
@@ -4042,7 +4307,7 @@ Current context: Digital products sales expert"""
                     elif hours_credit < 1:  # Warning jika kredit rendah
                         self.log_user(f"⚠️ Sisa kredit: {hours_credit:.1f} kredit", "💳")
                 
-                # KASUS 3: Status lainnya - hentikan
+                # KASUS 4: Status lainnya - hentikan
                 else:
                     self.stop()
                     QMessageBox.warning(
@@ -4126,7 +4391,7 @@ Current context: Digital products sales expert"""
     
     def reset_daily_interactions(self):
         """Reset semua interaksi harian dan topic cooldown."""
-        if hasattr(self, 'viewer_daily_interactions'):
+        if safe_attr_check(self, 'viewer_daily_interactions'):
             interaction_count = len(self.viewer_daily_interactions)
             self.viewer_daily_interactions.clear()
             self.log_view.append(f"[RESET] {interaction_count} daily interactions reset")
@@ -4181,7 +4446,61 @@ Current context: Digital products sales expert"""
             logger.error(f"Error checking credit: {e}")
             return False
 
-    def _enqueue(self, author, message):
+    def _enqueue_lightweight(self, author, message):
+        """Process comment untuk lightweight mode dengan validasi minimal."""
+        try:
+            self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] Starting: {author}: {message}")
+            
+            # ✅ FINAL FIX: ALWAYS display ALL comments immediately
+            if not hasattr(self, "comment_counter"):
+                self.comment_counter = 0
+            self.comment_counter += 1
+            
+            self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] Comment counter: {self.comment_counter}")
+
+            # Display comment in UI immediately with enhanced formatting
+            self.log_user(f"💬 [{self.comment_counter}] {author}: {message}", "👁️")
+            self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] UI display called")
+            
+            # Also log to activity log for visibility
+            self.log_debug(f"[REALTIME] Comment #{self.comment_counter} from {author}: {message}")
+
+            # Update status with comment count
+            try:
+                if hasattr(self, "status") and self.status:
+                    self.status.setText(f"✅ Real-time Active | Comments: {self.comment_counter}")
+                    self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] Status updated")
+            except Exception as e:
+                self.log_debug(f"Status update error: {e}")
+
+            # Check for triggers and process auto-reply - OPTIMIZED: Single check
+            trigger_check = self._has_trigger(message)
+            self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] Trigger check result: {trigger_check}")
+            
+            if trigger_check:
+                self.log_user(f"🎯 TRIGGER DETECTED in: {message}", "🔔")
+                self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] Trigger UI display called")
+                
+                # 🔧 OPTIMIZED: Pass trigger result to avoid re-checking
+                try:
+                    self.log_debug(f"[TRIGGER_DIRECT] Starting trigger processing: {author}: {message}")
+                    self._enqueue(author, message, skip_trigger_check=True)
+                    self.log_debug(f"[TRIGGER_DIRECT] Trigger processing completed successfully")
+                except Exception as e:
+                    self.log_debug(f"[TRIGGER_DIRECT] Auto-reply processing error: {e}")
+                    import traceback
+                    self.log_debug(f"[TRIGGER_DIRECT] Traceback: {traceback.format_exc()}")
+            else:
+                self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] No trigger found in: {message}")
+                
+            self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] Completed processing: {author}: {message}")
+                
+        except Exception as e:
+            self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] Critical error: {e}")
+            import traceback
+            self.log_debug(f"[ENQUEUE_LIGHTWEIGHT] Traceback: {traceback.format_exc()}")
+
+    def _enqueue(self, author, message, skip_trigger_check=False):
         """Process comment dengan validasi status langganan yang benar."""
 
         # ✅ PERBAIKAN UTAMA: Validasi timestamp untuk mencegah pesan lama dari cache
@@ -4189,7 +4508,7 @@ Current context: Digital products sales expert"""
         
         # Skip pesan duplikat yang sudah pernah diproses dalam session ini
         message_signature = f"{author}:{message}"
-        if hasattr(self, 'processed_messages_session'):
+        if safe_attr_check(self, 'processed_messages_session'):
             if message_signature in self.processed_messages_session:
                 self.log_debug(f"Skipping duplicate message from session: {author}")
                 return
@@ -4242,10 +4561,13 @@ Current context: Digital products sales expert"""
             self.log_debug(f"Hold-to-talk active, skipping auto-reply")
             return
 
-        # Check trigger words - TETAP DIBUTUHKAN untuk memproses balasan
-        if not self._has_trigger(message):
-            self.log_debug(f"No trigger detected in: {message}")
-            return
+        # Check trigger words - OPTIMIZED: Skip if already checked
+        if not skip_trigger_check:
+            if not self._has_trigger(message):
+                self.log_debug(f"No trigger detected in: {message}")
+                return
+        else:
+            self.log_debug(f"Trigger check skipped - already validated")
 
         self.log_user("✅ Trigger detected! Processing reply...", "🔔")
 
@@ -4318,7 +4640,6 @@ Current context: Digital products sales expert"""
             return
 
         # Register activity saat ada komentar valid
-        print("[USAGE] Activity registered (dummy log)")
         register_activity("cohost_basic")      
         self.log_debug(f"Processing comment from {author}: {message}")
         
@@ -4367,15 +4688,15 @@ Current context: Digital products sales expert"""
                 return
             
             # PERBAIKAN: Cek apakah TTS masih aktif
-            if hasattr(self, 'tts_active') and self.tts_active:
+            if safe_attr_check(self, 'tts_active'):
                 self.log_debug("TTS masih berjalan, menunda proses batch...")
                 # PERBAIKAN: Tunggu lebih lama (1000ms) seperti di kode lama yang sudah work
                 QTimer.singleShot(1000, self._process_next_in_batch)
                 return
             
             # PERBAIKAN: Cek apakah reply_queue ada dan tidak kosong
-            if not hasattr(self, 'reply_queue') or not self.reply_queue or self.batch_counter >= self.batch_size:
-                self.log_debug(f"Ending batch - queue empty: {not hasattr(self, 'reply_queue') or not self.reply_queue}, batch full: {self.batch_counter >= self.batch_size}")
+            if not safe_attr_check(self, 'reply_queue') or self.batch_counter >= self.batch_size:
+                self.log_debug(f"Ending batch - queue empty: {not safe_attr_check(self, 'reply_queue')}, batch full: {self.batch_counter >= self.batch_size}")
                 self._end_batch()
                 return
                 
@@ -4392,7 +4713,7 @@ Current context: Digital products sales expert"""
             except Exception as e:
                 self.log_error(f"Error processing message from queue: {e}")
                 # Coba lanjutkan dengan pesan berikutnya jika masih ada
-                if hasattr(self, 'reply_queue') and self.reply_queue:
+                if safe_attr_check(self, 'reply_queue'):
                     QTimer.singleShot(500, self._process_next_in_batch)
                 else:
                     self._end_batch()
@@ -4432,12 +4753,21 @@ Current context: Digital products sales expert"""
             # ✅ Create thread and connect signals
             reply_thread = ReplyThread(
                 author, message, personality, voice_model, 
-                language_code, lang_out, self.viewer_memory
+                language_code, lang_out
             )
             
-            # ✅ CRITICAL FIX: Connect finished signal properly with lambda to handle the 3 parameters
-            # Menggunakan lambda seperti di kode lama yang sudah work
-            reply_thread.finished.connect(lambda a, m, r: self._on_reply(a, m, r))
+            # ✅ CRITICAL FIX: Direct signal connection with immediate processing
+            print(f"[THREAD_SETUP] Creating signal connection for {author}")
+            
+            # Use direct connection for immediate processing
+            print(f"[THREAD_SETUP] Connecting signal for {author}")
+            reply_thread.finished.connect(self._handle_reply_immediately, Qt.ConnectionType.DirectConnection)
+            print(f"[THREAD_SETUP] Signal connected successfully for {author}")
+            
+            # Store reference to prevent garbage collection
+            if not hasattr(self, '_active_threads'):
+                self._active_threads = []
+            self._active_threads.append(reply_thread)
             
             # ✅ Track thread for cleanup
             if not hasattr(self, 'threads'):
@@ -4447,7 +4777,10 @@ Current context: Digital products sales expert"""
             # ✅ Auto-cleanup tidak diperlukan karena thread ditangani di threads list
             
             # ✅ Start the thread
+            print(f"[THREAD_SETUP] Starting reply thread for {author}")
             reply_thread.start()
+            print(f"[THREAD_SETUP] Reply thread started successfully for {author}")
+            print(f"[THREAD_SETUP] Thread is running: {reply_thread.isRunning()}")
             
             self.log_debug(f"Reply thread started for {author}")
                 
@@ -4463,7 +4796,7 @@ Current context: Digital products sales expert"""
     def _cleanup_reply_thread(self, thread):
         """🔧 Clean up finished reply thread"""
         try:
-            if hasattr(self, 'active_reply_threads') and thread in self.active_reply_threads:
+            if safe_attr_check(self, 'active_reply_threads') and thread in self.active_reply_threads:
                 self.active_reply_threads.remove(thread)
                 self.log_debug(f"Reply thread cleaned up. Active threads: {len(self.active_reply_threads)}")
             
@@ -4478,7 +4811,7 @@ Current context: Digital products sales expert"""
     def _cleanup_all_threads(self):
         """🔧 Clean up all active threads on shutdown"""
         try:
-            if hasattr(self, 'active_reply_threads'):
+            if safe_attr_check(self, 'active_reply_threads'):
                 self.log_debug(f"Cleaning up {len(self.active_reply_threads)} reply threads...")
                 for thread in self.active_reply_threads[:]:  # Copy list to avoid modification during iteration
                     if thread.isRunning():
@@ -4488,304 +4821,6 @@ Current context: Digital products sales expert"""
                 self.log_debug("All reply threads cleaned up")
         except Exception as e:
             self.log_debug(f"Thread cleanup error: {e}")
-
-# ====================================================================
-#  Enhanced Reply Thread with Human-like Learning  
-# ====================================================================
-
-class EnhancedReplyThread(ReplyThread):
-    """Enhanced reply thread with mood awareness and learning"""
-    
-    def __init__(self, author: str, message: str, personality: str, 
-                 voice_model: str, language_code: str, lang_out: str, 
-                 viewer_memory=None, viewer_prefs=None):
-        # Call parent constructor
-        super().__init__(author, message, personality, voice_model, 
-                        language_code, lang_out, viewer_memory)
-        self.viewer_prefs = viewer_prefs or {}
-
-    def run(self):
-        try:
-            # Load configuration
-            cfg = ConfigManager("config/settings.json")
-            extra = cfg.get("custom_context", "").strip()
-            lang_label = "Bahasa Indonesia" if self.lang_out == "Indonesia" else "English"
-
-            # 🔥 ENHANCED: Get comprehensive viewer context
-            viewer_status = "new"
-            viewer_context = ""
-            mood_context = ""
-            learning_context = ""
-            
-            if self.viewer_memory:
-                viewer_info = self.viewer_memory.get_viewer_info(self.author)
-                if viewer_info:
-                    viewer_status = viewer_info.get("status", "new")
-                    viewer_context = self.viewer_memory.get_recent_context(self.author, limit=3)
-                    
-                    # Get mood and sentiment context
-                    current_mood = self.viewer_prefs.get("current_mood", "stable_engagement")
-                    sentiment_trend = self.viewer_prefs.get("sentiment_trend", "neutral")
-                    
-                    mood_context = f"Current viewer mood: {current_mood}, sentiment trend: {sentiment_trend}"
-                    
-                    # Get learning-based preferences
-                    response_style = self.viewer_prefs.get("response_style", {})
-                    preferred_topics = self.viewer_prefs.get("preferred_topics", [])
-                    
-                    if preferred_topics:
-                        learning_context = f"Viewer prefers topics: {', '.join(preferred_topics)}. "
-                    
-                    if response_style.get("length") == "short":
-                        learning_context += "Prefers concise responses. "
-                    elif response_style.get("length") == "long":
-                        learning_context += "Enjoys detailed explanations. "
-
-            # Enhanced message analysis
-            message_lower = self.message.lower()
-            
-            # 🔥 ENHANCED: Multi-dimensional analysis
-            question_type = self._enhanced_intent_detection(message_lower, self.viewer_prefs)
-            
-            # Build AI prompt with human-like context awareness
-            normalized_author = self.author.replace('.', '').replace('_', '').lower()
-            display_author = self.author
-
-            # Enhanced platform detection
-            is_tiktok = (
-                self.author.islower() or
-                ('.' not in self.author and '_' not in self.author and len(self.author) <= 15)
-            )
-            platform_context = "TikTok Live" if is_tiktok else "YouTube Live"
-
-            # 🔥 HUMAN-LIKE PROMPT BUILDING
-            base_prompt = (
-                f"Kamu adalah AI Co-Host yang sangat natural dan manusiawi dalam berkomunikasi. "
-                f"Kamu sedang live streaming {platform_context}. "
-                f"Informasi tentang streamer dan karaktermu: {extra}. "
-                f"Penonton {display_author} (status: {viewer_status}) berkata: '{self.message}'. "
-            )
-            
-            # Add contextual awareness
-            if viewer_context:
-                base_prompt += f"\n\nKonteks percakapan sebelumnya: {viewer_context}"
-            
-            if mood_context:
-                base_prompt += f"\n\nSuasana hati viewer: {mood_context}"
-            
-            if learning_context:
-                base_prompt += f"\n\nPeferensi yang dipelajari: {learning_context}"
-
-            # Enhanced response instructions based on analysis
-            response_instructions = self._build_human_like_instructions(
-                question_type, viewer_status, self.viewer_prefs
-            )
-            
-            base_prompt += response_instructions
-
-            # Generate AI reply with enhanced context
-            try:
-                reply = generate_reply(base_prompt)
-                
-                if not reply:
-                    reply = self._get_fallback_response(display_author, viewer_status)
-                else:
-                    # Enhanced reply processing
-                    reply = self._process_reply_with_learning(reply, self.viewer_prefs)
-                    
-                    # Ensure natural name usage
-                    if not reply.lower().startswith(self.author.lower()):
-                        greeting = self._get_natural_greeting(display_author, viewer_status, self.viewer_prefs)
-                        reply = f"{greeting} {reply}"
-                
-                    # Apply learned response style
-                    reply = self._apply_learned_style(reply, self.viewer_prefs)
-                        
-            except Exception as e:
-                reply = self._get_error_response(display_author, str(e))
-
-            self.finished.emit(self.author, self.message, reply)
-            
-        except Exception as e:
-            error_reply = f"Hai {self.author} maaf ada error teknis"
-            self.finished.emit(self.author, self.message, error_reply)
-
-    def _enhanced_intent_detection(self, message_lower, viewer_prefs):
-        """🔥 Enhanced intent detection using viewer learning data"""
-        
-        # Get preferred topics for context
-        preferred_topics = viewer_prefs.get("preferred_topics", [])
-        current_mood = viewer_prefs.get("current_mood", "stable_engagement")
-        
-        # Basic intent detection
-        if any(word in message_lower for word in ["kabar", "apa kabar", "gimana"]):
-            intent = "greeting"
-        elif any(word in message_lower for word in ["main", "game", "gaming", "rank", "hero"]):
-            intent = "gaming"
-        elif "?" in message_lower:
-            intent = "question"
-        elif any(word in message_lower for word in ["halo", "hai", "hello"]):
-            intent = "greeting"
-        else:
-            intent = "general"
-        
-        # Enhance with mood context
-        if current_mood == "potentially_disengaged" and intent == "general":
-            intent = "re_engagement_needed"
-        elif current_mood == "information_seeking" and intent != "question":
-            intent = "curious_general"
-        elif current_mood == "highly_engaged":
-            intent = f"{intent}_enthusiastic"
-            
-        return intent
-
-    def _build_human_like_instructions(self, intent, viewer_status, viewer_prefs):
-        """Build human-like response instructions based on comprehensive context"""
-        
-        current_mood = viewer_prefs.get("current_mood", "stable_engagement")
-        response_style = viewer_prefs.get("response_style", {})
-        preferred_length = response_style.get("length", "short")  # CHANGED: Default to short
-        
-        base_instruction = "\n\nRESPOND SEPERTI MANUSIA ASLI dengan karakteristik berikut:\n"
-        
-        # Mood-based response style
-        if current_mood == "highly_engaged":
-            base_instruction += "- Tunjukkan antusiasme yang genuine dan energi tinggi\n"
-        elif current_mood == "potentially_disengaged":
-            base_instruction += "- Coba tarik perhatian dengan topik menarik\n"
-        elif current_mood == "information_seeking":
-            base_instruction += "- Berikan informasi yang helpful dan to-the-point\n"
-        
-        # Intent-specific instructions
-        if "enthusiastic" in intent:
-            base_instruction += "- Match energy level viewer yang tinggi\n"
-        elif intent == "re_engagement_needed":
-            base_instruction += "- Buat percakapan yang engaging dan personal\n"
-        
-        # 🔥 FIXED: Always force short responses (100 chars max)
-        base_instruction += "- WAJIB: Jawab SINGKAT maksimal 100 karakter (1 kalimat pendek)\n"
-        base_instruction += "- Hindari penjelasan panjang, fokus pada inti pesan\n"
-        base_instruction += "- Gunakan bahasa casual dan natural\n"
-        
-        # Viewer status context
-        if viewer_status == "new":
-            base_instruction += "- Buat mereka merasa welcome dengan salam singkat\n"
-        elif viewer_status == "vip":
-            base_instruction += "- Tunjukkan appreciation singkat\n"
-        
-        base_instruction += (
-            f"\nJawab dalam {self.lang_out} dengan style natural, conversational, dan SANGAT SINGKAT. "
-            f"PRIORITAS: Jawaban harus under 100 karakter total."
-        )
-        
-        return base_instruction
-
-    def _get_natural_greeting(self, author, status, viewer_prefs):
-        """Get natural greeting based on mood and learned preferences"""
-        current_mood = viewer_prefs.get("current_mood", "stable_engagement")
-        
-        # Mood-aware greetings
-        if current_mood == "highly_engaged":
-            greetings = [f"Woi {author}!", f"Yoo {author}!", f"Halo {author} semangat banget!"]
-        elif current_mood == "potentially_disengaged":
-            greetings = [f"Hey {author}", f"Halo {author}, apa kabar?", f"Hi {author}!"]
-        elif status == "vip":
-            greetings = [f"Wah {author} datang!", f"Halo {author} viewer setia!", f"Yow {author}!"]
-        else:
-            greetings = [f"Halo {author}", f"Hi {author}", f"Hai {author}"]
-        
-        import random
-        return random.choice(greetings)
-
-    def _process_reply_with_learning(self, reply, viewer_prefs):
-        """Process reply using learned patterns - FIXED double reply issue"""
-        
-        # Apply learned improvements
-        response_style = viewer_prefs.get("response_style", {})
-        
-        # 🔥 ENHANCED CLEANING: Fix double reply issue
-        reply = reply.strip()
-        
-        # Remove quotes and brackets
-        reply = re.sub(r'^["\'\[\(]', '', reply)
-        reply = re.sub(r'["\'\]\)]$', '', reply)
-        
-        # 🔥 CRITICAL FIX: Remove duplicate sentences with quotes
-        # Pattern: "sentence1" "sentence2" -> sentence1 sentence2
-        reply = re.sub(r'"([^"]*?)"\s*"([^"]*?)"', r'\1 \2', reply)
-        
-        # Remove line breaks
-        reply = reply.replace('\\n', ' ').replace('\n', ' ')
-        
-        # 🔥 ENHANCED: Remove duplicate author names within reply
-        author_lower = self.author.lower()
-        
-        # Pattern: ARL CRASHZONE ... ARL CRASHZONE -> ARL CRASHZONE ...
-        words = reply.split()
-        cleaned_words = []
-        last_was_author = False
-        
-        for word in words:
-            if word.lower() == author_lower:
-                if not last_was_author:  # Only keep first occurrence
-                    cleaned_words.append(word)
-                    last_was_author = True
-                # Skip subsequent author names
-            else:
-                cleaned_words.append(word)
-                last_was_author = False
-        
-        reply = ' '.join(cleaned_words)
-        
-        # Remove excessive spaces
-        reply = re.sub(r'\s+', ' ', reply).strip()
-        
-        return reply
-
-    def _apply_learned_style(self, reply, viewer_prefs):
-        """Apply learned response style preferences - FIXED to 100 chars max"""
-        
-        # 🔥 FIXED: Force maximum 100 characters for all responses
-        MAX_LENGTH = 100
-        
-        if len(reply) > MAX_LENGTH:
-            # Find natural break points within 100 chars
-            break_points = []
-            
-            # Look for sentence endings first
-            for i in range(min(len(reply), MAX_LENGTH - 10), 0, -1):
-                if reply[i] in '.!?':
-                    break_points.append(i + 1)
-                    break
-            
-            # If no sentence ending, look for comma or space
-            if not break_points:
-                for i in range(min(len(reply), MAX_LENGTH - 5), 0, -1):
-                    if reply[i] in ', ':
-                        break_points.append(i)
-                        break
-            
-            # Apply the cut
-            if break_points:
-                reply = reply[:break_points[0]].rstrip()
-            else:
-                # Hard cut at 95 chars to leave room
-                reply = reply[:95].rstrip()
-        
-        return reply
-
-    def _get_fallback_response(self, author, status):
-        """Get fallback response based on viewer status"""
-        if status == "vip":
-            return f"Hai {author} sorry lagi ada gangguan teknis, gimana kabarnya?"
-        elif status == "regular":
-            return f"Hi {author} ada masalah koneksi nih, tunggu sebentar ya"
-        else:
-            return f"Halo {author} welcome! Lagi ada kendala teknis"
-    
-    def _get_error_response(self, author, error):
-        """Get natural error response"""
-        return f"Hai {author} sorry ada error: {error[:30]}..."
 
 # ====================================================================
 #  DEFINITIVE SOLUTION V2: Isolated Process with Queue Communication

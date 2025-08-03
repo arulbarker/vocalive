@@ -18,17 +18,20 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 class APIClient:
+    """API Client - SUPABASE ONLY MODE"""
+    SUPABASE_ONLY = True
+    VPS_DISABLED = True
     def __init__(self):
         self.cfg = ConfigManager()
-        # FORCE PRODUCTION MODE - Always use VPS server
-        self.base_url = "http://69.62.79.238:8000"
-        print(f"[API] PRODUCTION MODE: Using VPS server: {self.base_url}")
+        # SUPABASE ONLY MODE - No VPS dependencies
+        self.base_url = "supabase_backend"
+        print(f"[API] SUPABASE ONLY MODE: Using Supabase backend")
         
         self.timeout = 30
         
     def _get_server_url(self):
-        """PRODUCTION MODE: Always use VPS server"""
-        return "http://69.62.79.238:8000"
+        """SUPABASE ONLY MODE: Use Supabase backend"""
+        return "supabase_backend"
     
     def _make_request(self, endpoint, data, timeout=None):
         """Make request dengan error handling"""
@@ -44,7 +47,7 @@ class APIClient:
             if self.base_url == "https://api.streammateai.com":
                 # Production server down, fallback ke localhost
                 logger.warning("Production server unavailable, trying localhost...")
-                self.base_url = "http://69.62.79.238:8000"
+                self.base_url = "supabase_backend"
                 return self._make_request(endpoint, data, timeout)
             else:
                 raise
@@ -85,6 +88,11 @@ class APIBridge:
     """Bridge untuk komunikasi dengan Supabase server"""
     
     def __init__(self):
+        # Initialize server URLs first
+        self.vps_server = "supabase_backend"
+        self.local_server = "http://localhost:8888"
+        self.active_server = self._get_active_server()
+        
         # Import Supabase client
         try:
             from modules_client.supabase_client import get_supabase_client
@@ -93,10 +101,7 @@ class APIBridge:
             print("[API] Using Supabase backend")
         except ImportError:
             # Fallback to VPS server if Supabase not available
-            self.vps_server = "http://69.62.79.238:8000"
-            self.local_server = "http://localhost:8888"
             self.use_supabase = False
-            self.active_server = self._get_active_server()
             print("[API] Using VPS backend (fallback)")
         
     def _get_active_server(self):
@@ -152,92 +157,100 @@ def generate_reply(prompt: str, timeout: int = 30) -> str:
         except Exception as e:
             print(f"[API] Supabase AI error: {e}")
     
-    # Method 2: Try VPS API endpoint (fallback)
-    try:
-        print(f"[API] Trying VPS API endpoint...")
-        
-        response = requests.post(
-            f"{api_bridge.active_server}/api/ai/generate",
-            json={"prompt": prompt},
-            timeout=timeout,
-            headers={"Content-Type": "application/json"}
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
+    # Method 2: Try VPS API endpoint (fallback) - SKIP INVALID URLs
+    if api_bridge.active_server and api_bridge.active_server.startswith(("http://", "https://")):
+        try:
+            print(f"[API] Trying VPS API endpoint...")
             
-            # Handle FastAPI response format
-            if result.get("status") == "success" and "data" in result:
-                reply = result["data"].get("reply", "").strip()
-                if reply:
-                    print(f"[API] VPS API success: {len(reply)} chars")
-                    return reply
+            response = requests.post(
+                f"{api_bridge.active_server}/api/ai/generate",
+                json={"prompt": prompt},
+                timeout=timeout,
+                headers={"Content-Type": "application/json"}
+            )
             
-            # Handle old format (fallback)
-            elif "reply" in result:
-                reply = result.get("reply", "").strip()
-                if reply:
-                    print(f"[API] VPS API success (old format): {len(reply)} chars")
-                    return reply
-            
-            print(f"[API] VPS API returned empty reply")
-            
-        else:
-            print(f"[API] VPS API error: {response.status_code}")
-            if response.status_code == 404:
-                print(f"[API] Endpoint /api/ai/generate not found on server")
-            try:
-                error_detail = response.json()
-                print(f"[API] Error detail: {error_detail}")
-            except:
-                print(f"[API] Error response: {response.text[:200]}")
-            
-    except requests.exceptions.RequestException as e:
-        print(f"[API] VPS API request failed: {e}")
-    except Exception as e:
-        print(f"[API] VPS API unexpected error: {e}")
+            if response.status_code == 200:
+                result = response.json()
+                
+                # Handle FastAPI response format
+                if result.get("status") == "success" and "data" in result:
+                    reply = result["data"].get("reply", "").strip()
+                    if reply:
+                        print(f"[API] VPS API success: {len(reply)} chars")
+                        return reply
+                
+                # Handle old format (fallback)
+                elif "reply" in result:
+                    reply = result.get("reply", "").strip()
+                    if reply:
+                        print(f"[API] VPS API success (old format): {len(reply)} chars")
+                        return reply
+                
+                print(f"[API] VPS API returned empty reply")
+                
+            else:
+                print(f"[API] VPS API error: {response.status_code}")
+                if response.status_code == 404:
+                    print(f"[API] Endpoint /api/ai/generate not found on server")
+                try:
+                    error_detail = response.json()
+                    print(f"[API] Error detail: {error_detail}")
+                except:
+                    print(f"[API] Error response: {response.text[:200]}")
+                
+        except requests.exceptions.RequestException as e:
+            print(f"[API] VPS API request failed: {e}")
+        except Exception as e:
+            print(f"[API] VPS API unexpected error: {e}")
+    else:
+        print(f"[API] Skipping VPS API (invalid URL: {api_bridge.active_server})")
     
     # Method 1.5: Try existing /api/ai/reply endpoint as fallback
-    try:
-        print(f"[API] Trying existing /api/ai/reply endpoint...")
-        
-        response = requests.post(
-            f"{api_bridge.active_server}/api/ai/reply",
-            json={"text": prompt},  # Different format for existing endpoint
-            timeout=timeout,
-            headers={"Content-Type": "application/json"}
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
+    if api_bridge.active_server and api_bridge.active_server.startswith(("http://", "https://")):
+        try:
+            print(f"[API] Trying existing /api/ai/reply endpoint...")
             
-            # Handle various response formats
-            reply = ""
-            if "data" in result and isinstance(result["data"], dict):
-                reply = result["data"].get("reply", "").strip()
-            elif "reply" in result:
-                reply = result.get("reply", "").strip()
-            elif "data" in result and isinstance(result["data"], str):
-                reply = result["data"].strip()
+            response = requests.post(
+                f"{api_bridge.active_server}/api/ai/reply",
+                json={"text": prompt},  # Different format for existing endpoint
+                timeout=timeout,
+                headers={"Content-Type": "application/json"}
+            )
             
-            if reply:
-                print(f"[API] Existing endpoint success: {len(reply)} chars")
-                return reply
-            else:
-                print(f"[API] Existing endpoint returned empty reply")
+            if response.status_code == 200:
+                result = response.json()
                 
-        else:
-            print(f"[API] Existing endpoint error: {response.status_code}")
-            
-    except Exception as e:
-        print(f"[API] Existing endpoint error: {e}")
+                # Handle various response formats
+                reply = ""
+                if "data" in result and isinstance(result["data"], dict):
+                    reply = result["data"].get("reply", "").strip()
+                elif "reply" in result:
+                    reply = result.get("reply", "").strip()
+                elif "data" in result and isinstance(result["data"], str):
+                    reply = result["data"].strip()
+                
+                if reply:
+                    print(f"[API] Existing endpoint success: {len(reply)} chars")
+                    return reply
+                else:
+                    print(f"[API] Existing endpoint returned empty reply")
+                    
+            else:
+                print(f"[API] Existing endpoint error: {response.status_code}")
+                
+        except Exception as e:
+            print(f"[API] Existing endpoint error: {e}")
+    else:
+        print(f"[API] Skipping existing endpoint (invalid URL: {api_bridge.active_server})")
     
     # Method 2: Try direct DeepSeek API if local API key available
     try:
         print(f"[API] Trying direct DeepSeek API...")
         
-        # Check if we have local API key
-        deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+        # Check if we have local API key from config or env
+        from modules_client.config_manager import ConfigManager
+        cfg = ConfigManager()
+        deepseek_key = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
         if deepseek_key and len(deepseek_key) > 10:
             print(f"[API] Using local DeepSeek API key...")
             
@@ -265,8 +278,14 @@ def generate_reply(prompt: str, timeout: int = 30) -> str:
                 result = response.json()
                 reply = result["choices"][0]["message"]["content"].strip()
                 if reply:
-                    print(f"[API] Direct DeepSeek success: {len(reply)} chars")
-                    return reply
+                    # Clean reply for safe encoding
+                    try:
+                        reply_clean = reply.encode('utf-8', errors='replace').decode('utf-8')
+                        print(f"[API] Direct DeepSeek success: {len(reply_clean)} chars")
+                        return reply_clean
+                    except Exception as enc_error:
+                        print(f"[API] Encoding fix failed: {enc_error}")
+                        return reply
             else:
                 print(f"[API] Direct DeepSeek error: {response.status_code}")
                 
@@ -281,7 +300,7 @@ def generate_reply(prompt: str, timeout: int = 30) -> str:
     return _get_fallback_response(prompt)
 
 def _get_fallback_response(prompt: str) -> str:
-    """Generate fallback response when AI API fails"""
+    """Generate enhanced fallback response when AI API fails"""
     prompt_lower = prompt.lower()
     
     # Extract author name from prompt if possible
@@ -293,17 +312,81 @@ def _get_fallback_response(prompt: str) -> str:
         if author_match:
             author = author_match.group(1)
     
-    # Simple rule-based responses
-    if any(word in prompt_lower for word in ["halo", "hai", "hello"]):
-        return f"Hai {author}! Maaf lagi ada gangguan koneksi AI"
-    elif any(word in prompt_lower for word in ["kabar", "apa kabar"]):
-        return f"Baik {author}, lagi streaming nih meski ada sedikit lag AI"
-    elif any(word in prompt_lower for word in ["makan", "udah makan"]):
-        return f"Udah makan {author}, sekarang lagi fokus main"
-    elif any(word in prompt_lower for word in ["khodam", "cek"]):
-        return f"{author} khodammu lagi offline kayak AI-nya hehe"
+    # Enhanced rule-based responses for gaming context
+    if any(word in prompt_lower for word in ["halo", "hai", "hello", "hi"]):
+        responses = [
+            f"Hai {author}! Lagi push rank nih, gimana kabarmu?",
+            f"Halo {author}! Welcome to stream, lagi main MOBA nih",
+            f"Hai {author}! Thanks udah join stream, enjoy ya!"
+        ]
+        import random
+        return random.choice(responses)
+    
+    elif any(word in prompt_lower for word in ["kabar", "apa kabar", "gimana"]):
+        responses = [
+            f"Baik {author}! Lagi semangat push rank, kamu gimana?",
+            f"Alhamdulillah baik {author}, lagi fokus main nih",
+            f"Baik dong {author}, lagi grinding rank soalnya hehe"
+        ]
+        import random
+        return random.choice(responses)
+    
+    elif any(word in prompt_lower for word in ["build", "item", "gear", "equipment"]):
+        responses = [
+            f"{author} untuk build sekarang meta damage penetration dulu bro",
+            f"Build {author}? War axe, hunter strike, malefic roar meta banget",
+            f"{author} coba build damage dulu, nanti tank item terakhir"
+        ]
+        import random
+        return random.choice(responses)
+    
+    elif any(word in prompt_lower for word in ["rank", "ranking", "tier", "main"]):
+        responses = [
+            f"{author} lagi push rank nih, target mythic season ini",
+            f"Rank {author}? Lagi di legend, target mythic nih",
+            f"{author} main rank yuk, butuh duo partner nih"
+        ]
+        import random
+        return random.choice(responses)
+    
+    elif any(word in prompt_lower for word in ["hero", "champion", "character"]):
+        responses = [
+            f"{author} hero favorit gue Layla, damage nya gila sih",
+            f"Hero {author}? Coba main marksman, enak buat carry",
+            f"{author} hero meta sekarang assassin sama marksman"
+        ]
+        import random
+        return random.choice(responses)
+    
+    elif any(word in prompt_lower for word in ["makan", "udah makan", "lunch", "dinner"]):
+        responses = [
+            f"Udah makan {author}, sekarang lagi fokus main nih",
+            f"{author} udah makan dong, kamu jangan lupa makan ya",
+            f"Alhamdulillah udah makan {author}, energy full buat main"
+        ]
+        import random
+        return random.choice(responses)
+    
+    elif any(word in prompt_lower for word in ["col", "bang"]):
+        responses = [
+            f"Iya {author}! Ada yang bisa gue bantu?",
+            f"Hai {author}! Gimana ada pertanyaan?",
+            f"Yes {author}! Mau tanya apa nih?"
+        ]
+        import random
+        return random.choice(responses)
+    
     else:
-        return f"Hai {author} sorry AI lagi bermasalah, coba tanya lagi nanti ya"
+        # General responses
+        responses = [
+            f"Hai {author}! Thanks udah nonton stream",
+            f"{author} ada yang mau ditanyain tentang game?",
+            f"Halo {author}! Enjoy streamnya ya, jangan lupa follow",
+            f"{author} gimana pendapat kamu tentang gameplay tadi?",
+            f"Thanks {author}! Semoga terhibur sama streamnya"
+        ]
+        import random
+        return random.choice(responses)
 
 def test_api_connection():
     """Test API connection and return status"""

@@ -32,6 +32,11 @@ from PyQt6.QtCore import QTimer
 # ✅ FIX: Impor fungsi path helper
 from utils.path_util import get_app_data_path
 
+# Utility functions for safe attribute checking
+def safe_attr_check(obj, attr_name):
+    """Check if object has attribute and it's truthy"""
+    return hasattr(obj, attr_name) and getattr(obj, attr_name)
+
 class ProfileTab(QWidget):
     """Tab profil pengguna yang disempurnakan dengan statistik detail."""
     
@@ -603,7 +608,7 @@ class ProfileTab(QWidget):
         self.name_label.setText(name)
         
         # Update field username di tab settings
-        if hasattr(self, "username_edit"):
+        if safe_attr_check(self, "username_edit"):
             self.username_edit.setText(name)
         
         # Email
@@ -611,7 +616,7 @@ class ProfileTab(QWidget):
         self.email_label.setText(email)
         
         # Update email display di tab settings
-        if hasattr(self, "email_display"):
+        if safe_attr_check(self, "email_display"):
             self.email_display.setText(email)
         
         # Last login
@@ -644,7 +649,7 @@ class ProfileTab(QWidget):
         """PERBAIKAN 6: Update tampilan penggunaan dengan fallback yang benar."""
         try:
             # Pastikan semua label sudah terinisialisasi
-            if not hasattr(self, 'hours_credit'):
+            if not safe_attr_check(self, 'hours_credit'):
                 logger.warning("hours_credit label not initialized")
                 return
                 
@@ -808,9 +813,8 @@ class ProfileTab(QWidget):
             
             # Setelah update label kredit:
             try:
-                # Gunakan Supabase untuk cek credit balance
-                from modules_client.supabase_client import SupabaseClient
-                supabase = SupabaseClient()
+                # Gunakan Supabase untuk cek credit balance (use existing instance)
+                supabase = self.supabase
                 email = self.cfg.get("user_data", {}).get("email", "")
                 if email:
                     credit_data = supabase.get_credit_balance(email)
@@ -906,7 +910,7 @@ class ProfileTab(QWidget):
     def load_daily_usage(self):
         """Muat data penggunaan harian dengan fallback yang benar."""
         try:
-            if not hasattr(self, "daily_table"):
+            if not safe_attr_check(self, "daily_table"):
                 return
                 
             # Clear table
@@ -987,7 +991,7 @@ class ProfileTab(QWidget):
     def load_usage_stats(self):
         """Muat statistik penggunaan fitur dengan fallback."""
         try:
-            if not hasattr(self, "stats_table"):
+            if not safe_attr_check(self, "stats_table"):
                 return
             
             # Initialize counters
@@ -1052,7 +1056,7 @@ class ProfileTab(QWidget):
     def update_calendar_data(self):
         """Update data kalender penggunaan dengan fallback."""
         try:
-            if not hasattr(self, "calendar"):
+            if not safe_attr_check(self, "calendar"):
                 return
                 
             # Dapatkan penggunaan harian
@@ -1280,11 +1284,11 @@ class ProfileTab(QWidget):
                     logger.error(f"Failed to create subscription tab: {e}")
                     
             # METODE 2: Stack widget
-            elif hasattr(self.parent_window, 'stack') and self.parent_window.stack:
+            elif safe_attr_check(self.parent_window, 'stack') and self.parent_window.stack:
                 logger.info("Found stack widget, attempting to show subscription tab")
                 
                 # Cek apakah subscription tab sudah ada
-                if not hasattr(self.parent_window, 'subscription_tab') or self.parent_window.subscription_tab is None:
+                if not safe_attr_check(self.parent_window, 'subscription_tab') or self.parent_window.subscription_tab is None:
                     logger.info("Creating subscription tab for stack widget")
                     self.parent_window.subscription_tab = SubscriptionTab(self.parent_window)
                     self.parent_window.stack.addWidget(self.parent_window.subscription_tab)
@@ -1294,13 +1298,13 @@ class ProfileTab(QWidget):
                 return
                 
             # METODE 3: Direct method call (untuk developer mode)
-            elif hasattr(self.parent_window, 'show_subscription_tab'):
+            elif safe_attr_check(self.parent_window, 'show_subscription_tab'):
                 logger.info("Using direct method call")
                 self.parent_window.show_subscription_tab()
                 return
                 
             # METODE 4: Signal emission sebagai fallback
-            elif hasattr(self.parent_window, 'switch_to_subscription'):
+            elif safe_attr_check(self.parent_window, 'switch_to_subscription'):
                 logger.info("Using signal emission")
                 self.parent_window.switch_to_subscription()
                 return
@@ -1326,7 +1330,7 @@ class ProfileTab(QWidget):
     def to_tutorial(self):
         """Navigasi ke tab Tutorial."""
         if self.parent_window:
-            if hasattr(self.parent_window, 'main_tabs'):
+            if safe_attr_check(self.parent_window, 'main_tabs'):
                 for i in range(self.parent_window.main_tabs.count()):
                     if "Tutorial" in self.parent_window.main_tabs.tabText(i):
                         self.parent_window.main_tabs.setCurrentIndex(i)
@@ -1336,7 +1340,7 @@ class ProfileTab(QWidget):
         """Muat ulang data profil dengan force VPS sync."""
         try:
             # ✅ PERBAIKAN UTAMA: Force VPS sync sebelum reload data
-            if self.parent_window and hasattr(self.parent_window, 'license_validator'):
+            if self.parent_window and safe_attr_check(self.parent_window, 'license_validator'):
                 try:
                     print("[PROFILE] Force syncing from VPS server...")
                     license_data = self.parent_window.license_validator.validate(force_refresh=True)
@@ -1431,7 +1435,7 @@ class ProfileTab(QWidget):
         self.name_label.setText(name)
         
         # Update field di tab settings
-        if hasattr(self, "username_edit"):
+        if safe_attr_check(self, "username_edit"):
             self.username_edit.setText(name)
         
         # Tutup dialog

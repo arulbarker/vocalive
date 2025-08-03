@@ -638,13 +638,27 @@ class LoginTab(QWidget):
         print(f"[DEBUG] PROCESS: Starting Supabase validation for {email}")
         
         try:
-            # LANGKAH 1: VALIDASI KE SUPABASE
-            print(f"[DEBUG] PROCESS: Calling Supabase validation...")
+            # LANGKAH 1: SIMPAN USER KE SUPABASE (jika belum ada)
+            print(f"[DEBUG] PROCESS: Ensuring user exists in Supabase...")
             supabase = SupabaseClient()
+            
+            # Cek apakah user sudah ada di Supabase
+            user_data = supabase.get_user_data(email)
+            if not user_data:
+                # User belum ada, buat user baru
+                print(f"[DEBUG] PROCESS: Creating new user in Supabase...")
+                create_result = supabase.create_user(email)
+                if create_result and create_result.get("status") == "success":
+                    print(f"[DEBUG] PROCESS: User created successfully in Supabase")
+                else:
+                    print(f"[DEBUG] PROCESS: Failed to create user in Supabase")
+            
+            # LANGKAH 2: VALIDASI KE SUPABASE
+            print(f"[DEBUG] PROCESS: Calling Supabase validation...")
             validation_result = supabase.validate_license(email)
             print(f"[DEBUG] PROCESS: Supabase validation result: {validation_result}")
             
-            # LANGKAH 2: PROSES BERDASARKAN HASIL VALIDASI
+            # LANGKAH 3: PROSES BERDASARKAN HASIL VALIDASI
             if validation_result and validation_result.get("is_valid", False):
                 tier = validation_result.get("tier", "basic")
                 self.cfg.set("paket", tier)

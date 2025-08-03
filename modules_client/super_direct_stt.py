@@ -9,6 +9,7 @@ import sounddevice as sd
 from PyQt6.QtCore import QThread, pyqtSignal
 from google.cloud import speech
 import time
+from utils.safe_checks import safe_attr_check
 
 class SuperDirectSTTThread(QThread):
     """
@@ -121,7 +122,7 @@ class SuperDirectSTTThread(QThread):
                 if transcript:
                     print(f"[Super Direct STT] SUCCESS: '{transcript}'")
                     # 🎯 EMIT TO PARENT: Direct connection to GoogleSTTThread
-                    if hasattr(self, 'parent_thread') and self.parent_thread:
+                    if safe_attr_check(self, 'parent_thread') and self.parent_thread:
                         print(f"[Super Direct STT] ⚡ Emitting to parent GoogleSTTThread...")
                         self.parent_thread.result.emit(transcript)
                     else:
@@ -129,13 +130,13 @@ class SuperDirectSTTThread(QThread):
                         self.result.emit(transcript)
                 else:
                     print(f"[Super Direct STT] Empty transcript")
-                    if hasattr(self, 'parent_thread') and self.parent_thread:
+                    if safe_attr_check(self, 'parent_thread') and self.parent_thread:
                         self.parent_thread.result.emit("")
                     else:
                         self.result.emit("")
             else:
                 print(f"[Super Direct STT] No speech detected")
-                if hasattr(self, 'parent_thread') and self.parent_thread:
+                if safe_attr_check(self, 'parent_thread') and self.parent_thread:
                     self.parent_thread.result.emit("")
                 else:
                     self.result.emit("")
@@ -178,4 +179,4 @@ if __name__ == "__main__":
     stt.stop_recording()
     
     stt.wait()
-    print("Done!") 
+    print("Done!")

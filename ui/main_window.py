@@ -14,6 +14,13 @@ import time
 logger = logging.getLogger('StreamMate')
 from datetime import timezone
 
+def safe_attr_check(obj, attr_name):
+    """Safely check if an object has an attribute"""
+    try:
+        return hasattr(obj, attr_name)
+    except Exception:
+        return False
+
 # Import PyQt6 components
 from PyQt6.QtGui import QGuiApplication, QIcon
 from PyQt6.QtCore import Qt, QTimer
@@ -186,10 +193,12 @@ except ImportError:
 try:
     from ui.cohost_tab_basic import CohostTabBasic
     COHOST_AVAILABLE = True
+    print("[INFO] CohostTabBasic imported successfully")
 except ImportError:
     try:
         from cohost_tab_basic import CohostTabBasic
         COHOST_AVAILABLE = True
+        print("[INFO] CohostTabBasic imported successfully (fallback)")
     except ImportError:
         COHOST_AVAILABLE = False
         print("[WARNING] CohostTabBasic not available")
@@ -256,15 +265,16 @@ except ImportError:
 
 # Import CoHost Pro tab
 try:
+    print("[DEBUG] Attempting to import CohostTabPro from ui.cohost_tab_pro...")
     from ui.cohost_tab_pro import CohostTabPro
     COHOST_PRO_AVAILABLE = True
-except ImportError:
-    try:
-        from cohost_tab_pro import CohostTabPro
-        COHOST_PRO_AVAILABLE = True
-    except ImportError:
-        COHOST_PRO_AVAILABLE = False
-        print("[WARNING] CohostTabPro not available")
+    print("[DEBUG] CohostTabPro imported successfully from ui.cohost_tab_pro")
+except Exception as e:
+    print(f"[ERROR] Failed to import CohostTabPro from ui.cohost_tab_pro: {e}")
+    import traceback
+    traceback.print_exc()
+    COHOST_PRO_AVAILABLE = False
+    print("[WARNING] CohostTabPro not available")
 
 # Import Viewers tab
 try:
@@ -289,6 +299,18 @@ except ImportError:
     except ImportError:
         VIRTUAL_MIC_AVAILABLE = False
         print("[WARNING] VirtualMicTab not available")
+
+# Import Translate Pro tab
+try:
+    from ui.translate_tab_pro import TranslateTabPro
+    TRANSLATE_PRO_AVAILABLE = True
+except ImportError:
+    try:
+        from translate_tab_pro import TranslateTabPro
+        TRANSLATE_PRO_AVAILABLE = True
+    except ImportError:
+        TRANSLATE_PRO_AVAILABLE = False
+        print("[WARNING] TranslateTabPro not available")
 
 # Import Credit Wallet tab
 try:
@@ -355,7 +377,18 @@ QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
     Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
 )
 
+# Utility functions for simplifying hasattr checks
+def safe_attr_check_legacy(obj, attr_name):
+    """Check if object has attribute and it's truthy"""
+    return safe_attr_check(obj, attr_name) and getattr(obj, attr_name)
+
+def safe_timer_check(obj, timer_name):
+    """Check if object has timer attribute and it's active"""
+    return safe_attr_check(obj, timer_name) and getattr(obj, timer_name) and getattr(obj, timer_name).isActive()
+
 class MainWindow(QMainWindow):
+    # PERFORMANCE FIX: Fast startup mode
+    FAST_STARTUP_MODE = True
     """Main window aplikasi StreamMate AI - Basic Mode Only."""
     
     def __init__(self):
@@ -399,10 +432,10 @@ class MainWindow(QMainWindow):
         version = "v1.0.0-basic"
         self.cfg.set("app_version", version)
         
-        # Timer untuk demo expiration check - RESPONSIVE untuk demo
+        # Timer untuk demo expiration check - OPTIMASI: Kurangi frekuensi untuk performa
         self.demo_timer = QTimer(self)
         self.demo_timer.timeout.connect(self.check_demo_expiration)
-        self.demo_timer.start(1000)  # ✅ PERBAIKAN: 1 detik untuk responsif demo expiration
+        self.demo_timer.start(5000)  # ✅ OPTIMASI: Ubah dari 1 detik ke 5 detik untuk performa
 
         # Placeholder untuk tabs
         self.subscription_tab = None
@@ -411,7 +444,7 @@ class MainWindow(QMainWindow):
         
         # Session status timer - OPTIMASI: Perlambat interval
         self.session_timer = QTimer(self)
-        self.session_timer.setInterval(60000)  # ✅ OPTIMASI: Ubah dari 10 detik ke 60 detik
+        self.session_timer.setInterval(120000)  # ✅ OPTIMASI: Ubah dari 60 detik ke 2 menit
         self.session_timer.timeout.connect(self.update_session_status)
         self.session_timer.start()
         
@@ -425,7 +458,7 @@ class MainWindow(QMainWindow):
         # Start license check timer - OPTIMASI: Perlambat interval  
         self.license_timer = QTimer(self)
         self.license_timer.timeout.connect(self.update_license_status)
-        self.license_timer.start(300000)  # ✅ OPTIMASI: Ubah dari 60 detik ke 5 menit
+        self.license_timer.start(600000)  # ✅ OPTIMASI: Ubah dari 5 menit ke 10 menit
         
         # Initial setup
         self.update_license_status()
@@ -510,8 +543,25 @@ class MainWindow(QMainWindow):
                     
                     logger.info(f"Subscription status: {status}, Hours: {hours_credit}")
                     
-                    # CASE 1: User berbayar dengan kredit cukup
-                    if status in ["paid", "active"] and hours_credit >= 1.0:  # Minimal 1 kredit
+                    # CASE 1: Check for Pro package first - DENGAN VALIDASI KREDIT
+                    pro_data = sub_data.get("pro", {})
+                    basic_data = sub_data.get("basic", {})
+                    
+                    # ✅ PERBAIKAN UTAMA: Cek kredit sebelum mengaktifkan mode
+                    if pro_data.get("active", False) and hours_credit > 0:
+                        logger.info(f"Pro package is active with {hours_credit} credits, going to Pro mode")
+                        self.pilih_paket("pro")
+                        return
+                    elif basic_data.get("active", False) and hours_credit > 0:
+                        logger.info(f"Basic package is active with {hours_credit} credits, going to Basic mode")
+                        self.pilih_paket("basic")
+                        return
+                    elif (pro_data.get("active", False) or basic_data.get("active", False)) and hours_credit <= 0:
+                        logger.info(f"Package is active but no credits ({hours_credit}), staying in subscription tab")
+                        self.login_berhasil()
+                        return
+                    # CASE 2: User berbayar dengan kredit cukup (fallback)
+                    elif status in ["paid", "active"] and hours_credit >= 1.0:  # Minimal 1 kredit
                         logger.info(f"User has sufficient credit ({hours_credit}), going to basic mode")
                         self.pilih_paket("basic")
                         return
@@ -662,7 +712,7 @@ class MainWindow(QMainWindow):
             logger.info(f"License validation result: {license_data}")
             
             # PERBAIKAN: Pastikan subscription tab dibuat dengan benar
-            if not hasattr(self, 'subscription_tab') or self.subscription_tab is None:
+            if not safe_attr_check(self, 'subscription_tab') or self.subscription_tab is None:
                 logger.info("Creating new subscription tab")
                 from ui.subscription_tab import SubscriptionTab
                 self.subscription_tab = SubscriptionTab(self)
@@ -674,7 +724,7 @@ class MainWindow(QMainWindow):
             
             # TAMBAHAN BARU: Refresh subscription tab untuk sinkronisasi data
             logger.info("Refreshing subscription tab to sync data")
-            if hasattr(self.subscription_tab, 'refresh_credits'):
+            if safe_attr_check(self.subscription_tab, 'refresh_credits'):
                 self.subscription_tab.refresh_credits()
                 
             # Switch ke subscription tab
@@ -735,6 +785,12 @@ class MainWindow(QMainWindow):
                     print(f"[DEBUG_STARTUP] User has sufficient credits ({credit_balance}). Activating {tier} mode.")
                     # Auto-activate jika sudah ada subscription
                     QTimer.singleShot(1500, lambda: self.pilih_paket(tier))
+                    return
+                
+                # PERBAIKAN BARU: Jika user memiliki lisensi valid tapi kredit 0, tetap di subscription tab
+                if credit_balance == 0:
+                    print(f"[DEBUG_STARTUP] User has valid license but 0 credits. Staying in subscription tab.")
+                    # Tetap di subscription tab, jangan auto-activate mode apapun
                     return
                     
                 # Jika kredit habis, tampilkan notifikasi khusus
@@ -846,23 +902,29 @@ class MainWindow(QMainWindow):
                 credit_balance = float(sub_data.get("credit_balance", sub_data.get("hours_credit", 0)))
                 is_valid = sub_data.get("is_valid", False)
                 
-                # User has active subscription with credits = basic access
-                if (status in ["active", "paid"] and 
-                    (package == "basic" or tier == "basic") and 
-                    credit_balance > 0 and 
-                    is_valid):
-                    basic_active = True
-                    print(f"[DEBUG] PACKAGE_CHECK: Detected basic access via old structure - Status: {status}, Credits: {credit_balance}")
-                
-                # Check for cohost_seller package
-                if package == "cohost_seller" or tier == "cohost_seller":
-                    cohost_seller_active = True
-                    print(f"[DEBUG] PACKAGE_CHECK: Detected cohost_seller access via old structure")
-                
-                # Check for pro package
-                if package == "pro" or tier == "pro":
-                    pro_active = True
-                    print(f"[DEBUG] PACKAGE_CHECK: Detected pro access via old structure")
+                # PERBAIKAN KRITIS: User harus memiliki kredit > 0 untuk dianggap memiliki paket aktif
+                if credit_balance <= 0:
+                    print(f"[DEBUG] PACKAGE_CHECK: User has 0 credits, no active packages")
+                    basic_active = False
+                    cohost_seller_active = False
+                    pro_active = False
+                else:
+                    # User has active subscription with credits = basic access
+                    if (status in ["active", "paid"] and 
+                        (package == "basic" or tier == "basic") and 
+                        is_valid):
+                        basic_active = True
+                        print(f"[DEBUG] PACKAGE_CHECK: Detected basic access via old structure - Status: {status}, Credits: {credit_balance}")
+                    
+                    # Check for cohost_seller package
+                    if (package == "cohost_seller" or tier == "cohost_seller") and is_valid:
+                        cohost_seller_active = True
+                        print(f"[DEBUG] PACKAGE_CHECK: Detected cohost_seller access via old structure")
+                    
+                    # Check for pro package
+                    if (package == "pro" or tier == "pro") and is_valid:
+                        pro_active = True
+                        print(f"[DEBUG] PACKAGE_CHECK: Detected pro access via old structure")
             
             result = {
                 "basic": basic_active,
@@ -889,12 +951,26 @@ class MainWindow(QMainWindow):
             print(f"[DEBUG] PILIH_PAKET: Purchased packages: {purchased}")
 
             # Determine which mode to use based on purchases
-            if purchased["pro"]:
+            # ✅ PERBAIKAN: Jika user memilih paket tertentu, gunakan paket tersebut
+            if paket == "basic" and purchased["basic"]:
+                actual_mode = "basic"
+                # Force basic mode untuk memastikan tidak ada tab Pro
+                purchased["force_basic"] = True
+            elif paket == "pro" and purchased["pro"]:
                 actual_mode = "pro"
+                # Pastikan tidak force basic untuk Pro mode
+                purchased["force_basic"] = False
+            elif paket == "cohost_seller" and purchased["cohost_seller"]:
+                actual_mode = "cohost_seller"
+            # Fallback: jika paket yang dipilih tidak tersedia, gunakan yang tersedia
+            elif purchased["pro"]:
+                actual_mode = "pro"
+                purchased["force_basic"] = False
             elif purchased["cohost_seller"]:
                 actual_mode = "cohost_seller"
             elif purchased["basic"]:
                 actual_mode = "basic"
+                purchased["force_basic"] = True
             else:
                 # No packages purchased - redirect to subscription tab
                 print(f"[DEBUG] PILIH_PAKET: No packages purchased, redirecting to subscription")
@@ -935,7 +1011,7 @@ class MainWindow(QMainWindow):
             logger.info(f"{actual_mode} mode berhasil diaktifkan")
             
             # Connect subscription tab signal
-            if hasattr(self, 'subscription_tab') and self.subscription_tab:
+            if safe_attr_check(self, 'subscription_tab'):
                 self.subscription_tab.package_activated.connect(self.activate_basic_mode_from_subscription)
                 self.subscription_tab.demo_expired_signal.connect(self.handle_demo_expired)
             
@@ -954,149 +1030,257 @@ class MainWindow(QMainWindow):
                 print(f"[DEBUG] PILIH_PAKET: Fallback also failed: {fallback_error}")
 
     def _setup_tabs_by_packages(self, tabs, purchased):
-        """Setup tabs based on what packages user has purchased"""
+        """Setup tabs based on what packages user has purchased - OPTIMIZED with lazy loading"""
         try:
             print(f"[DEBUG] Setting up tabs for purchased packages: {purchased}")
+            print(f"[DEBUG] Force basic mode: {purchased.get('force_basic', False)}")
             
-            # Always show Credit Wallet for top-up
-            if CREDIT_WALLET_AVAILABLE:
-                self.credit_wallet_tab = CreditWalletTab()
-                tabs.addTab(self.credit_wallet_tab, "💰 Credit Wallet")
-                print("[INFO] Credit Wallet tab added successfully")
-
-            # Only show basic features if Basic package is purchased
-            if purchased["basic"]:
-                # Tab Cohost - Basic features
-                if COHOST_AVAILABLE:
-                    self.cohost_tab = CohostTabBasic()
-                    tabs.addTab(self.cohost_tab, "🤖 Cohost Chat")
-                    print("[INFO] Cohost tab added (Basic purchased)")
+            # ✅ OPTIMASI: Cache tab instances untuk menghindari re-initialization
+            if not safe_attr_check(self, '_tab_cache'):
+                self._tab_cache = {}
+            
+            # ✅ PERBAIKAN: Pisahkan logic untuk Basic dan Pro mode sesuai permintaan user
+            if purchased["pro"] and not purchased.get("force_basic", False):
+                # PRO MODE - sesuai permintaan user: cohost tab pro, credit wallet, chat overlay, profile, reply log, trakteer, tutorial, viewers, virtual mic, translate pro
+                print("[INFO] Setting up PRO MODE tabs - sesuai permintaan user")
+                print("[DEBUG] PRO MODE: Pro mode activated")
+                
+                # Tab Credit Wallet (PENTING untuk mode pro) - LAZY LOADING
+                if CREDIT_WALLET_AVAILABLE:
+                    if 'credit_wallet_tab' not in self._tab_cache:
+                        self._tab_cache['credit_wallet_tab'] = CreditWalletTab()
+                    self.credit_wallet_tab = self._tab_cache['credit_wallet_tab']
+                    tabs.addTab(self.credit_wallet_tab, "💰 Credit Wallet")
+                    print("[INFO] Credit Wallet tab added (Pro mode)")
                 else:
-                    placeholder = QWidget()
-                    layout = QVBoxLayout(placeholder)
-                    label = QLabel("🤖 Cohost Chat\n\n(Under development)")
-                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    label.setStyleSheet("font-size: 16px; color: #888;")
-                    layout.addWidget(label)
-                    tabs.addTab(placeholder, "🤖 Cohost Chat")
-                    print("[WARNING] Cohost tab not available - using placeholder")
-
-                # Tab Overlay
-                if OVERLAY_AVAILABLE:
-                    self.overlay_tab = OverlayTab()
-                    tabs.addTab(self.overlay_tab, "💬 Chat Overlay")
-                    print("[INFO] Overlay tab added (Basic purchased)")
-
-                # Tab Trakteer
-                if TRAKTEER_AVAILABLE:
-                    self.trakteer_tab = TrakteerTab()
-                    tabs.addTab(self.trakteer_tab, "🎁 Trakteer")
-                    print("[INFO] Trakteer tab added (Basic purchased)")
-
-                    # Tab Reply Log
-                    if REPLY_LOG_AVAILABLE:
-                        self.reply_log_tab = ReplyLogTab()
-                        tabs.addTab(self.reply_log_tab, "📝 Reply Log")
-                        print("[INFO] Reply Log tab added (Basic purchased)")
-            else:
-                # Show locked placeholder for Basic features
-                placeholder = QWidget()
-                layout = QVBoxLayout(placeholder)
-                label = QLabel("🔒 Basic Features Locked\n\nPurchase Basic package with credits\nto unlock these features")
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                label.setStyleSheet("font-size: 16px; color: #888;")
-                layout.addWidget(label)
-                tabs.addTab(placeholder, "🔒 Basic Features")
-                print("[INFO] Basic features locked - user needs to purchase")
-
-            # Only show CoHost Pro if that package is purchased
-            if purchased["pro"]:
+                    if 'credit_wallet_placeholder' not in self._tab_cache:
+                        placeholder = QWidget()
+                        layout = QVBoxLayout(placeholder)
+                        label = QLabel("💰 Credit Wallet\n\nModule not available.\nPlease check installation.")
+                        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        label.setStyleSheet("font-size: 16px; color: #888;")
+                        layout.addWidget(label)
+                        self._tab_cache['credit_wallet_placeholder'] = placeholder
+                    tabs.addTab(self._tab_cache['credit_wallet_placeholder'], "💰 Credit Wallet")
+                    print("[WARNING] Credit Wallet tab not available - using placeholder")
+                
+                # Tab CoHost Pro - LAZY LOADING
                 if COHOST_PRO_AVAILABLE:
-                    self.cohost_pro_tab = CohostTabPro()
-                    tabs.addTab(self.cohost_pro_tab, "🚀 CoHost Pro")
-                    print("[INFO] CoHost Pro tab added (Pro purchased)")
+                    try:
+                        print("[DEBUG] Attempting to initialize CohostTabPro...")
+                        if 'cohost_pro_tab' not in self._tab_cache:
+                            print("[DEBUG] Creating new CohostTabPro instance...")
+                            self._tab_cache['cohost_pro_tab'] = CohostTabPro()
+                            print("[DEBUG] CohostTabPro instance created successfully")
+                        self.cohost_pro_tab = self._tab_cache['cohost_pro_tab']
+                        tabs.addTab(self.cohost_pro_tab, "🤖 CoHost Pro")
+                        print("[SUCCESS] CoHost Pro tab added (Pro mode)")
+                    except Exception as e:
+                        import traceback
+                        error_details = traceback.format_exc()
+                        logger.error(f"Failed to initialize CohostTabPro: {e}")
+                        print(f"[ERROR] CohostTabPro initialization failed: {e}")
+                        print(f"[ERROR] Full traceback:\n{error_details}")
+                        if 'cohost_pro_placeholder' not in self._tab_cache:
+                            placeholder = QWidget()
+                            layout = QVBoxLayout(placeholder)
+                            label = QLabel("🤖 CoHost Pro\n\nInitialization failed.\nPlease check logs for details.")
+                            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                            label.setStyleSheet("font-size: 16px; color: #888;")
+                            layout.addWidget(label)
+                            self._tab_cache['cohost_pro_placeholder'] = placeholder
+                        tabs.addTab(self._tab_cache['cohost_pro_placeholder'], "🤖 CoHost Pro")
+                        print("[WARNING] CoHost Pro tab not available - using placeholder (init error)")
                 else:
-                    placeholder = QWidget()
-                    layout = QVBoxLayout(placeholder)
-                    label = QLabel("🚀 CoHost Pro\n\n(Under development)")
-                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    label.setStyleSheet("font-size: 16px; color: #888;")
-                    layout.addWidget(label)
-                    tabs.addTab(placeholder, "🚀 CoHost Pro")
+                    if 'cohost_pro_placeholder' not in self._tab_cache:
+                        placeholder = QWidget()
+                        layout = QVBoxLayout(placeholder)
+                        label = QLabel("🤖 CoHost Pro\n\nModule not available.\nPlease check installation.")
+                        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        label.setStyleSheet("font-size: 16px; color: #888;")
+                        layout.addWidget(label)
+                        self._tab_cache['cohost_pro_placeholder'] = placeholder
+                    tabs.addTab(self._tab_cache['cohost_pro_placeholder'], "🤖 CoHost Pro")
                     print("[WARNING] CoHost Pro tab not available - using placeholder")
                 
-                # Add Virtual Mic tab for Pro users
-                if VIRTUAL_MIC_AVAILABLE:
-                    self.virtual_mic_tab = VirtualMicTab()
-                    tabs.addTab(self.virtual_mic_tab, "🎚️ Virtual Mic")
-                    print("[INFO] Virtual Mic tab added (Pro purchased)")
+                # Tab Chat Overlay - LAZY LOADING
+                if OVERLAY_AVAILABLE:
+                    if 'overlay_tab' not in self._tab_cache:
+                        self._tab_cache['overlay_tab'] = OverlayTab()
+                    self.overlay_tab = self._tab_cache['overlay_tab']
+                    tabs.addTab(self.overlay_tab, "💬 Chat Overlay")
+                    print("[INFO] Chat Overlay tab added (Pro mode)")
                 
-                # Add Viewers tab for Pro users
+                # Tab Profile - LAZY LOADING
+                if 'profile_tab' not in self._tab_cache:
+                    self._tab_cache['profile_tab'] = ProfileTab(self)
+                self.profile_tab = self._tab_cache['profile_tab']
+                tabs.addTab(self.profile_tab, "👤 Profile")
+                print("[INFO] Profile tab added (Pro mode)")
+                
+                # Tab Reply Log - LAZY LOADING
+                if REPLY_LOG_AVAILABLE:
+                    if 'reply_log_tab' not in self._tab_cache:
+                        self._tab_cache['reply_log_tab'] = ReplyLogTab()
+                    self.reply_log_tab = self._tab_cache['reply_log_tab']
+                    tabs.addTab(self.reply_log_tab, "📝 Reply Log")
+                    print("[INFO] Reply Log tab added (Pro mode)")
+                
+                # Tab Trakteer - LAZY LOADING
+                if TRAKTEER_AVAILABLE:
+                    if 'trakteer_tab' not in self._tab_cache:
+                        self._tab_cache['trakteer_tab'] = TrakteerTab()
+                    self.trakteer_tab = self._tab_cache['trakteer_tab']
+                    tabs.addTab(self.trakteer_tab, "🎁 Trakteer")
+                    print("[INFO] Trakteer tab added (Pro mode)")
+                
+                # Tab Tutorial - LAZY LOADING
+                if TUTORIAL_AVAILABLE:
+                    if 'tutorial_tab' not in self._tab_cache:
+                        self._tab_cache['tutorial_tab'] = TutorialTab()
+                    self.tutorial_tab = self._tab_cache['tutorial_tab']
+                    tabs.addTab(self.tutorial_tab, "❓ Tutorial")
+                    print("[INFO] Tutorial tab added (Pro mode)")
+                
+                # Tab Viewers - LAZY LOADING
                 if VIEWERS_AVAILABLE:
-                    self.viewers_tab = ViewersTab()
+                    if 'viewers_tab' not in self._tab_cache:
+                        self._tab_cache['viewers_tab'] = ViewersTab()
+                    self.viewers_tab = self._tab_cache['viewers_tab']
                     tabs.addTab(self.viewers_tab, "👥 Viewers")
-                    print("[INFO] Viewers tab added (Pro purchased)")
-            else:
-                # Show locked placeholder for CoHost Pro
-                placeholder = QWidget()
-                layout = QVBoxLayout(placeholder)
-                label = QLabel("🔒 CoHost Pro Locked\n\nPurchase CoHost Pro package\nwith credits to unlock")
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                label.setStyleSheet("font-size: 16px; color: #888;")
-                layout.addWidget(label)
-                tabs.addTab(placeholder, "🔒 CoHost Pro")
-                print("[INFO] CoHost Pro locked - user needs to purchase")
-
-            # Only show CoHost Seller if that package is purchased
-            if purchased["cohost_seller"]:
-                if COHOST_SELLER_AVAILABLE:
-                    self.cohost_seller_tab = CohostSellerTab()
-                    tabs.addTab(self.cohost_seller_tab, "🛍️ CoHost Seller")
-                    print("[INFO] CoHost Seller tab added (CoHost Seller purchased)")
+                    print("[INFO] Viewers tab added (Pro mode)")
+                
+                # Tab Virtual Mic - LAZY LOADING
+                if VIRTUAL_MIC_AVAILABLE:
+                    if 'virtual_mic_tab' not in self._tab_cache:
+                        self._tab_cache['virtual_mic_tab'] = VirtualMicTab()
+                    self.virtual_mic_tab = self._tab_cache['virtual_mic_tab']
+                    tabs.addTab(self.virtual_mic_tab, "🎚️ Virtual Mic")
+                    print("[INFO] Virtual Mic tab added (Pro mode)")
+                
+                # Tab Translate Pro - LAZY LOADING
+                if TRANSLATE_PRO_AVAILABLE:
+                    if 'translate_tab_pro' not in self._tab_cache:
+                        self._tab_cache['translate_tab_pro'] = TranslateTabPro()
+                    self.translate_tab_pro = self._tab_cache['translate_tab_pro']
+                    tabs.addTab(self.translate_tab_pro, "🌍 Translate Pro")
+                    print("[INFO] Translate Pro tab added (Pro mode)")
+                
+                # ✅ HILANGKAN tab yang tidak diminta untuk Pro mode
+                print("[INFO] Pro mode tabs: Credit Wallet, CoHost Pro, Chat Overlay, Profile, Reply Log, Trakteer, Tutorial, Viewers, Virtual Mic, Translate Pro")
+                print("[INFO] Log, RAG, System Log tabs REMOVED from Pro mode as requested")
+                
+            elif purchased["basic"] or purchased.get("force_basic", False):
+                # BASIC MODE - sesuai permintaan user: cohost tab basic, credit wallet, chat overlay, profile, reply log, trakteer, tutorial
+                print("[INFO] Setting up BASIC MODE tabs - sesuai permintaan user")
+                print("[DEBUG] BASIC MODE: Force basic mode activated")
+                # Force basic mode untuk memastikan tidak ada tab Pro
+                purchased["force_basic"] = True
+                
+                # Tab Credit Wallet (PENTING untuk mode basic) - LAZY LOADING
+                if CREDIT_WALLET_AVAILABLE:
+                    if 'credit_wallet_tab' not in self._tab_cache:
+                        self._tab_cache['credit_wallet_tab'] = CreditWalletTab()
+                    self.credit_wallet_tab = self._tab_cache['credit_wallet_tab']
+                    tabs.addTab(self.credit_wallet_tab, "💰 Credit Wallet")
+                    print("[INFO] Credit Wallet tab added (Basic mode)")
                 else:
-                    placeholder = QWidget()
-                    layout = QVBoxLayout(placeholder)
-                    label = QLabel("🛍️ CoHost Seller\n\n(Under development)")
-                    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    label.setStyleSheet("font-size: 16px; color: #888;")
-                    layout.addWidget(label)
-                    tabs.addTab(placeholder, "🛍️ CoHost Seller")
-                    print("[WARNING] CoHost Seller tab not available - using placeholder")
+                    if 'credit_wallet_placeholder' not in self._tab_cache:
+                        placeholder = QWidget()
+                        layout = QVBoxLayout(placeholder)
+                        label = QLabel("💰 Credit Wallet\n\nModule not available.\nPlease check installation.")
+                        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        label.setStyleSheet("font-size: 16px; color: #888;")
+                        layout.addWidget(label)
+                        self._tab_cache['credit_wallet_placeholder'] = placeholder
+                    tabs.addTab(self._tab_cache['credit_wallet_placeholder'], "💰 Credit Wallet")
+                    print("[WARNING] Credit Wallet tab not available - using placeholder")
+                
+                # Tab Cohost Basic - LAZY LOADING
+                if COHOST_AVAILABLE:
+                    if 'cohost_tab_basic' not in self._tab_cache:
+                        self._tab_cache['cohost_tab_basic'] = CohostTabBasic()
+                    self.cohost_tab = self._tab_cache['cohost_tab_basic']
+                    tabs.addTab(self.cohost_tab, "🤖 Cohost Basic")
+                    print("[INFO] Cohost Basic tab added (Basic mode)")
+                else:
+                    if 'cohost_basic_placeholder' not in self._tab_cache:
+                        placeholder = QWidget()
+                        layout = QVBoxLayout(placeholder)
+                        label = QLabel("🤖 Cohost Basic\n\nModule not available.\nPlease check installation.")
+                        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        label.setStyleSheet("font-size: 16px; color: #888;")
+                        layout.addWidget(label)
+                        self._tab_cache['cohost_basic_placeholder'] = placeholder
+                    tabs.addTab(self._tab_cache['cohost_basic_placeholder'], "🤖 Cohost Basic")
+                    print("[WARNING] Cohost Basic tab not available - using placeholder")
+
+                # Tab Chat Overlay - LAZY LOADING
+                if OVERLAY_AVAILABLE:
+                    if 'overlay_tab' not in self._tab_cache:
+                        self._tab_cache['overlay_tab'] = OverlayTab()
+                    self.overlay_tab = self._tab_cache['overlay_tab']
+                    tabs.addTab(self.overlay_tab, "💬 Chat Overlay")
+                    print("[INFO] Chat Overlay tab added (Basic mode)")
+
+                # Tab Profile - LAZY LOADING
+                if 'profile_tab' not in self._tab_cache:
+                    self._tab_cache['profile_tab'] = ProfileTab(self)
+                self.profile_tab = self._tab_cache['profile_tab']
+                tabs.addTab(self.profile_tab, "👤 Profile")
+                print("[INFO] Profile tab added (Basic mode)")
+
+                # Tab Reply Log - LAZY LOADING
+                if REPLY_LOG_AVAILABLE:
+                    if 'reply_log_tab' not in self._tab_cache:
+                        self._tab_cache['reply_log_tab'] = ReplyLogTab()
+                    self.reply_log_tab = self._tab_cache['reply_log_tab']
+                    tabs.addTab(self.reply_log_tab, "📝 Reply Log")
+                    print("[INFO] Reply Log tab added (Basic mode)")
+                
+                # Tab Trakteer - LAZY LOADING
+                if TRAKTEER_AVAILABLE:
+                    if 'trakteer_tab' not in self._tab_cache:
+                        self._tab_cache['trakteer_tab'] = TrakteerTab()
+                    self.trakteer_tab = self._tab_cache['trakteer_tab']
+                    tabs.addTab(self.trakteer_tab, "🎁 Trakteer")
+                    print("[INFO] Trakteer tab added (Basic mode)")
+                
+                # Tab Tutorial - LAZY LOADING
+                if TUTORIAL_AVAILABLE:
+                    if 'tutorial_tab' not in self._tab_cache:
+                        self._tab_cache['tutorial_tab'] = TutorialTab()
+                    self.tutorial_tab = self._tab_cache['tutorial_tab']
+                    tabs.addTab(self.tutorial_tab, "❓ Tutorial")
+                    print("[INFO] Tutorial tab added (Basic mode)")
+                
+                # ✅ HILANGKAN tab yang tidak diminta untuk Basic mode
+                print("[INFO] Basic mode tabs: Credit Wallet, Cohost Basic, Chat Overlay, Profile, Reply Log, Trakteer, Tutorial")
+                print("[INFO] Viewers, Virtual Mic, Translate Pro tabs REMOVED from Basic mode as requested")
+                
+                # Connect signals for basic mode
+                if safe_attr_check(self, 'cohost_tab') and safe_attr_check(self.cohost_tab, 'replyGenerated'):
+                    # Connect ke reply log jika tersedia
+                    if safe_attr_check(self, 'reply_log_tab'):
+                        self.cohost_tab.replyGenerated.connect(self._handle_new_reply)
+                        print("[INFO] Connected cohost to reply log")
+
+                    # Connect ke overlay jika tersedia
+                    if safe_attr_check(self, 'overlay_tab'):
+                        self.cohost_tab.replyGenerated.connect(
+                            lambda author, msg, reply: self.overlay_tab.update_overlay(author, reply)
+                        )
+                        print("[INFO] Connected cohost to overlay")
             else:
-                # Show locked placeholder for CoHost Seller
+                # No packages purchased - show locked placeholders
                 placeholder = QWidget()
                 layout = QVBoxLayout(placeholder)
-                label = QLabel("🔒 CoHost Seller Locked\n\nPurchase CoHost Seller package\nwith credits to unlock")
+                label = QLabel("🔒 Features Locked\n\nPurchase Basic or Pro package with credits\nto unlock features")
                 label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 label.setStyleSheet("font-size: 16px; color: #888;")
                 layout.addWidget(label)
-                tabs.addTab(placeholder, "🔒 CoHost Seller")
-                print("[INFO] CoHost Seller locked - user needs to purchase")
-
-            # Tab Tutorial - always available
-            if TUTORIAL_AVAILABLE:
-                self.tutorial_tab = TutorialTab()
-                tabs.addTab(self.tutorial_tab, "❓ Tutorial")
-                print("[INFO] Tutorial tab added successfully")
-
-            # Tab Profile - always available
-            self.profile_tab = ProfileTab(self)
-            tabs.addTab(self.profile_tab, "👤 Profile")
-            print("[INFO] Profile tab added successfully")
-
-            # Connect signals only if basic features are purchased
-            if purchased["basic"] and hasattr(self, 'cohost_tab') and hasattr(self.cohost_tab, 'replyGenerated'):
-                # Connect ke reply log jika tersedia
-                if hasattr(self, 'reply_log_tab'):
-                    self.cohost_tab.replyGenerated.connect(self._handle_new_reply)
-                    print("[INFO] Connected cohost to reply log")
-
-                # Connect ke overlay jika tersedia
-                if hasattr(self, 'overlay_tab'):
-                    self.cohost_tab.replyGenerated.connect(
-                        lambda author, msg, reply: self.overlay_tab.update_overlay(author, reply)
-                    )
-                    print("[INFO] Connected cohost to overlay")
+                tabs.addTab(placeholder, "🔒 Features Locked")
+                print("[INFO] Features locked - user needs to purchase")
 
         except Exception as e:
             print(f"[ERROR] Error setting up tabs by packages: {e}")
@@ -1105,13 +1289,13 @@ class MainWindow(QMainWindow):
 
     def _handle_new_reply(self, author, message, reply):
         """Handler untuk meneruskan balasan baru ke reply_log_tab."""
-        if hasattr(self, 'reply_log_tab') and self.reply_log_tab:
+        if safe_attr_check(self, 'reply_log_tab') and self.reply_log_tab:
             print(f"[DEBUG] Handling new reply from {author}: {message[:30]}...")
 
-            if hasattr(self.reply_log_tab, 'add_interaction'):
+            if safe_attr_check(self.reply_log_tab, 'add_interaction'):
                 self.reply_log_tab.add_interaction(author, message, reply)
 
-            if hasattr(self, 'overlay_tab') and self.overlay_tab:
+            if safe_attr_check(self, 'overlay_tab') and self.overlay_tab:
                 self.overlay_tab.update_overlay(author, reply)
 
     def update_license_status(self):
@@ -1216,7 +1400,7 @@ class MainWindow(QMainWindow):
     def show_idle_warning(self, seconds_left):
         """Tampilkan peringatan idle."""
         mins_left = int(seconds_left / 60)
-        if not hasattr(self, '_idle_warning_shown') or not self._idle_warning_shown:
+        if not safe_attr_check(self, '_idle_warning_shown') or not self._idle_warning_shown:
             self.status_bar.showMessage(f"⚠️ Idle detected. Session will pause in {mins_left} minutes.", 10000)
             self._idle_warning_shown = True
 
@@ -1227,14 +1411,14 @@ class MainWindow(QMainWindow):
 
     def update_session_status(self):
         """Update status sesi di status bar."""
-        if hasattr(self, 'license_label'):
+        if safe_attr_check(self, 'license_label'):
             self.update_license_status()
             
     def check_demo_expiration(self):
         """Cek sisa waktu demo dan panggil handler jika waktu habis."""
         try:
             # Jangan proses jika main_tabs belum ada (misal masih di halaman login)
-            if not hasattr(self, 'main_tabs') or not self.main_tabs:
+            if not safe_attr_check(self, 'main_tabs') or not self.main_tabs:
                 return
 
             subscription_file = Path("config/subscription_status.json")
@@ -1291,25 +1475,25 @@ class MainWindow(QMainWindow):
             print("[DEMO-EXPIRED] Demo 30 menit telah habis - menghentikan semua proses...")
             
             # 1. Stop timer demo terlebih dahulu
-            if hasattr(self, 'demo_timer'):
+            if safe_attr_check(self, 'demo_timer'):
                 self.demo_timer.stop()
                 print("[DEMO-EXPIRED] Demo timer stopped")
                 
             # 2. Stop auto-reply di cohost tab dengan lebih agresif
-            if hasattr(self, 'cohost_tab') and self.cohost_tab:
+            if safe_attr_check(self, 'cohost_tab') and self.cohost_tab:
                 try:
                     # Stop auto-reply jika sedang aktif
-                    if hasattr(self.cohost_tab, 'reply_busy') and self.cohost_tab.reply_busy:
+                    if safe_attr_check(self.cohost_tab, 'reply_busy') and self.cohost_tab.reply_busy:
                         self.cohost_tab.reply_busy = False
                         print("[DEMO-EXPIRED] Cohost auto-reply stopped")
                     
                     # Stop listener
-                    if hasattr(self.cohost_tab, 'stop') and callable(getattr(self.cohost_tab, 'stop')):
+                    if safe_attr_check(self.cohost_tab, 'stop') and callable(getattr(self.cohost_tab, 'stop')):
                         self.cohost_tab.stop()
                         print("[DEMO-EXPIRED] Cohost listener stopped")
                     
                     # Clear queue jika ada
-                    if hasattr(self.cohost_tab, 'reply_queue'):
+                    if safe_attr_check(self.cohost_tab, 'reply_queue'):
                         self.cohost_tab.reply_queue.clear()
                         print("[DEMO-EXPIRED] Cohost reply queue cleared")
                         
@@ -1365,14 +1549,14 @@ class MainWindow(QMainWindow):
     def _refresh_subscription_tab_UI(self):
         """Refresh UI subscription tab setelah demo expired"""
         try:
-            if hasattr(self, 'subscription_tab') and self.subscription_tab:
+            if safe_attr_check(self, 'subscription_tab'):
                 # Call refresh_credits untuk update tombol demo
-                if hasattr(self.subscription_tab, 'refresh_credits'):
+                if safe_attr_check(self.subscription_tab, 'refresh_credits'):
                     self.subscription_tab.refresh_credits()
                     print("[DEMO-EXPIRED] Subscription tab UI refreshed after demo expiration")
                 
                 # Update display juga jika ada
-                if hasattr(self.subscription_tab, 'update_display'):
+                if safe_attr_check(self.subscription_tab, 'update_display'):
                     self.subscription_tab.update_display()
                 
         except Exception as e:
@@ -1384,7 +1568,7 @@ class MainWindow(QMainWindow):
             print("[DEMO-EXPIRED] Navigating to subscription tab...")
             
             # ✅ PERBAIKAN: Create atau show subscription tab
-            if not hasattr(self, 'subscription_tab') or self.subscription_tab is None:
+            if not safe_attr_check(self, 'subscription_tab'):
                 from ui.subscription_tab import SubscriptionTab
                 self.subscription_tab = SubscriptionTab(self)
                 self.stack.addWidget(self.subscription_tab)
@@ -1398,7 +1582,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage("Demo expired - Redirected to subscription", 5000)
             
             # ✅ PERBAIKAN: Disable tab cohost jika ada main_tabs
-            if hasattr(self, 'main_tabs') and self.main_tabs:
+            if safe_attr_check(self, 'main_tabs'):
                 for i in range(self.main_tabs.count()):
                     tab_text = self.main_tabs.tabText(i)
                     
@@ -1500,10 +1684,10 @@ class MainWindow(QMainWindow):
                 print(f"[LOGOUT] Saved logout email to temp file")
             
             # Hentikan semua proses aktif
-            if hasattr(self, 'main_tabs') and self.main_tabs:
+            if safe_attr_check(self, 'main_tabs'):
                 for i in range(self.main_tabs.count()):
                     tab = self.main_tabs.widget(i)
-                    if hasattr(tab, 'stop'):
+                    if safe_attr_check(tab, 'stop'):
                         try:
                             tab.stop()
                             print(f"[LOGOUT] Stopped tab {i}")
@@ -1511,7 +1695,7 @@ class MainWindow(QMainWindow):
                             pass
             
             # Buat tab login baru
-            if not hasattr(self, 'login_tab') or not self.login_tab:
+            if not safe_attr_check(self, 'login_tab'):
                 self.login_tab = LoginTab(self)
                 self.stack.addWidget(self.login_tab)
             
@@ -1519,12 +1703,12 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.login_tab)
             
             # Hapus tab yang sudah tidak perlu
-            if hasattr(self, 'main_tabs') and self.main_tabs:
+            if safe_attr_check(self, 'main_tabs'):
                 self.stack.removeWidget(self.main_tabs)
                 self.main_tabs = None
                 print(f"[LOGOUT] Removed main tabs")
                 
-            if hasattr(self, 'subscription_tab') and self.subscription_tab:
+            if safe_attr_check(self, 'subscription_tab'):
                 self.stack.removeWidget(self.subscription_tab)
                 self.subscription_tab = None
                 print(f"[LOGOUT] Removed subscription tab")
@@ -1549,47 +1733,69 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Handle window close event."""
-        # Stop license timer
-        if hasattr(self, 'license_timer') and self.license_timer.isActive():
-            self.license_timer.stop()
-        
-        # Stop validation timer
-        if hasattr(self, 'validation_timer') and self.validation_timer and self.validation_timer.isActive():
-            self.validation_timer.stop()
-        
-        # Stop session tracking jika tersedia
-        if SUBSCRIPTION_CHECKER_AVAILABLE:
-            stop_usage_tracking()
-        
-        # Ask for confirmation
-        reply = QMessageBox.question(
-            self, 'Confirm Exit',
-            'Are you sure you want to exit the application?',
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            # Stop any active tabs before closing
-            if hasattr(self, 'main_tabs') and self.main_tabs:
-                current_tab = self.main_tabs.currentWidget()
-                if hasattr(current_tab, 'stop'):
-                    try:
-                        current_tab.stop()
-                    except:
-                        pass
-                for i in range(self.main_tabs.count()):
-                    tab = self.main_tabs.widget(i)
-                    if hasattr(tab, 'stop'):
-                        try:
-                            tab.stop()
-                        except:
-                            pass
+        try:
+            print("[FORCE-CLOSE-DEBUG] MainWindow closeEvent triggered")
             
-            # Accept event
+            # Stop license timer
+            if safe_timer_check(self, 'license_timer'):
+                print("[FORCE-CLOSE-DEBUG] Stopping license timer")
+                self.license_timer.stop()
+            
+            # Stop validation timer
+            if safe_timer_check(self, 'validation_timer'):
+                print("[FORCE-CLOSE-DEBUG] Stopping validation timer")
+                self.validation_timer.stop()
+            
+            # Stop session tracking jika tersedia
+            if SUBSCRIPTION_CHECKER_AVAILABLE:
+                print("[FORCE-CLOSE-DEBUG] Stopping usage tracking")
+                stop_usage_tracking()
+            
+            # Ask for confirmation
+            print("[FORCE-CLOSE-DEBUG] Showing exit confirmation dialog")
+            reply = QMessageBox.question(
+                self, 'Confirm Exit',
+                'Are you sure you want to exit the application?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                print("[FORCE-CLOSE-DEBUG] User confirmed exit, stopping tabs")
+                
+                # Stop any active tabs before closing
+                if safe_attr_check(self, 'main_tabs'):
+                    print("[FORCE-CLOSE-DEBUG] Stopping main tabs")
+                    current_tab = self.main_tabs.currentWidget()
+                    if safe_attr_check(current_tab, 'stop'):
+                        try:
+                            print(f"[FORCE-CLOSE-DEBUG] Stopping current tab: {type(current_tab).__name__}")
+                            current_tab.stop()
+                        except Exception as e:
+                            print(f"[FORCE-CLOSE-DEBUG] Error stopping current tab: {e}")
+                    
+                    for i in range(self.main_tabs.count()):
+                        tab = self.main_tabs.widget(i)
+                        if safe_attr_check(tab, 'stop'):
+                            try:
+                                print(f"[FORCE-CLOSE-DEBUG] Stopping tab {i}: {type(tab).__name__}")
+                                tab.stop()
+                            except Exception as e:
+                                print(f"[FORCE-CLOSE-DEBUG] Error stopping tab {i}: {e}")
+                
+                # Accept event
+                print("[FORCE-CLOSE-DEBUG] Accepting close event")
+                event.accept()
+            else:
+                print("[FORCE-CLOSE-DEBUG] User cancelled exit")
+                event.ignore()
+                
+        except Exception as e:
+            print(f"[FORCE-CLOSE-DEBUG] Error in MainWindow closeEvent: {e}")
+            import traceback
+            print(f"[FORCE-CLOSE-DEBUG] Traceback: {traceback.format_exc()}")
+            # Force accept event even if cleanup fails
             event.accept()
-        else:
-            event.ignore()
 
     def activate_basic_mode_from_subscription(self, package):
         """Aktifkan mode dari subscription tab."""
@@ -1611,7 +1817,7 @@ class MainWindow(QMainWindow):
                 )
                 
                 # Navigate to CoHost Pro tab if available
-                if hasattr(self, 'main_tabs') and self.main_tabs:
+                if safe_attr_check(self, 'main_tabs'):
                     for i in range(self.main_tabs.count()):
                         tab_text = self.main_tabs.tabText(i)
                         if "cohost pro" in tab_text.lower():
@@ -1637,7 +1843,7 @@ class MainWindow(QMainWindow):
                 )
                 
                 # Navigate to CoHost Seller tab if available
-                if hasattr(self, 'main_tabs') and self.main_tabs:
+                if safe_attr_check(self, 'main_tabs'):
                     for i in range(self.main_tabs.count()):
                         tab_text = self.main_tabs.tabText(i)
                         if "cohost seller" in tab_text.lower():
@@ -1687,7 +1893,7 @@ class MainWindow(QMainWindow):
     def show_subscription_tab(self):
         """Method helper untuk menampilkan subscription tab"""
         try:
-            if not hasattr(self, 'subscription_tab') or self.subscription_tab is None:
+            if not safe_attr_check(self, 'subscription_tab'):
                 from ui.subscription_tab import SubscriptionTab
                 self.subscription_tab = SubscriptionTab(self)
                 self.stack.addWidget(self.subscription_tab)
@@ -1732,11 +1938,11 @@ class MainWindow(QMainWindow):
             print(f"[DEBUG] Auto-navigating to cohost tab with mode: {mode}")
             
             # Jika main_tabs belum ada, buat dulu dengan pilih_paket
-            if not hasattr(self, 'main_tabs') or not self.main_tabs:
+            if not safe_attr_check(self, 'main_tabs') or not self.main_tabs:
                 self.pilih_paket(mode)
                 
             # Pastikan main_tabs sudah ada
-            if hasattr(self, 'main_tabs') and self.main_tabs:
+            if safe_attr_check(self, 'main_tabs') and self.main_tabs:
                 # Cari tab cohost
                 for i in range(self.main_tabs.count()):
                     tab_text = self.main_tabs.tabText(i)

@@ -4,12 +4,25 @@
   "package": "none",
   "credit_balance": 0.0,
   "credit_used": 0.0,
-  "hours_credit": 0.0,
-  "hours_used": 0.0,
+  "hours_credit": 0,
+  "hours_used": 65.4655,
   "tier": "none",
   "is_valid": false,
   "expire_date": null,
   "synced_from_vps": true,
   "vps_source_only": true,
-  "last_sync": "2025-07-22T08:58:23.185382+00:00"
+  "last_sync": "2025-07-22T08:58:23.185382+00:00",
+  "basic": {
+    "active": true,
+    "purchased_at": "2025-07-23T22:51:41.664298",
+    "email": "mursalinasrul@gmail.com",
+    "package": "basic"
+  },
+  "pro": {
+    "active": true,
+    "purchased_at": "2025-07-23T22:51:51.408218",
+    "email": "mursalinasrul@gmail.com",
+    "package": "pro"
+  },
+  "updated_at": "2025-08-03T23:23:57.340104+07:00"
 }

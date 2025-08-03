@@ -19,10 +19,10 @@ logging.basicConfig(
 from pathlib import Path
 
 import keyboard
-from PyQt6.QtCore    import QThread, pyqtSignal, QTimer
+from PyQt6.QtCore    import QThread, pyqtSignal, QTimer, Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, QComboBox,
-    QPushButton, QTextEdit, QHBoxLayout, QCheckBox, QSpinBox
+    QPushButton, QTextEdit, QHBoxLayout, QCheckBox, QSpinBox, QScrollArea, QGroupBox, QSizePolicy
 )
 from datetime import datetime
 from modules_server.tts_google import speak_with_google_cloud
@@ -58,6 +58,18 @@ CHAT_BUFFER  = ROOT / "temp" / "chat_buffer.jsonl"
 COHOST_LOG   = ROOT / "temp" / "cohost_log.txt"
 TRIGGER_FILE = ROOT / "temp" / "trigger.txt"
 VOICES_PATH  = ROOT / "config" / "voices.json"
+
+# Utility functions for simplifying hasattr checks
+def safe_attr_check(obj, attr_name):
+    """Check if object has attribute and it's truthy"""
+    try:
+        return hasattr(obj, attr_name) and getattr(obj, attr_name)
+    except Exception:
+        return False
+
+def safe_timer_check(obj, timer_name):
+    """Check if object has timer attribute and it's active"""
+    return safe_attr_check(obj, timer_name) and getattr(obj, timer_name) and getattr(obj, timer_name).isActive()
 
 class FileMonitorThread(QThread):
     newComment = pyqtSignal(str, str)
@@ -247,8 +259,27 @@ class CohostTabPro(QWidget):
         if not TRIGGER_FILE.exists():
             TRIGGER_FILE.write_text("OFF")
 
-        # ─── UI Setup ──────────────────────────────────────────────────
-        layout = QVBoxLayout(self)
+        # ─── UI Setup dengan Scroll Area ──────────────────────────────────────────────────
+        # Main layout untuk widget ini
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Buat scroll area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Widget konten yang akan di-scroll
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+        layout.setSpacing(8)  # Kurangi spacing untuk efisiensi
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Set content widget ke scroll area
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
+        
         layout.addWidget(QLabel("🤖 Auto-Reply Chat (YouTube & TikTok)"))
 
         # Platform selection
@@ -303,13 +334,52 @@ class CohostTabPro(QWidget):
         self.person_cb.currentTextChanged.connect(self.save_personality)
         layout.addWidget(self.person_cb)
 
-        # Prompt Tambahan
-        layout.addWidget(QLabel("Prompt Tambahan (opsional):"))
-        self.custom = QLineEdit(self.cfg.get("custom_context", ""))
+        # 🔥 ENHANCED: Prompt Templates System
+        layout.addWidget(QLabel("🎭 AI Character & Prompt:"))
+        
+        # Template selector
+        template_row = QHBoxLayout()
+        template_row.addWidget(QLabel("📋 Quick Templates:"))
+        self.template_combo = QComboBox()
+        self.template_combo.addItems([
+            "📝 Custom Prompt",
+            "🎮 Gaming - MOBA Expert", 
+            "🎮 Gaming - FPS Pro",
+            "💰 Sales - E-Commerce", 
+            "💰 Sales - Digital Products"
+        ])
+        self.template_combo.currentTextChanged.connect(self.load_template)
+        template_row.addWidget(self.template_combo, 2)
+        
+        btn_preview_template = QPushButton("👁️ Preview")
+        btn_preview_template.clicked.connect(self.preview_template)
+        template_row.addWidget(btn_preview_template, 1)
+        
+        layout.addLayout(template_row)
+
+        # Custom prompt text area
+        layout.addWidget(QLabel("✏️ Edit Prompt (customize as needed):"))
+        self.custom = QTextEdit(self.cfg.get("custom_context", ""))
+        self.custom.setPlaceholderText("Choose a template above or write your custom prompt...")
+        self.custom.setMinimumHeight(100)
+        self.custom.setMaximumHeight(150)
         layout.addWidget(self.custom)
-        btn = QPushButton("💾 Simpan Prompt")
-        btn.clicked.connect(self.save_custom)
-        layout.addWidget(btn)
+
+        # Action buttons
+        button_row = QHBoxLayout()
+        self.custom_btn = QPushButton("💾 Save Prompt")
+        self.custom_btn.clicked.connect(self.save_custom)
+        button_row.addWidget(self.custom_btn)
+        
+        btn_clear = QPushButton("🗑️ Clear")
+        btn_clear.clicked.connect(lambda: self.custom.clear())
+        button_row.addWidget(btn_clear)
+        
+        btn_reset_template = QPushButton("🔄 Reset Template")
+        btn_reset_template.clicked.connect(lambda: self.load_template(self.template_combo.currentText()))
+        button_row.addWidget(btn_reset_template)
+        
+        layout.addLayout(button_row)
 
         # Mode Balasan
         row = QHBoxLayout()
@@ -329,73 +399,281 @@ class CohostTabPro(QWidget):
         row.addWidget(btn)
         layout.addLayout(row)
 
-        # Trigger Word
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Trigger Penonton (mode Trigger):"))
-        self.trigger_input = QLineEdit(self.cfg.get("trigger_word", ""))
-        row.addWidget(self.trigger_input)
-        self.trigger_btn = QPushButton("💾 Simpan Trigger")
-        self.trigger_btn.clicked.connect(self.save_trigger)
-        row.addWidget(self.trigger_btn)
+        # 🔥 ENHANCED: Memory Statistics
+        memory_group = QGroupBox("🧠 Memory & Statistics")
+        memory_layout = QVBoxLayout(memory_group)
+        
+        # Memory stats display
+        self.memory_stats_label = QLabel("📊 Viewer Memory: 0 viewers tracked")
+        memory_layout.addWidget(self.memory_stats_label)
+        
+        layout.addWidget(memory_group)
 
-        layout.addLayout(row)
-
-        # Suara CoHost
-        layout.addWidget(QLabel("Suara CoHost:"))
-        row = QHBoxLayout()
-        self.voice_cb = QComboBox()
-        row.addWidget(self.voice_cb)
-        btn = QPushButton("🔈 Preview Suara")
-        btn.clicked.connect(self.preview_cohost_voice)
-        row.addWidget(btn)
-        btn = QPushButton("💾 Simpan Suara")
-        btn.clicked.connect(self.save_cohost_voice)
-        row.addWidget(btn)
-        layout.addLayout(row)
-
-        # Start / Stop
-        self.status = QLabel("Status: Ready")
-        layout.addWidget(self.status)
-        row = QHBoxLayout()
-        self.btn_start = QPushButton("▶️ Start Auto-Reply")
-        self.btn_start.clicked.connect(self.start)
-        row.addWidget(self.btn_start)
-        self.btn_stop = QPushButton("⏹️ Stop Auto-Reply")
-        self.btn_stop.clicked.connect(self.stop)
-        row.addWidget(self.btn_stop)
-        layout.addLayout(row)
-
-        # Log
-        layout.addWidget(QLabel("📋 Log (Komentar & Balasan)"))
-        self.log_view = QTextEdit()
-        self.log_view.setReadOnly(True)
-        layout.addWidget(self.log_view)
-
-        # Hold-to-Talk Hotkey
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Hold-to-Talk Hotkey:"))
+        # 🔥 ENHANCED: Streamer Communication
+        comm_group = QGroupBox("🎤 Streamer Communication")
+        comm_layout = QVBoxLayout(comm_group)
+        
+        # Microphone selection
+        mic_row = QHBoxLayout()
+        mic_row.addWidget(QLabel("🎙️ Microphone:"))
+        self.mic_combo = QComboBox()
+        self.load_microphones()
+        mic_row.addWidget(self.mic_combo, 2)
+        
+        btn_refresh_mic = QPushButton("🔄")
+        btn_refresh_mic.clicked.connect(self.load_microphones)
+        btn_refresh_mic.setToolTip("Refresh microphone list")
+        mic_row.addWidget(btn_refresh_mic)
+        comm_layout.addLayout(mic_row)
+        
+        # Hotkey settings (enhanced)
+        hotkey_row = QHBoxLayout()
+        hotkey_row.addWidget(QLabel("⌨️ Talk Hotkey:"))
         self.chk_ctrl = QCheckBox("Ctrl")
-        row.addWidget(self.chk_ctrl)
+        hotkey_row.addWidget(self.chk_ctrl)
         self.chk_alt = QCheckBox("Alt")
-        row.addWidget(self.chk_alt)
+        hotkey_row.addWidget(self.chk_alt)
         self.chk_shift = QCheckBox("Shift")
-        row.addWidget(self.chk_shift)
+        hotkey_row.addWidget(self.chk_shift)
         self.key_combo = QComboBox()
         for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789":
             self.key_combo.addItem(c)
-        row.addWidget(self.key_combo)
+        hotkey_row.addWidget(self.key_combo)
+        comm_layout.addLayout(hotkey_row)
+        
+        # Hotkey display and controls
+        hotkey_control_row = QHBoxLayout()
         self.hk_edit = QLineEdit(self.cfg.get("cohost_hotkey", "Ctrl+Alt+X"))
         self.hk_edit.setReadOnly(True)
-        row.addWidget(self.hk_edit)
-        btn = QPushButton("💾 Simpan Hotkey")
-        btn.clicked.connect(self.save_hotkey)
-        row.addWidget(btn)
-        self.toggle_btn = QPushButton("🔔 Ngobrol: ON")
+        hotkey_control_row.addWidget(self.hk_edit)
+        
+        btn_save_hotkey = QPushButton("💾 Save Hotkey")
+        btn_save_hotkey.clicked.connect(self.save_hotkey)
+        hotkey_control_row.addWidget(btn_save_hotkey)
+        
+        self.toggle_btn = QPushButton("🔔 Chat: ON")
         self.toggle_btn.setCheckable(True)
         self.toggle_btn.setChecked(True)
         self.toggle_btn.clicked.connect(self.toggle_hotkey)
-        row.addWidget(self.toggle_btn)
-        layout.addLayout(row)
+        hotkey_control_row.addWidget(self.toggle_btn)
+        comm_layout.addLayout(hotkey_control_row)
+        
+        layout.addWidget(comm_group)
+
+        # 🔥 ENHANCED: Activity Log
+        log_group = QGroupBox("📋 Activity Log")
+        log_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        log_layout = QVBoxLayout(log_group)
+        
+        # Main log layout with text area and button panel
+        log_row = QHBoxLayout()
+        
+        # Log view (main text area)
+        self.log_view = QTextEdit()
+        self.log_view.setMinimumHeight(200)
+        self.log_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.log_view.setStyleSheet("""
+            QTextEdit {
+                background-color: #1e1e1e;
+                color: #ffffff;
+                border: 1px solid #555;
+                border-radius: 4px;
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 10px;
+                padding: 5px;
+            }
+        """)
+        log_row.addWidget(self.log_view, 3)
+        
+        # Button panel (matching Basic version)
+        button_panel = QVBoxLayout()
+        button_panel.addStretch()
+
+        button_style = """
+            QPushButton {
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                padding: 8px;
+                margin: 5px;
+                text-align: left;
+                min-height: 40px;
+                color: black;
+            }
+            QPushButton:hover { background-color: #e0e0e0; }
+        """
+
+        btn_filter_stats = QPushButton("📊 Filter Stats")
+        btn_filter_stats.setStyleSheet(button_style)
+        btn_filter_stats.clicked.connect(self.show_filter_stats)
+        button_panel.addWidget(btn_filter_stats)
+
+        btn_reset_stats = QPushButton("🔄 Reset Stats")
+        btn_reset_stats.setStyleSheet(button_style)
+        btn_reset_stats.clicked.connect(self.reset_statistics)
+        button_panel.addWidget(btn_reset_stats)
+
+        btn_statistics = QPushButton("📊 Cache & Spam\nStatistics")
+        btn_statistics.setStyleSheet(button_style)
+        btn_statistics.clicked.connect(self.show_cache_spam_stats)
+        button_panel.addWidget(btn_statistics)
+
+        btn_reset_spam = QPushButton("🚫 Reset Spam\nBlocks")
+        btn_reset_spam.setStyleSheet(button_style)
+        btn_reset_spam.clicked.connect(self.reset_spam_blocks)
+        button_panel.addWidget(btn_reset_spam)
+
+        btn_reset_daily = QPushButton("📅 Reset Daily\nInteractions")
+        btn_reset_daily.setStyleSheet(button_style)
+        btn_reset_daily.clicked.connect(self.reset_daily_interactions)
+        button_panel.addWidget(btn_reset_daily)
+
+        # Set equal widths for all buttons
+        max_width = 180
+        for btn in [btn_filter_stats, btn_reset_stats, btn_statistics, btn_reset_spam, btn_reset_daily]:
+            btn.setMaximumWidth(max_width)
+            btn.setMinimumWidth(max_width)
+
+        button_panel.addStretch()
+        log_row.addLayout(button_panel, 1)
+        log_layout.addLayout(log_row)
+        
+        # Log controls (simplified)
+        log_controls = QHBoxLayout()
+        btn_clear_log = QPushButton("🗑️ Clear Log")
+        btn_clear_log.clicked.connect(lambda: self.log_view.clear())
+        log_controls.addWidget(btn_clear_log)
+        
+        btn_export_log = QPushButton("💾 Export Log")
+        btn_export_log.clicked.connect(self.export_log)
+        log_controls.addWidget(btn_export_log)
+        
+        self.auto_scroll_check = QCheckBox("Auto Scroll")
+        self.auto_scroll_check.setChecked(True)
+        log_controls.addWidget(self.auto_scroll_check)
+        log_layout.addLayout(log_controls)
+
+        # 🔥 ENHANCED: Trigger & Cooldown Settings
+        trigger_group = QGroupBox("⚙️ Trigger & Cooldown Settings")
+        trigger_layout = QVBoxLayout(trigger_group)
+        
+        # Enhanced trigger words (multiple)
+        trigger_layout.addWidget(QLabel("🎯 Viewer Triggers (separate with comma):"))
+        self.trigger_words_input = QLineEdit()
+        existing_triggers = self.cfg.get("trigger_words", [])
+        if isinstance(existing_triggers, list):
+            self.trigger_words_input.setText(", ".join(existing_triggers))
+        else:
+            self.trigger_words_input.setText(self.cfg.get("trigger_word", ""))
+        self.trigger_words_input.setPlaceholderText("example: bro, hey, ?, greet me, help")
+        trigger_layout.addWidget(self.trigger_words_input)
+        
+        trigger_btn_row = QHBoxLayout()
+        btn_save_triggers = QPushButton("💾 Save Triggers")
+        btn_save_triggers.clicked.connect(self.save_trigger_words)
+        trigger_btn_row.addWidget(btn_save_triggers)
+        
+        btn_test_trigger = QPushButton("🧪 Test Trigger")
+        btn_test_trigger.clicked.connect(self.test_trigger)
+        trigger_btn_row.addWidget(btn_test_trigger)
+        trigger_layout.addLayout(trigger_btn_row)
+
+        # Cooldown controls
+        cooldown_row = QHBoxLayout()
+        cooldown_row.addWidget(QLabel("⏱️ Batch Cooldown:"))
+        self.cooldown_spin = QSpinBox()
+        self.cooldown_spin.setRange(0, 30)
+        self.cooldown_spin.setValue(self.cfg.get("cooldown_duration", 10))
+        self.cooldown_spin.valueChanged.connect(self.update_cooldown)
+        self.cooldown_spin.setToolTip("Delay between batch reply processing (seconds)")
+        cooldown_row.addWidget(self.cooldown_spin)
+        cooldown_row.addWidget(QLabel("sec"))
+        
+        cooldown_row.addWidget(QLabel("👤 Viewer Cooldown:"))
+        self.viewer_cooldown_spin = QSpinBox()
+        self.viewer_cooldown_spin.setRange(1, 30)
+        self.viewer_cooldown_spin.setValue(self.cfg.get("viewer_cooldown_minutes", 3))
+        self.viewer_cooldown_spin.valueChanged.connect(self.update_viewer_cooldown)
+        self.viewer_cooldown_spin.setToolTip("Minimum delay between questions from same viewer (minutes)")
+        cooldown_row.addWidget(self.viewer_cooldown_spin)
+        cooldown_row.addWidget(QLabel("min"))
+        trigger_layout.addLayout(cooldown_row)
+
+        # Queue and daily limits
+        limits_row = QHBoxLayout()
+        limits_row.addWidget(QLabel("📋 Max Queue:"))
+        self.max_queue_spin = QSpinBox()
+        self.max_queue_spin.setRange(1, 10)
+        self.max_queue_spin.setValue(self.cfg.get("max_queue_size", 5))
+        self.max_queue_spin.valueChanged.connect(self.update_max_queue)
+        self.max_queue_spin.setToolTip("Maximum comments in batch queue")
+        limits_row.addWidget(self.max_queue_spin)
+        
+        limits_row.addWidget(QLabel("📅 Daily Limit:"))
+        self.daily_limit_spin = QSpinBox()
+        self.daily_limit_spin.setRange(1, 50)
+        self.daily_limit_spin.setValue(self.cfg.get("viewer_daily_limit", 5))
+        self.daily_limit_spin.valueChanged.connect(self.update_daily_limit)
+        self.daily_limit_spin.setToolTip("Maximum interactions per viewer per day")
+        limits_row.addWidget(self.daily_limit_spin)
+        trigger_layout.addLayout(limits_row)
+
+        # Topic cooldown and blocking
+        topic_row = QHBoxLayout()
+        topic_row.addWidget(QLabel("🚫 Topic Cooldown:"))
+        self.topic_cooldown_spin = QSpinBox()
+        self.topic_cooldown_spin.setRange(1, 60)
+        self.topic_cooldown_spin.setValue(self.cfg.get("topic_cooldown_minutes", 5))
+        self.topic_cooldown_spin.valueChanged.connect(self.update_topic_cooldown)
+        self.topic_cooldown_spin.setToolTip("Prevent same topic repetition (minutes)")
+        topic_row.addWidget(self.topic_cooldown_spin)
+        topic_row.addWidget(QLabel("min"))
+        
+        self.topic_blocking_input = QLineEdit()
+        self.topic_blocking_input.setText(self.cfg.get("blocked_topics", ""))
+        self.topic_blocking_input.setPlaceholderText("blocked topics (comma separated)")
+        topic_row.addWidget(self.topic_blocking_input)
+        
+        btn_save_topics = QPushButton("💾 Save")
+        btn_save_topics.clicked.connect(self.save_topic_settings)
+        topic_row.addWidget(btn_save_topics)
+        trigger_layout.addLayout(topic_row)
+        
+        layout.addWidget(trigger_group)
+
+        # 🔥 ENHANCED: Voice & Control Settings
+        voice_group = QGroupBox("🔊 Voice & Control Settings")
+        voice_layout = QVBoxLayout(voice_group)
+        
+        # Suara CoHost
+        voice_layout.addWidget(QLabel("🎤 CoHost Voice:"))
+        voice_row = QHBoxLayout()
+        self.voice_cb = QComboBox()
+        voice_row.addWidget(self.voice_cb, 2)
+        btn_preview = QPushButton("🔈 Preview")
+        btn_preview.clicked.connect(self.preview_cohost_voice)
+        voice_row.addWidget(btn_preview)
+        btn_save_voice = QPushButton("💾 Save")
+        btn_save_voice.clicked.connect(self.save_cohost_voice)
+        voice_row.addWidget(btn_save_voice)
+        voice_layout.addLayout(voice_row)
+
+        # Start / Stop controls
+        voice_layout.addWidget(QLabel("🎮 Auto-Reply Control:"))
+        self.status = QLabel("Status: Ready")
+        voice_layout.addWidget(self.status)
+        
+        control_row = QHBoxLayout()
+        self.btn_start = QPushButton("▶️ Start Auto-Reply")
+        self.btn_start.clicked.connect(self.start)
+        control_row.addWidget(self.btn_start)
+        self.btn_stop = QPushButton("⏹️ Stop Auto-Reply")
+        self.btn_stop.clicked.connect(self.stop)
+        control_row.addWidget(self.btn_stop)
+        voice_layout.addLayout(control_row)
+        
+        layout.addWidget(voice_group)
+        layout.addWidget(log_group)
 
         # finalize UI callbacks
         self.mode_cb.currentTextChanged.connect(self.update_mode_ui)
@@ -424,10 +702,19 @@ class CohostTabPro(QWidget):
 
     # — UI helpers —
     def update_mode_ui(self, mode):
+        """Update UI based on reply mode selection."""
         self.delay_spin.setEnabled(mode == "Delay Latest")
-        is_tr = (mode == "Trigger")
-        self.trigger_input.setEnabled(is_tr)
-        self.trigger_btn.setEnabled(is_tr)
+        is_trigger = (mode == "Trigger")
+        
+        # Update enhanced trigger controls
+        if safe_attr_check(self, 'trigger_words_input'):
+            self.trigger_words_input.setEnabled(is_trigger)
+        
+        # Update old trigger controls for backward compatibility
+        if safe_attr_check(self, 'trigger_input'):
+            self.trigger_input.setEnabled(is_trigger)
+        if safe_attr_check(self, 'trigger_btn'):
+            self.trigger_btn.setEnabled(is_trigger)
 
     def on_language_change(self, lang):
         self.save_language(lang)
@@ -565,13 +852,13 @@ class CohostTabPro(QWidget):
 
     def toggle_hotkey_off(self):
         """Mute CoHost chat (nonaktifkan hotkey)."""
-        if hasattr(self, "toggle_btn"):
+        if safe_attr_check(self, "toggle_btn"):
             self.toggle_btn.setChecked(False)
         self.hotkey_enabled = False
 
     def toggle_hotkey_on(self):
         """Unmute CoHost chat (aktifkan hotkey kembali)."""
-        if hasattr(self, "toggle_btn"):
+        if safe_attr_check(self, "toggle_btn"):
             self.toggle_btn.setChecked(True)
         self.hotkey_enabled = True
 
@@ -652,7 +939,7 @@ class CohostTabPro(QWidget):
         """Start auto-reply untuk mode Basic dengan validasi lengkap."""
         # TAMBAHAN: Skip usage tracking untuk test mode
         main_window = self.window()
-        if hasattr(main_window, 'license_validator') and main_window.license_validator.testing_mode:
+        if safe_attr_check(main_window, 'license_validator') and main_window.license_validator.testing_mode:
             print("[DEBUG] Test mode active - skipping usage tracking")
             # Jangan start usage timer
         else:
@@ -665,7 +952,7 @@ class CohostTabPro(QWidget):
         # TAMBAHKAN DI SINI - CEK KREDIT LEBIH AWAL
         # Ambil data kredit dari license_validator
         main_window = self.window()
-        if hasattr(main_window, 'license_validator'):
+        if safe_attr_check(main_window, 'license_validator'):
             license_data = main_window.license_validator.validate()
             daily_usage = license_data.get("daily_usage", {})
             today = datetime.now().date().isoformat()
@@ -684,14 +971,14 @@ class CohostTabPro(QWidget):
             
             # Cek kredit
             if remaining_hours <= 0:
-                if hasattr(main_window, 'show_no_credit_dialog'):
+                if safe_attr_check(main_window, 'show_no_credit_dialog'):
                     main_window.show_no_credit_dialog()
                 else:
                     QMessageBox.critical(self, "Kredit Habis", 
                                          "Kredit jam Anda telah habis.\nSilakan beli paket untuk melanjutkan.")
                 return
             elif remaining_hours < 1:
-                if hasattr(main_window, 'show_credit_warning'):
+                if safe_attr_check(main_window, 'show_credit_warning'):
                     main_window.show_credit_warning(remaining_hours)
                 else:
                     QMessageBox.warning(self, "Kredit Rendah",
@@ -771,7 +1058,7 @@ class CohostTabPro(QWidget):
         if self.proc and self.proc.poll() is None:
             self.proc.terminate()
             self.proc = None
-        if hasattr(self, "delay_timer") and self.delay_timer:
+        if safe_attr_check(self, "delay_timer") and self.delay_timer:
             self.delay_timer.cancel()
         self.log_view.append("[INFO] Semua listener dihentikan.")
 
@@ -779,7 +1066,7 @@ class CohostTabPro(QWidget):
         self.usage_timer.stop()
 
     def _track_usage(self):
-        """Track usage untuk mode Pro dengan multiplier 5x"""
+        """Track usage untuk mode Pro dengan multiplier 5x dan menggunakan pro_credits"""
         # jika ada demo expired_at, dan paket basic
         exp = self.cfg.get("expired_at", None)
         if self.cfg.get("paket") == "basic" and exp:
@@ -814,7 +1101,82 @@ class CohostTabPro(QWidget):
             )
             return
 
-        # Mode Pro = 5x lipat usage
+        # Mode Pro = 5x lipat usage dan menggunakan pro_credits
+        try:
+            # Cek apakah debug mode (skip tracking)
+            if self.cfg.get("debug_mode", False):
+                self.log_view.append("[PRO] Developer Mode: credits not enforced")
+                return
+            
+            # 🔥 FORCE immediate credit deduction untuk AI dan TTS usage (MODE PRO)
+            tts_chars = getattr(self, 'current_reply_char_count', 100)
+            tts_credits = tts_chars * 5.0 / 100    # PRO: 5x lipat dari basic (1.0 → 5.0)
+            ai_credits = 100 * 7.5 / 100          # PRO: 5x lipat dari basic (1.5 → 7.5)
+            total_credits = tts_credits + ai_credits
+            
+            self.log_view.append(f"[PRO] 💳 Credit deduction: TTS={tts_credits:.4f}, AI={ai_credits:.4f}, Total={total_credits:.4f}")
+            
+            # Get user email
+            email = self.cfg.get("user_data", {}).get("email", "")
+            if not email:
+                self.log_view.append("[PRO] ❌ No email found for credit deduction")
+                return
+            
+            # Force TTS deduction via Supabase - PRO MODE
+            if tts_credits > 0:
+                try:
+                    from modules_client.supabase_client import SupabaseClient
+                    supabase = SupabaseClient()
+                    tts_success = supabase.deduct_mode_credits(
+                        email=email,
+                        amount=tts_credits,
+                        mode="pro",
+                        component="TTS",
+                        description=f"PRO TTS processing {tts_chars} characters"
+                    )
+                    if not tts_success or tts_success.get("status") != "success":
+                        self.log_view.append("[PRO] ❌ PRO TTS credit deduction FAILED!")
+                        self.log_view.append(f"[PRO] Error: {tts_success.get('message', 'Unknown error')}")
+                    else:
+                        self.log_view.append(f"[PRO] ✅ PRO TTS: {tts_credits:.4f} credits deducted")
+                except Exception as e:
+                    self.log_view.append(f"[PRO] ❌ PRO TTS credit deduction error: {e}")
+            
+            # Force AI deduction via Supabase - PRO MODE
+            if ai_credits > 0:
+                try:
+                    from modules_client.supabase_client import SupabaseClient
+                    supabase = SupabaseClient()
+                    ai_success = supabase.deduct_mode_credits(
+                        email=email,
+                        amount=ai_credits,
+                        mode="pro",
+                        component="AI",
+                        description="PRO AI reply generation (100 tokens)"
+                    )
+                    if not ai_success or ai_success.get("status") != "success":
+                        self.log_view.append("[PRO] ❌ PRO AI credit deduction FAILED!")
+                        self.log_view.append(f"[PRO] Error: {ai_success.get('message', 'Unknown error')}")
+                    else:
+                        self.log_view.append(f"[PRO] ✅ PRO AI: {ai_credits:.4f} credits deducted")
+                except Exception as e:
+                    self.log_view.append(f"[PRO] ❌ PRO AI credit deduction error: {e}")
+            
+            # Update session stats
+            if not safe_attr_check(self, 'session_usage'):
+                self.session_usage = {"tts_chars": 0, "ai_requests": 0, "total_credits_used": 0}
+            
+            self.session_usage["tts_chars"] += tts_chars
+            self.session_usage["ai_requests"] += 1
+            self.session_usage["total_credits_used"] += total_credits
+            
+            # Log session totals
+            self.log_view.append(f"[PRO] 💰 PRO Mode Session total: {self.session_usage.get('total_credits_used', 0):.4f} credits used")
+            
+        except Exception as e:
+            self.log_view.append(f"[PRO] Error in PRO Mode usage tracking: {e}")
+        
+        # Original usage tracking for time-based limits
         pro_usage = 5  # 5x lipat dari basic
         add_usage(pro_usage)
         self.log_view.append(f"[Langganan PRO] +{pro_usage} menit (tier: {tier}) - 5x multiplier")
@@ -890,7 +1252,7 @@ class CohostTabPro(QWidget):
 
     def _cleanup_existing_timer(self):
         """Bersihkan timer yang sudah ada."""
-        if hasattr(self, "delay_timer") and self.delay_timer:
+        if safe_attr_check(self, "delay_timer") and self.delay_timer:
             try:
                 if isinstance(self.delay_timer, threading.Timer):
                     self.delay_timer.cancel()
@@ -974,7 +1336,7 @@ class CohostTabPro(QWidget):
         try:
             # Update UI (overlay dan log)
             mw = self.window()
-            if hasattr(mw, "overlay_tab"):
+            if safe_attr_check(mw, "overlay_tab"):
                 mw.overlay_tab.update_overlay(author, reply)
     
             self.log_view.append(f"🤖 {reply}")
@@ -1024,7 +1386,7 @@ class CohostTabPro(QWidget):
             traceback.print_exc()
     
             # Pastikan cleanup meskipun ada error
-            if hasattr(self, 'tts_active') and self.tts_active:
+            if safe_attr_check(self, 'tts_active'):
                 self.ttsFinished.emit()
                 print("[DEBUG] ttsFinished signal emitted (error recovery)")
                 self.tts_active = False
@@ -1037,7 +1399,7 @@ class CohostTabPro(QWidget):
         print("[DEBUG] Manual TTS finished timer triggered")
     
         # Hentikan timeout timer jika masih aktif
-        if hasattr(self, 'safety_timer') and self.safety_timer.isActive():
+        if safe_timer_check(self, 'safety_timer'):
             self.safety_timer.stop()
     
         # Emit signal TTS selesai
@@ -1124,7 +1486,7 @@ class CohostTabPro(QWidget):
         Mencegah timer berjalan ganda atau konflik.
         """
         for timer_name in ['tts_timer', 'safety_timer']:
-            if hasattr(self, timer_name):
+            if safe_attr_check(self, timer_name):
                 timer = getattr(self, timer_name)
                 if isinstance(timer, QTimer) and timer.isActive():
                     timer.stop()
@@ -1160,7 +1522,7 @@ class CohostTabPro(QWidget):
         
         try:
             # Pastikan timer dihentikan
-            if hasattr(self, 'tts_timer') and self.tts_timer.isActive():
+            if safe_timer_check(self, 'tts_timer'):
                 self.tts_timer.stop()
                 print("[DEBUG] Stopped active TTS timer")
             
@@ -1182,7 +1544,7 @@ class CohostTabPro(QWidget):
         """Bersihkan state TTS dan pastikan tidak ada deadlock."""
         self.ttsFinished.emit()
         self.reply_busy = False
-        if hasattr(self, 'tts_timer') and self.tts_timer.isActive():
+        if safe_timer_check(self, 'tts_timer'):
             self.tts_timer.stop()
 
     def _calculate_tts_duration(self, text):
@@ -1242,6 +1604,367 @@ class CohostTabPro(QWidget):
     
         print(f"[DEBUG] TTS timers set: normal={duration:.1f}s, safety={duration*2:.1f}s")
 
+    # 🔥 ENHANCED: Template System Methods
+    def load_template(self, template_name):
+        """Load predefined template based on selection."""
+        templates = {
+            "🎮 Gaming - MOBA Expert": """You are a MOBA gaming expert and co-host. You help viewers with:
+- Champion/hero strategies and builds
+- Game mechanics and meta analysis  
+- Team composition advice
+- Skill combos and timing
+- Map awareness tips
+Keep responses concise, helpful, and engaging for stream viewers.""",
+            
+            "🎮 Gaming - FPS Pro": """You are an FPS gaming expert and co-host. You assist viewers with:
+- Weapon recommendations and loadouts
+- Map callouts and positioning
+- Aim training techniques
+- Movement mechanics
+- Competitive strategies
+Provide quick, actionable advice that enhances their gameplay.""",
+            
+            "💰 Sales - E-Commerce": """You are a sales expert co-host specializing in e-commerce. You help with:
+- Product recommendations
+- Deal analysis and value assessment
+- Shopping tips and best practices
+- Brand comparisons
+- Purchase decision guidance
+Be persuasive yet honest, focusing on viewer value and satisfaction.""",
+            
+            "💰 Sales - Digital Products": """You are a digital products sales expert and co-host. You assist with:
+- Software and app recommendations
+- Digital service evaluations
+- Subscription value analysis
+- Tech product comparisons
+- Digital marketing insights
+Provide informed advice that helps viewers make smart digital purchases."""
+        }
+        
+        if template_name in templates:
+            self.custom.setPlainText(templates[template_name])
+            self.log_view.append(f"[INFO] Template loaded: {template_name}")
+
+    def preview_template(self):
+        """Preview current template content."""
+        current_text = self.custom.toPlainText()
+        if current_text:
+            from PyQt6.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Template Preview")
+            dialog.setModal(True)
+            dialog.resize(500, 300)
+            
+            layout = QVBoxLayout(dialog)
+            preview_text = QTextEdit()
+            preview_text.setPlainText(current_text)
+            preview_text.setReadOnly(True)
+            layout.addWidget(preview_text)
+            
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(dialog.close)
+            layout.addWidget(close_btn)
+            
+            dialog.exec()
+        else:
+            self.log_view.append("[WARN] No template content to preview")
+
+    # 🔥 ENHANCED: Trigger and Cooldown Methods
+    def save_trigger_words(self):
+        """Save multiple trigger words."""
+        words_text = self.trigger_words_input.text().strip()
+        if words_text:
+            words_list = [w.strip() for w in words_text.split(",") if w.strip()]
+            self.cfg.set("trigger_words", words_list)
+            self.cfg.set("trigger_word", words_text)  # Backward compatibility
+            self.log_view.append(f"[INFO] Trigger words saved: {words_list}")
+        else:
+            self.cfg.set("trigger_words", [])
+            self.cfg.set("trigger_word", "")
+            self.log_view.append("[INFO] Trigger words cleared")
+
+    def test_trigger(self):
+        """Test trigger word matching."""
+        test_message = "hey bro, can you help me with this game?"
+        words_text = self.trigger_words_input.text().strip()
+        if words_text:
+            words_list = [w.strip().lower() for w in words_text.split(",") if w.strip()]
+            matches = [word for word in words_list if word in test_message.lower()]
+            if matches:
+                self.log_view.append(f"[TEST] ✅ Triggers matched: {matches}")
+            else:
+                self.log_view.append(f"[TEST] ❌ No triggers matched in test message")
+        else:
+            self.log_view.append("[TEST] ❌ No trigger words configured")
+
+    def update_cooldown(self, value):
+        """Update batch cooldown setting."""
+        self.cfg.set("cooldown_duration", value)
+        self.log_view.append(f"[INFO] Batch cooldown updated: {value}s")
+
+    def update_viewer_cooldown(self, value):
+        """Update viewer cooldown setting."""
+        self.cfg.set("viewer_cooldown_minutes", value)
+        self.log_view.append(f"[INFO] Viewer cooldown updated: {value} minutes")
+
+    def update_max_queue(self, value):
+        """Update maximum queue size."""
+        self.cfg.set("max_queue_size", value)
+        self.log_view.append(f"[INFO] Max queue size updated: {value}")
+
+    def update_daily_limit(self, value):
+        """Update daily interaction limit per viewer."""
+        self.cfg.set("viewer_daily_limit", value)
+        self.log_view.append(f"[INFO] Daily limit updated: {value} interactions per viewer")
+
+    def update_topic_cooldown(self, value):
+        """Update topic cooldown setting."""
+        self.cfg.set("topic_cooldown_minutes", value)
+        self.log_view.append(f"[INFO] Topic cooldown updated: {value} minutes")
+
+    def save_topic_settings(self):
+        """Save topic blocking settings."""
+        blocked_topics = self.topic_blocking_input.text().strip()
+        self.cfg.set("blocked_topics", blocked_topics)
+        self.log_view.append(f"[INFO] Blocked topics saved: {blocked_topics}")
+
+    # 🔥 ENHANCED: Statistics and Memory Methods
+    def show_filter_stats(self):
+        """Show detailed filter statistics (matching Basic version)."""
+        try:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Initialize filter stats if not exists
+            if not safe_attr_check(self, 'filter_stats'):
+                self.filter_stats = {
+                    "toxic": 0, "short": 0, "emoji": 0, "spam": 0, "numeric": 0
+                }
+            
+            # Calculate total filtered
+            total_filtered = sum(self.filter_stats.values())
+            
+            # Daily interactions stats
+            today_viewers = 0
+            total_interactions_today = 0
+            status_counts = {"new": 0, "regular": 0, "vip": 0}
+            
+            if safe_attr_check(self, 'viewer_daily_interactions'):
+                for author, data in self.viewer_daily_interactions.items():
+                    if data.get("date") == today:
+                        today_viewers += 1
+                        total_interactions_today += data.get("interaction_count", 0)
+                        status = data.get("status", "new")
+                        status_counts[status] += 1
+
+            stats_msg = "\n[FILTER STATISTICS]\n"
+            stats_msg += "=" * 40 + "\n"
+            stats_msg += f"Toxic words: {self.filter_stats.get('toxic', 0)}\n"
+            stats_msg += f"Short messages: {self.filter_stats.get('short', 0)}\n"
+            stats_msg += f"Emoji only: {self.filter_stats.get('emoji', 0)}\n"
+            stats_msg += f"Spam/daily limit: {self.filter_stats.get('spam', 0)}\n"
+            stats_msg += f"Numeric spam: {self.filter_stats.get('numeric', 0)}\n"
+            stats_msg += "=" * 40 + "\n"
+            stats_msg += f"Total filtered: {total_filtered}\n\n"
+            
+            stats_msg += "[DAILY INTERACTIONS]\n"
+            stats_msg += "=" * 40 + "\n"
+            stats_msg += f"Active viewers today: {today_viewers}\n"
+            stats_msg += f"Total interactions today: {total_interactions_today}\n"
+            stats_msg += f"New viewers: {status_counts['new']}\n"
+            stats_msg += f"Regular viewers: {status_counts['regular']}\n"
+            stats_msg += f"VIP viewers: {status_counts['vip']}\n"
+            stats_msg += f"Limit per same question: {getattr(self, 'daily_message_limit', 3)}x/day"
+
+            self.log_view.append(stats_msg)
+            
+        except Exception as e:
+            self.log_view.append(f"[ERROR] Failed to show filter stats: {e}")
+
+    def show_cache_spam_stats(self):
+        """Show cache and spam statistics (matching Basic version)."""
+        try:
+            import textwrap
+            
+            # Initialize components if not exists
+            if not safe_attr_check(self, 'cache_manager'):
+                cache_stats = {
+                    'total_entries': 0,
+                    'total_hits': 0,
+                    'hit_rate': 0.0,
+                    'cache_size_kb': 0.0
+                }
+            else:
+                cache_stats = self.cache_manager.get_stats()
+            
+            if not safe_attr_check(self, 'spam_detector'):
+                spam_stats = {
+                    'total_users': 0,
+                    'blocked_users': 0,
+                    'total_messages': 0,
+                    'active_blocks': []
+                }
+            else:
+                spam_stats = self.spam_detector.get_overall_stats()
+
+            stats_msg = textwrap.dedent(f"""
+                [CACHE STATISTICS]
+                Total Entries: {cache_stats['total_entries']}
+                Total Hits: {cache_stats['total_hits']}
+                Hit Rate: {cache_stats['hit_rate']:.1f}%
+                Cache Size: {cache_stats['cache_size_kb']:.1f} KB
+
+                [SPAM DETECTION]
+                Total Users: {spam_stats['total_users']}
+                Blocked Users: {spam_stats['blocked_users']}
+                Total Messages: {spam_stats['total_messages']}
+                Active Blocks: {', '.join(spam_stats['active_blocks'])}
+            """).strip()
+
+            self.log_view.append(stats_msg)
+            
+        except Exception as e:
+            self.log_view.append(f"[ERROR] Failed to show cache/spam stats: {e}")
+
+    def reset_statistics(self):
+        """Reset filter statistics (matching Basic version)."""
+        try:
+            # Reset filter stats
+            if not safe_attr_check(self, 'filter_stats'):
+                self.filter_stats = {
+                    "toxic": 0, "short": 0, "emoji": 0, "spam": 0, "numeric": 0
+                }
+            else:
+                self.filter_stats = {
+                    "toxic": 0, "short": 0, "emoji": 0, "spam": 0, "numeric": 0
+                }
+            
+            # Reset viewer memory if exists
+            if safe_attr_check(self, 'viewer_memory'):
+                self.viewer_memory.reset_statistics()
+                self.update_memory_stats()
+                
+            self.log_view.append("[INFO] ✅ Filter statistics have been reset")
+            
+        except Exception as e:
+            self.log_view.append(f"[ERROR] Failed to reset statistics: {e}")
+
+    def reset_spam_blocks(self):
+        """Reset spam block records (matching Basic version)."""
+        try:
+            import time
+            
+            # Count currently blocked viewers
+            blocked_count = 0
+            if safe_attr_check(self, 'viewer_daily_interactions'):
+                current_time = time.time()
+                for author, data in self.viewer_daily_interactions.items():
+                    if data.get("blocked_until", 0) > current_time:
+                        blocked_count += 1
+                # Reset all spam data
+                self.viewer_daily_interactions.clear()
+
+            # Reset old system if exists
+            if safe_attr_check(self, 'viewer_cooldowns'):
+                blocked_count += sum(1 for data in self.viewer_cooldowns.values() if data.get("blocked_until", 0) > time.time())
+                self.viewer_cooldowns.clear()
+                
+            # Reset spam detector if exists
+            if safe_attr_check(self, 'spam_detector'):
+                self.spam_detector.reset_blocks()
+                
+            self.log_view.append(f"[RESET] {blocked_count} spam blocks removed, all viewers can ask questions again")
+            self.log_view.append("[RESET] Daily interaction history has been reset")
+            
+        except Exception as e:
+            self.log_view.append(f"[ERROR] Failed to reset spam blocks: {e}")
+
+    def reset_daily_interactions(self):
+        """Reset daily interaction counters (matching Basic version)."""
+        try:
+            interaction_count = 0
+            
+            # Reset daily interactions
+            if safe_attr_check(self, 'viewer_daily_interactions'):
+                interaction_count = len(self.viewer_daily_interactions)
+                self.viewer_daily_interactions.clear()
+                
+            # Reset viewer memory daily interactions if exists
+            if safe_attr_check(self, 'viewer_memory'):
+                self.viewer_memory.reset_daily_interactions()
+                self.update_memory_stats()
+                
+            self.log_view.append(f"[RESET] {interaction_count} daily interactions reset")
+            self.log_view.append("[RESET] All viewers can ask questions about any topic again")
+            
+        except Exception as e:
+            self.log_view.append(f"[ERROR] Failed to reset daily interactions: {e}")
+
+    def update_memory_stats(self):
+        """Update memory statistics display."""
+        try:
+            if safe_attr_check(self, 'viewer_memory'):
+                stats = self.viewer_memory.get_statistics()
+                viewer_count = len(stats.get('viewers', {}))
+                self.memory_stats_label.setText(f"📊 Viewer Memory: {viewer_count} viewers tracked")
+        except Exception as e:
+            self.memory_stats_label.setText("📊 Viewer Memory: Error loading stats")
+
+    # 🔥 ENHANCED: Microphone and Communication Methods
+    def load_microphones(self):
+        """Load available microphones."""
+        self.mic_combo.clear()
+        try:
+            import sounddevice as sd
+            devices = sd.query_devices()
+            for i, device in enumerate(devices):
+                if device['max_input_channels'] > 0:
+                    self.mic_combo.addItem(f"{device['name']}", i)
+            
+            # Set saved microphone
+            saved_mic = self.cfg.get("selected_microphone", "")
+            if saved_mic:
+                idx = self.mic_combo.findText(saved_mic)
+                if idx >= 0:
+                    self.mic_combo.setCurrentIndex(idx)
+        except Exception as e:
+            self.log_view.append(f"[ERROR] Failed to load microphones: {e}")
+            self.mic_combo.addItem("Default Microphone", -1)
+
+    def export_log(self):
+        """Export activity log to file."""
+        try:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"cohost_pro_log_{timestamp}.txt"
+            
+            log_content = self.log_view.toPlainText()
+            if log_content:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(f"StreamMate AI - CoHost Pro Log\n")
+                    f.write(f"Exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write("="*50 + "\n\n")
+                    f.write(log_content)
+                
+                self.log_view.append(f"[INFO] ✅ Log exported to: {filename}")
+            else:
+                self.log_view.append("[WARN] No log content to export")
+        except Exception as e:
+            self.log_view.append(f"[ERROR] Failed to export log: {e}")
+
+    def save_custom(self):
+        """Save custom prompt with enhanced validation."""
+        c = self.custom.toPlainText().strip()
+        if c:
+            self.cfg.set("custom_context", c)
+            self.log_view.append("[INFO] ✅ Custom prompt saved successfully")
+            
+            # Update template combo to show custom
+            if self.template_combo.currentText() != "📝 Custom Prompt":
+                self.template_combo.setCurrentText("📝 Custom Prompt")
+        else:
+            self.cfg.set("custom_context", "")
+            self.log_view.append("[INFO] Custom prompt cleared")
 
 
     def closeEvent(self, event):

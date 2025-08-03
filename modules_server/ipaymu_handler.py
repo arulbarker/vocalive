@@ -19,7 +19,7 @@ class IPaymuHandler:
         
         # Production credentials
         self.va = "1179005157914468"
-        self.api_key = "C3CF720D-8347-4EA3-8DC9-BAC2DEF046AC"
+        self.api_key = os.getenv("IPAYMU_API_KEY")
         
         print(f"🚀 iPaymu PRODUCTION MODE")
         print(f"📱 VA: {self.va}")

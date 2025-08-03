@@ -8,7 +8,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("DEEPSEEK_API_KEY")
+# Try to get API key from config first, then environment
+try:
+    from modules_server.config_manager import ConfigManager
+    cfg = ConfigManager()
+    API_KEY = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+except:
+    # Fallback to environment variable
+    API_KEY = os.getenv("DEEPSEEK_API_KEY")
+
 ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
 
 # Setup logging

@@ -191,6 +191,16 @@ CREDIT_PACKAGES = [
         "total_credits": 100000,
         "description": "Good for: Basic mode + some upgrades",
         "popular": True
+    },
+    {
+        "id": "premium",
+        "name": "💎 Premium Pack", 
+        "price_idr": 100000,
+        "credits": 100000,
+        "bonus": 0,
+        "total_credits": 100000,
+        "description": "Good for: Pro mode + long term usage",
+        "popular": False
     }
 ]
 
@@ -203,4 +213,4 @@ def get_package_by_id(package_id: str) -> Optional[Dict]:
     for package in CREDIT_PACKAGES:
         if package["id"] == package_id:
             return package
-    return None 
+    return None

@@ -558,7 +558,6 @@ class TutorialTab(QWidget):
             }}
             QPushButton:hover {{
                 background-color: {self.darken_color(color)};
-                transform: scale(1.05);
             }}
             QPushButton:pressed {{
                 background-color: {self.darken_color(color, 0.3)};

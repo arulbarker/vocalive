@@ -3,6 +3,13 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
+def safe_attr_check(obj, attr_name):
+    """Safely check if an object has an attribute."""
+    try:
+        return hasattr(obj, attr_name)
+    except Exception:
+        return False
+
 class UpdateDialog(QDialog):
     """Dialog untuk menampilkan update yang tersedia."""
     
@@ -363,7 +370,7 @@ class UpdateDialog(QDialog):
     def closeEvent(self, event):
         """Handle dialog close."""
         # Cancel download jika sedang berjalan
-        if self.update_manager and hasattr(self.update_manager, 'cancel_download'):
+        if self.update_manager and safe_attr_check(self.update_manager, 'cancel_download'):
             self.update_manager.cancel_download()
 
         super().closeEvent(event)
