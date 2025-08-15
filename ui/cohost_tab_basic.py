@@ -77,10 +77,13 @@ except ImportError:
 
 # Import credit tracking functions
 try:
-    from modules_server.real_credit_tracker import track_usage_with_forced_deduction
-except ImportError:
+    from modules_server.real_credit_tracker import track_usage_with_forced_deduction, force_credit_deduction, credit_tracker
+    print("[DEBUG] Credit tracking functions imported successfully")
+except ImportError as e:
+    print(f"[ERROR] Failed to import credit tracking: {e}")
     def track_usage_with_forced_deduction(*args, **kwargs):
         """Fallback track_usage_with_forced_deduction function"""
+        print("[WARNING] Using fallback credit tracking - no actual deduction!")
         return True
 
 # ====================================================================
@@ -3940,6 +3943,13 @@ Current context: Digital products sales expert"""
 
         # PERBAIKAN: Reset flag TTS aktif
         self.tts_active = False
+        
+        # ✅ TAMBAH: Force credit tracking setelah TTS complete
+        try:
+            self.log_debug("Tracking usage after TTS completion...")
+            self._track_usage()
+        except Exception as e:
+            self.log_error(f"Error tracking usage: {e}")
 
         # PERBAIKAN KRITIKAL: Menggunakan batch_timer dengan delay yang sesuai
         # Ini adalah kunci dari perbaikan yang bekerja di kode lama
@@ -4040,26 +4050,35 @@ Current context: Digital products sales expert"""
             total_credits = tts_credits + ai_credits
             
             self.log_debug(f"💳 FORCING credit deduction: TTS={tts_credits:.4f}, AI={ai_credits:.4f}, Total={total_credits:.4f}")
+            self.log_user(f"💳 Credit deduction: TTS={tts_credits:.4f}, AI={ai_credits:.4f}", "💰")
             
             # Force TTS deduction
             if tts_credits > 0:
+                print(f"[CREDIT_DEBUG] Calling track_usage_with_forced_deduction for TTS: {tts_credits}")
                 tts_success = track_usage_with_forced_deduction(
                     "TTS", 
                     tts_credits, 
                     f"TTS processing {tts_chars} characters"
                 )
+                print(f"[CREDIT_DEBUG] TTS deduction result: {tts_success}")
                 if not tts_success:
                     self.log_error("❌ TTS credit deduction FAILED!")
+                else:
+                    self.log_user(f"✅ TTS credits deducted: {tts_credits:.4f}", "💰")
             
             # Force AI deduction
             if ai_credits > 0:
+                print(f"[CREDIT_DEBUG] Calling track_usage_with_forced_deduction for AI: {ai_credits}")
                 ai_success = track_usage_with_forced_deduction(
                     "AI", 
                     ai_credits, 
                     "AI reply generation (100 tokens)"
                 )
+                print(f"[CREDIT_DEBUG] AI deduction result: {ai_success}")
                 if not ai_success:
                     self.log_error("❌ AI credit deduction FAILED!")
+                else:
+                    self.log_user(f"✅ AI credits deducted: {ai_credits:.4f}", "💰")
             
             # Update session stats
             if not safe_attr_check(self, 'session_usage'):

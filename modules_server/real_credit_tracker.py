@@ -581,7 +581,30 @@ def force_credit_deduction(credits_used: float, description: str = "Auto-reply u
                 
         except Exception as e:
             print(f"[CREDIT] ❌ VPS deduction ERROR: {e}")
-            return False
+            print(f"[CREDIT] 🔄 Trying Supabase fallback...")
+            
+            # FALLBACK: Use Supabase direct deduction
+            try:
+                from modules_client.supabase_client import SupabaseClient
+                supabase_client = SupabaseClient()
+                
+                # Call Supabase credit deduction
+                deduction_result = supabase_client.deduct_credits(
+                    email, 
+                    credits_used, 
+                    description
+                )
+                
+                if deduction_result.get("status") == "success":
+                    print(f"[CREDIT] ✅ Supabase deduction SUCCESS!")
+                    return True
+                else:
+                    print(f"[CREDIT] ❌ Supabase deduction failed: {deduction_result.get('message')}")
+                    return False
+                    
+            except Exception as supabase_error:
+                print(f"[CREDIT] ❌ Supabase fallback error: {supabase_error}")
+                return False
             
     except Exception as e:
         print(f"[CREDIT] ❌ Force deduction error: {e}")

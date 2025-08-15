@@ -1,9 +1,9 @@
 {
   "ARL CRASHZONE": {
     "first_seen": "2025-08-03T22:38:24.127165",
-    "last_seen": "2025-08-15T20:06:07.353000",
-    "comment_count": 4,
-    "status": "new",
+    "last_seen": "2025-08-15T20:23:24.944141",
+    "comment_count": 5,
+    "status": "regular",
     "recent_interactions": [
       {
         "time": "2025-08-03T22:38:24.127165",
@@ -32,6 +32,13 @@
         "reply": "ARL CRASHZONE, thanks bro! Layla's late game scaling is insane if you position well and farm efficiently early on.",
         "sentiment": "positive",
         "mood_pattern": "stable_engagement"
+      },
+      {
+        "time": "2025-08-15T20:23:24.944141",
+        "message": "hebat ketua",
+        "reply": "ARL CRASHZONE, thanks bro! Layla's late game damage is insane if you position well and farm early. \" \"ARL CRASHZONE, appreciate it! Just remember, map awareness is key when playing squishy MM like Layla.",
+        "sentiment": "positive",
+        "mood_pattern": "stable_engagement"
       }
     ],
     "sentiment_history": [
@@ -49,6 +56,10 @@
       },
       {
         "time": "2025-08-15T20:06:07.353000",
+        "sentiment": "positive"
+      },
+      {
+        "time": "2025-08-15T20:23:24.944141",
         "sentiment": "positive"
       }
     ],
@@ -87,6 +98,13 @@
           "timestamp": "2025-08-15T20:06:07.353000",
           "message_type": "general",
           "response_length": 19,
+          "engagement_score": 0.5,
+          "topic": "general"
+        },
+        {
+          "timestamp": "2025-08-15T20:23:24.944141",
+          "message_type": "general",
+          "response_length": 34,
           "engagement_score": 0.5,
           "topic": "general"
         }
