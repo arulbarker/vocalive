@@ -829,12 +829,6 @@ class SupabaseClient:
                 "data": None
             }
 
-# Global instance
-supabase_client = SupabaseClient()
-
-def get_supabase_client() -> SupabaseClient:
-    """Get global Supabase client instance"""
-    return supabase_client
     def generate_ai_reply(self, prompt: str, timeout: int = 30) -> str:
         """Generate AI reply using Supabase Edge Function"""
         try:
@@ -858,3 +852,10 @@ def get_supabase_client() -> SupabaseClient:
         except Exception as e:
             print(f"[Supabase] AI generation error: {e}")
             return None
+
+# Global instance
+supabase_client = SupabaseClient()
+
+def get_supabase_client() -> SupabaseClient:
+    """Get global Supabase client instance"""
+    return supabase_client

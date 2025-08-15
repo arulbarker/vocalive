@@ -1,8 +1,8 @@
 {
   "ARL CRASHZONE": {
     "first_seen": "2025-08-03T22:38:24.127165",
-    "last_seen": "2025-08-03T23:23:54.863599",
-    "comment_count": 3,
+    "last_seen": "2025-08-15T20:06:07.353000",
+    "comment_count": 4,
     "status": "new",
     "recent_interactions": [
       {
@@ -25,6 +25,13 @@
         "reply": "ARL CRASHZONE Yo ARL CRASHZONE! What's up bro, ready to dominate the lane with Layla today?",
         "sentiment": "neutral",
         "mood_pattern": "getting_to_know"
+      },
+      {
+        "time": "2025-08-15T20:06:07.353000",
+        "message": "hebat ketua",
+        "reply": "ARL CRASHZONE, thanks bro! Layla's late game scaling is insane if you position well and farm efficiently early on.",
+        "sentiment": "positive",
+        "mood_pattern": "stable_engagement"
       }
     ],
     "sentiment_history": [
@@ -39,9 +46,13 @@
       {
         "time": "2025-08-03T23:23:54.863599",
         "sentiment": "neutral"
+      },
+      {
+        "time": "2025-08-15T20:06:07.353000",
+        "sentiment": "positive"
       }
     ],
-    "current_mood": "getting_to_know",
+    "current_mood": "stable_engagement",
     "learning_data": {
       "successful_response_patterns": [],
       "preferred_topics": {},
@@ -69,6 +80,71 @@
           "timestamp": "2025-08-03T23:23:54.863599",
           "message_type": "greeting",
           "response_length": 16,
+          "engagement_score": 0.5,
+          "topic": "general"
+        },
+        {
+          "timestamp": "2025-08-15T20:06:07.353000",
+          "message_type": "general",
+          "response_length": 19,
+          "engagement_score": 0.5,
+          "topic": "general"
+        }
+      ]
+    }
+  },
+  "ARL MONEY": {
+    "first_seen": "2025-08-15T20:04:58.233643",
+    "last_seen": "2025-08-15T20:06:33.689621",
+    "comment_count": 2,
+    "status": "new",
+    "recent_interactions": [
+      {
+        "time": "2025-08-15T20:04:58.233643",
+        "message": "halo ketua",
+        "reply": "ARL MONEY Yo ARL MONEY what's good my dude! Just carrying games with Layla right now, wanna see some OP plays?",
+        "sentiment": "neutral",
+        "mood_pattern": "new_viewer"
+      },
+      {
+        "time": "2025-08-15T20:06:33.689621",
+        "message": "mantap ketua",
+        "reply": "ARL MONEY, thanks bro! Just carrying with Layla's insane late game damage, farm safe early and dominate later.",
+        "sentiment": "excited",
+        "mood_pattern": "getting_to_know"
+      }
+    ],
+    "sentiment_history": [
+      {
+        "time": "2025-08-15T20:04:58.233643",
+        "sentiment": "neutral"
+      },
+      {
+        "time": "2025-08-15T20:06:33.689621",
+        "sentiment": "excited"
+      }
+    ],
+    "current_mood": "getting_to_know",
+    "learning_data": {
+      "successful_response_patterns": [],
+      "preferred_topics": {},
+      "response_style_preferences": {
+        "length": "medium",
+        "formality": "casual",
+        "detail_level": "balanced"
+      },
+      "engagement_history": [
+        {
+          "timestamp": "2025-08-15T20:04:58.233643",
+          "message_type": "greeting",
+          "response_length": 21,
+          "engagement_score": 0.5,
+          "topic": "general"
+        },
+        {
+          "timestamp": "2025-08-15T20:06:33.689621",
+          "message_type": "general",
+          "response_length": 18,
           "engagement_score": 0.5,
           "topic": "general"
         }

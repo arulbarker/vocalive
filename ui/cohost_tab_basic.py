@@ -4502,296 +4502,309 @@ Current context: Digital products sales expert"""
 
     def _enqueue(self, author, message, skip_trigger_check=False):
         """Process comment dengan validasi status langganan yang benar."""
-
-        # ✅ PERBAIKAN UTAMA: Validasi timestamp untuk mencegah pesan lama dari cache
-        current_time = time.time()
-        
-        # Skip pesan duplikat yang sudah pernah diproses dalam session ini
-        message_signature = f"{author}:{message}"
-        if safe_attr_check(self, 'processed_messages_session'):
-            if message_signature in self.processed_messages_session:
-                self.log_debug(f"Skipping duplicate message from session: {author}")
-                return
-        else:
-            self.processed_messages_session = set()
-            
-        # Tambahkan ke tracking session
-        self.processed_messages_session.add(message_signature)
-        
-        # Cleanup session tracking jika terlalu besar (>1000 entries)
-        if len(self.processed_messages_session) > 1000:
-            # Keep only recent 500 entries
-            recent_entries = list(self.processed_messages_session)[-500:]
-            self.processed_messages_session = set(recent_entries)
-
-        # ✅ PERBAIKAN UTAMA: Log komentar yang masuk untuk user visibility
-        self.log_user(f"📨 Incoming comment from {author}: {message}", "👁️")
-
-        # ✅ BARU: Log SEMUA komentar ke cohost_log.txt untuk Reply Log Tab
-        # Tidak peduli ada trigger atau tidak - semua komentar tercatat
         try:
-            COHOST_LOG.parent.mkdir(exist_ok=True)
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.log_debug(f"[_ENQUEUE] Starting _enqueue for: {author}: {message}")
             
-            # Log dengan format: timestamp, author, message, status (trigger/no-trigger)
-            with open(str(COHOST_LOG), "a", encoding="utf-8") as f:
-                # Cek apakah ada trigger untuk menandai status
-                has_trigger = self._has_trigger(message)
-                status = "TRIGGER" if has_trigger else "NO-TRIGGER"
-                f.write(f"{timestamp}\t{author}\t{message}\t[{status}] Komentar diterima\n")
+            # ✅ PERBAIKAN UTAMA: Validasi timestamp untuk mencegah pesan lama dari cache
+            current_time = time.time()
+            self.log_debug(f"[_ENQUEUE] Current time: {current_time}")
+            
+            # Skip pesan duplikat yang sudah pernah diproses dalam session ini
+            message_signature = f"{author}:{message}"
+            if safe_attr_check(self, 'processed_messages_session'):
+                if message_signature in self.processed_messages_session:
+                    self.log_debug(f"Skipping duplicate message from session: {author}")
+                    return
+            else:
+                self.processed_messages_session = set()
                 
-            self.log_debug(f"💾 Logged comment to cohost_log.txt: {author}")
+            # Tambahkan ke tracking session
+            self.processed_messages_session.add(message_signature)
             
-        except Exception as e:
-            self.log_debug(f"Failed to log comment: {e}")
+            # Cleanup session tracking jika terlalu besar (>1000 entries)
+            if len(self.processed_messages_session) > 1000:
+                # Keep only recent 500 entries
+                recent_entries = list(self.processed_messages_session)[-500:]
+                self.processed_messages_session = set(recent_entries)
 
-        # Skip if message or author is empty
-        if not author or not message:
-            self.log_debug(f"Skipping empty message/author")
-            return
+            # ✅ PERBAIKAN UTAMA: Log komentar yang masuk untuk user visibility
+            self.log_user(f"📨 Incoming comment from {author}: {message}", "👁️")
 
-        # Skip if auto-reply not active
-        if not self.reply_busy:
-            self.log_debug(f"Auto-reply not active, skipping")
-            return
+            # ✅ BARU: Log SEMUA komentar ke cohost_log.txt untuk Reply Log Tab
+            # Tidak peduli ada trigger atau tidak - semua komentar tercatat
+            try:
+                COHOST_LOG.parent.mkdir(exist_ok=True)
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                # Log dengan format: timestamp, author, message, status (trigger/no-trigger)
+                with open(str(COHOST_LOG), "a", encoding="utf-8") as f:
+                    # Cek apakah ada trigger untuk menandai status
+                    has_trigger = self._has_trigger(message)
+                    status = "TRIGGER" if has_trigger else "NO-TRIGGER"
+                    f.write(f"{timestamp}\t{author}\t{message}\t[{status}] Komentar diterima\n")
+                    
+                self.log_debug(f"💾 Logged comment to cohost_log.txt: {author}")
+                
+            except Exception as e:
+                self.log_debug(f"Failed to log comment: {e}")
 
-        # Skip if conversation active (hold-to-talk)
-        if self.conversation_active:
-            self.log_debug(f"Hold-to-talk active, skipping auto-reply")
-            return
-
-        # Check trigger words - OPTIMIZED: Skip if already checked
-        if not skip_trigger_check:
-            if not self._has_trigger(message):
-                self.log_debug(f"No trigger detected in: {message}")
+            # Skip if message or author is empty
+            if not author or not message:
+                self.log_debug(f"Skipping empty message/author")
                 return
-        else:
-            self.log_debug(f"Trigger check skipped - already validated")
 
-        self.log_user("✅ Trigger detected! Processing reply...", "🔔")
+            # Skip if auto-reply not active
+            if not self.reply_busy:
+                self.log_debug(f"Auto-reply not active, skipping")
+                return
 
-        # ✅ PERBAIKAN: Validasi langganan yang disederhanakan untuk mode demo
-        try:
-            subscription_file = Path("config/subscription_status.json")
-            if subscription_file.exists():
-                with open(subscription_file, "r", encoding="utf-8") as f:
-                    subscription_data = json.load(f)
+            # Skip if conversation active (hold-to-talk)
+            if self.conversation_active:
+                self.log_debug(f"Hold-to-talk active, skipping auto-reply")
+                return
 
-                status = subscription_data.get("status", "")
-                
-                # KASUS 1: Mode demo - cek apakah masih aktif (lebih permisif)
-                if status == "demo":
-                    expire_date_str = subscription_data.get("expire_date", "")
-                    if expire_date_str:
-                        try:
-                            # Handle timezone dengan benar
-                            if '+' in expire_date_str or 'Z' in expire_date_str:
-                                from datetime import timezone
-                                expire_date = datetime.fromisoformat(expire_date_str.replace('Z', '+00:00'))
-                                now_time = datetime.now(timezone.utc)
-                            else:
-                                expire_date = datetime.fromisoformat(expire_date_str)
-                                now_time = datetime.now()
+            # Check trigger words - OPTIMIZED: Skip if already checked
+            if not skip_trigger_check:
+                if not self._has_trigger(message):
+                    self.log_debug(f"No trigger detected in: {message}")
+                    return
+            else:
+                self.log_debug(f"Trigger check skipped - already validated")
 
-                            if expire_date > now_time:
-                                remaining = expire_date - now_time
-                                mins_left = int(remaining.total_seconds() / 60)
-                                
-                                # Batasi maksimal 30 menit untuk demo
-                                if mins_left > 30:
-                                    mins_left = 30
-                                
-                                self.log_debug(f"🎮 Demo aktif - sisa: {mins_left} menit")
-                                # Lanjutkan pemrosesan untuk demo
-                            else:
-                                self.log_user("⏰ Demo has ended", "⏰")
-                                return  # Hanya return, jangan stop
-                        except ValueError as e:
-                            self.log_debug(f"Error parsing demo date: {e}")
-                            # Untuk demo, tetap lanjutkan meskipun ada error parsing
-                            self.log_debug("Demo date error - tetap lanjutkan untuk development")
+            self.log_user("✅ Trigger detected! Processing reply...", "🔔")
+
+            # ✅ PERBAIKAN: Validasi langganan yang disederhanakan untuk mode demo
+            try:
+                subscription_file = Path("config/subscription_status.json")
+                if subscription_file.exists():
+                    with open(subscription_file, "r", encoding="utf-8") as f:
+                        subscription_data = json.load(f)
+
+                    status = subscription_data.get("status", "")
+                    
+                    # KASUS 1: Mode demo - cek apakah masih aktif (lebih permisif)
+                    if status == "demo":
+                        expire_date_str = subscription_data.get("expire_date", "")
+                        if expire_date_str:
+                            try:
+                                # Handle timezone dengan benar
+                                if '+' in expire_date_str or 'Z' in expire_date_str:
+                                    from datetime import timezone
+                                    expire_date = datetime.fromisoformat(expire_date_str.replace('Z', '+00:00'))
+                                    now_time = datetime.now(timezone.utc)
+                                else:
+                                    expire_date = datetime.fromisoformat(expire_date_str)
+                                    now_time = datetime.now()
+
+                                if expire_date > now_time:
+                                    remaining = expire_date - now_time
+                                    mins_left = int(remaining.total_seconds() / 60)
+                                    
+                                    # Batasi maksimal 30 menit untuk demo
+                                    if mins_left > 30:
+                                        mins_left = 30
+                                    
+                                    self.log_debug(f"🎮 Demo aktif - sisa: {mins_left} menit")
+                                    # Lanjutkan pemrosesan untuk demo
+                                else:
+                                    self.log_user("⏰ Demo has ended", "⏰")
+                                    return  # Hanya return, jangan stop
+                            except ValueError as e:
+                                self.log_debug(f"Error parsing demo date: {e}")
+                                # Untuk demo, tetap lanjutkan meskipun ada error parsing
+                                self.log_debug("Demo date error - tetap lanjutkan untuk development")
+                        else:
+                            self.log_debug("Demo tanpa expire date - lanjutkan untuk development")
+
+                    # KASUS 2: User berbayar dengan kredit
+                    elif status == "paid":
+                        hours_credit = float(subscription_data.get("hours_credit", 0))
+                        if hours_credit > 0:
+                            self.log_debug(f"User berbayar - kredit: {hours_credit} jam")
+                        else:
+                            self.log_user("⚠️ Credits depleted", "💳")
+                            return  # Hanya return, jangan stop
+                    
+                    # KASUS 3: Status lain - tetap coba proses untuk development
                     else:
-                        self.log_debug("Demo tanpa expire date - lanjutkan untuk development")
+                        self.log_debug(f"Status: {status} - lanjutkan untuk development mode")
 
-                # KASUS 2: User berbayar dengan kredit
-                elif status == "paid":
-                    hours_credit = float(subscription_data.get("hours_credit", 0))
-                    if hours_credit > 0:
-                        self.log_debug(f"User berbayar - kredit: {hours_credit} jam")
-                    else:
-                        self.log_user("⚠️ Credits depleted", "💳")
-                        return  # Hanya return, jangan stop
-                
-                # KASUS 3: Status lain - tetap coba proses untuk development
                 else:
-                    self.log_debug(f"Status: {status} - lanjutkan untuk development mode")
+                    # Tidak ada file subscription - untuk development mode, tetap lanjutkan
+                    self.log_debug("No subscription file - continue for development")
 
+            except Exception as e:
+                self.log_debug(f"Subscription validation error: {e} - continue anyway")
+                # Untuk development, tetap lanjutkan meskipun ada error
+
+            # Cek limit harian per-penonton (hanya jika validasi langganan lolos)
+            if self._is_viewer_daily_limit_reached(author, message):
+                return
+
+            # Register activity saat ada komentar valid
+            register_activity("cohost_basic")      
+            self.log_debug(f"Processing comment from {author}: {message}")
+            
+            # Proses batch
+            if self.processing_batch:
+                if len(self.reply_queue) < self.max_queue_size:
+                    self.reply_queue.append((author, message))
+                    self.log_user(f"📋 Added to queue ({len(self.reply_queue)} items)", "⏳")
+                else:
+                    self.log_user(f"⚠️ Queue full, skipped: {author}", "📋")
+                return
             else:
-                # Tidak ada file subscription - untuk development mode, tetap lanjutkan
-                self.log_debug("No subscription file - continue for development")
-
-        except Exception as e:
-            self.log_debug(f"Subscription validation error: {e} - continue anyway")
-            # Untuk development, tetap lanjutkan meskipun ada error
-
-        # Cek limit harian per-penonton (hanya jika validasi langganan lolos)
-        if self._is_viewer_daily_limit_reached(author, message):
-            return
-
-        # Register activity saat ada komentar valid
-        register_activity("cohost_basic")      
-        self.log_debug(f"Processing comment from {author}: {message}")
-        
-        # Proses batch
-        if self.processing_batch:
-            if len(self.reply_queue) < self.max_queue_size:
-                self.reply_queue.append((author, message))
-                self.log_user(f"📋 Added to queue ({len(self.reply_queue)} items)", "⏳")
-            else:
-                self.log_user(f"⚠️ Queue full, skipped: {author}", "📋")
-            return
-
-        # Jika tidak ada batch, langsung proses
-        self.reply_queue = [(author, message)]
-        self.log_debug(f"Starting new batch with: {author}")
-        self._start_batch()
+                # Jika tidak ada batch, langsung proses
+                self.reply_queue = [(author, message)]
+                self.log_debug(f"Starting new batch with: {author}")
+                self._start_batch()
+                
+        except Exception as main_error:
+            self.log_debug(f"[_ENQUEUE] CRITICAL ERROR in _enqueue: {main_error}")
+            self.log_debug(f"[_ENQUEUE] Error type: {type(main_error).__name__}")
+            import traceback
+            self.log_debug(f"[_ENQUEUE] Full traceback:")
+            for line in traceback.format_exc().split('\n'):
+                if line.strip():
+                    self.log_debug(f"[_ENQUEUE] {line}")
+            self.log_debug(f"[_ENQUEUE] CRITICAL ERROR END")
 
     def _start_batch(self):
-        """Start batch processing"""
-        # ✅ PERBAIKAN: Cek apakah auto-reply masih aktif
-        if not self.reply_busy:
-            self.log_debug("Auto-reply stopped, not starting batch")
-            self.reply_queue.clear()
-            return
-            
-        if not self.reply_queue:
-            self.log_debug("No queue to process")
-            return
-            
-        self.log_debug(f"Starting batch with {len(self.reply_queue)} items")
-        self.log_user("🔄 Processing reply...", "🤖")
-        self.processing_batch = True
-        self.batch_counter = 0
-        self._process_next_in_batch()
+            """Start batch processing"""
+            # ✅ PERBAIKAN: Cek apakah auto-reply masih aktif
+            if not self.reply_busy:
+                self.log_debug("Auto-reply stopped, not starting batch")
+                self.reply_queue.clear()
+                return
+                
+            if not self.reply_queue:
+                self.log_debug("No queue to process")
+                return
+                
+            self.log_debug(f"Starting batch with {len(self.reply_queue)} items")
+            self.log_user("🔄 Processing reply...", "🤖")
+            self.processing_batch = True
+            self.batch_counter = 0
+            self._process_next_in_batch()
 
     def _process_next_in_batch(self):
-        """Process next message dengan kontrol TTS yang lebih ketat"""
-        try:
-            # PERBAIKAN: Tambahkan try-except untuk menangkap error
-            self.log_debug(f"_process_next_in_batch called, queue: {len(self.reply_queue) if hasattr(self, 'reply_queue') else 0}, batch_counter: {self.batch_counter}")
-            
-            # ✅ PERBAIKAN KRITIKAL: Cek apakah auto-reply masih aktif
-            if not self.reply_busy:
-                self.log_debug("Auto-reply stopped, ending batch processing")
-                self._end_batch()
-                return
-            
-            # PERBAIKAN: Cek apakah TTS masih aktif
-            if safe_attr_check(self, 'tts_active'):
-                self.log_debug("TTS masih berjalan, menunda proses batch...")
-                # PERBAIKAN: Tunggu lebih lama (1000ms) seperti di kode lama yang sudah work
-                QTimer.singleShot(1000, self._process_next_in_batch)
-                return
-            
-            # PERBAIKAN: Cek apakah reply_queue ada dan tidak kosong
-            if not safe_attr_check(self, 'reply_queue') or self.batch_counter >= self.batch_size:
-                self.log_debug(f"Ending batch - queue empty: {not safe_attr_check(self, 'reply_queue')}, batch full: {self.batch_counter >= self.batch_size}")
-                self._end_batch()
-                return
-                
-            # PERBAIKAN: Ambil pesan dari queue dengan error handling
+            """Process next message dengan kontrol TTS yang lebih ketat"""
             try:
-                author, msg = self.reply_queue.pop(0)
-                self.batch_counter += 1
+                # PERBAIKAN: Tambahkan try-except untuk menangkap error
+                self.log_debug(f"_process_next_in_batch called, queue: {len(self.reply_queue) if hasattr(self, 'reply_queue') else 0}, batch_counter: {self.batch_counter}")
                 
-                self.log_debug(f"Processing message {self.batch_counter}/{self.batch_size}: {author} - {msg}")
-                self._create_reply_thread(author, msg)
-            except IndexError:
-                self.log_error("Queue empty when trying to process next message")
-                self._end_batch()
-            except Exception as e:
-                self.log_error(f"Error processing message from queue: {e}")
-                # Coba lanjutkan dengan pesan berikutnya jika masih ada
-                if safe_attr_check(self, 'reply_queue'):
-                    QTimer.singleShot(500, self._process_next_in_batch)
-                else:
+                # ✅ PERBAIKAN KRITIKAL: Cek apakah auto-reply masih aktif
+                if not self.reply_busy:
+                    self.log_debug("Auto-reply stopped, ending batch processing")
                     self._end_batch()
-        except Exception as e:
-            self.log_error(f"Critical error in _process_next_in_batch: {e}")
-            # Fallback - coba end batch
-            self._end_batch()
+                    return
+                
+                # PERBAIKAN: Cek apakah TTS masih aktif
+                if safe_attr_check(self, 'tts_active'):
+                    self.log_debug("TTS masih berjalan, menunda proses batch...")
+                    # PERBAIKAN: Tunggu lebih lama (1000ms) seperti di kode lama yang sudah work
+                    QTimer.singleShot(1000, self._process_next_in_batch)
+                    return
+                
+                # PERBAIKAN: Cek apakah reply_queue ada dan tidak kosong
+                if not safe_attr_check(self, 'reply_queue') or self.batch_counter >= self.batch_size:
+                    self.log_debug(f"Ending batch - queue empty: {not safe_attr_check(self, 'reply_queue')}, batch full: {self.batch_counter >= self.batch_size}")
+                    self._end_batch()
+                    return
+                    
+                # PERBAIKAN: Ambil pesan dari queue dengan error handling
+                try:
+                    author, msg = self.reply_queue.pop(0)
+                    self.batch_counter += 1
+                    
+                    self.log_debug(f"Processing message {self.batch_counter}/{self.batch_size}: {author} - {msg}")
+                    self._create_reply_thread(author, msg)
+                except IndexError:
+                    self.log_error("Queue empty when trying to process next message")
+                    self._end_batch()
+                except Exception as e:
+                    self.log_error(f"Error processing message from queue: {e}")
+                    # Coba lanjutkan dengan pesan berikutnya jika masih ada
+                    if safe_attr_check(self, 'reply_queue'):
+                        QTimer.singleShot(500, self._process_next_in_batch)
+                    else:
+                        self._end_batch()
+            except Exception as e:
+                self.log_error(f"Critical error in _process_next_in_batch: {e}")
+                # Fallback - coba end batch
+                self._end_batch()
 
     def _create_reply_thread(self, author, message):
-        """🔥 FIXED: Create reply thread and connect signals properly"""
-        try:
-            # Fix personality combobox reference
-            personality = self.person_cb.currentText()
-            voice_model = self.voice_cb.currentData()
-            language_code = "id-ID" if self.out_lang.currentText() == "Indonesia" else "en-US"
-            lang_out = self.out_lang.currentText()
-            
-            # 🔥 Get viewer preferences for enhanced AI (graceful fallback)
-            viewer_prefs = {}
-            use_enhanced = False
-            
-            if self.viewer_memory:
-                try:
-                    viewer_prefs = self.viewer_memory.get_viewer_preferences(author)
-                    # Only use enhanced if we have meaningful data
-                    if viewer_prefs and len(viewer_prefs) > 2:  # More than just empty defaults
-                        use_enhanced = True
-                        self.log_debug(f"Enhanced AI for {author}: mood={viewer_prefs.get('current_mood', 'unknown')}")
-                except Exception as e:
-                    self.log_debug(f"Viewer preferences error: {e}, using standard AI")
-                    viewer_prefs = {}
-            
-            # 🔥 SIMPLIFIED: Use standard thread with enhanced context if available
-            if use_enhanced:
-                self.log_debug(f"Creating enhanced reply for {author}")
-                
-            # ✅ Create thread and connect signals
-            reply_thread = ReplyThread(
-                author, message, personality, voice_model, 
-                language_code, lang_out
-            )
-            
-            # ✅ CRITICAL FIX: Direct signal connection with immediate processing
-            print(f"[THREAD_SETUP] Creating signal connection for {author}")
-            
-            # Use direct connection for immediate processing
-            print(f"[THREAD_SETUP] Connecting signal for {author}")
-            reply_thread.finished.connect(self._handle_reply_immediately, Qt.ConnectionType.DirectConnection)
-            print(f"[THREAD_SETUP] Signal connected successfully for {author}")
-            
-            # Store reference to prevent garbage collection
-            if not hasattr(self, '_active_threads'):
-                self._active_threads = []
-            self._active_threads.append(reply_thread)
-            
-            # ✅ Track thread for cleanup
-            if not hasattr(self, 'threads'):
-                self.threads = []
-            self.threads.append(reply_thread)
-            
-            # ✅ Auto-cleanup tidak diperlukan karena thread ditangani di threads list
-            
-            # ✅ Start the thread
-            print(f"[THREAD_SETUP] Starting reply thread for {author}")
-            reply_thread.start()
-            print(f"[THREAD_SETUP] Reply thread started successfully for {author}")
-            print(f"[THREAD_SETUP] Thread is running: {reply_thread.isRunning()}")
-            
-            self.log_debug(f"Reply thread started for {author}")
-                
-        except Exception as e:
-            self.log_error(f"Error creating reply thread: {e}")
-            # Emergency fallback - create simple reply
+            """🔥 FIXED: Create reply thread and connect signals properly"""
             try:
-                fallback_reply = f"Halo {author}, maaf ada masalah teknis"
-                self._on_reply(author, message, fallback_reply)
-            except Exception as fallback_error:
-                self.log_error(f"Fallback reply error: {fallback_error}")
+                # Fix personality combobox reference
+                personality = self.person_cb.currentText()
+                voice_model = self.voice_cb.currentData()
+                language_code = "id-ID" if self.out_lang.currentText() == "Indonesia" else "en-US"
+                lang_out = self.out_lang.currentText()
+                
+                # 🔥 Get viewer preferences for enhanced AI (graceful fallback)
+                viewer_prefs = {}
+                use_enhanced = False
+                
+                if self.viewer_memory:
+                    try:
+                        viewer_prefs = self.viewer_memory.get_viewer_preferences(author)
+                        # Only use enhanced if we have meaningful data
+                        if viewer_prefs and len(viewer_prefs) > 2:  # More than just empty defaults
+                            use_enhanced = True
+                            self.log_debug(f"Enhanced AI for {author}: mood={viewer_prefs.get('current_mood', 'unknown')}")
+                    except Exception as e:
+                        self.log_debug(f"Viewer preferences error: {e}, using standard AI")
+                        viewer_prefs = {}
+                
+                # 🔥 SIMPLIFIED: Use standard thread with enhanced context if available
+                if use_enhanced:
+                    self.log_debug(f"Creating enhanced reply for {author}")
+                    
+                # ✅ Create thread and connect signals
+                reply_thread = ReplyThread(
+                    author, message, personality, voice_model, 
+                    language_code, lang_out
+                )
+                
+                # ✅ CRITICAL FIX: Direct signal connection with immediate processing
+                print(f"[THREAD_SETUP] Creating signal connection for {author}")
+                
+                # Use direct connection for immediate processing
+                print(f"[THREAD_SETUP] Connecting signal for {author}")
+                reply_thread.finished.connect(self._handle_reply_immediately, Qt.ConnectionType.DirectConnection)
+                print(f"[THREAD_SETUP] Signal connected successfully for {author}")
+                
+                # Store reference to prevent garbage collection
+                if not hasattr(self, '_active_threads'):
+                    self._active_threads = []
+                self._active_threads.append(reply_thread)
+                
+                # ✅ Track thread for cleanup
+                if not hasattr(self, 'threads'):
+                    self.threads = []
+                self.threads.append(reply_thread)
+                
+                # ✅ Auto-cleanup tidak diperlukan karena thread ditangani di threads list
+                
+                # ✅ Start the thread
+                print(f"[THREAD_SETUP] Starting reply thread for {author}")
+                reply_thread.start()
+                print(f"[THREAD_SETUP] Reply thread started successfully for {author}")
+                print(f"[THREAD_SETUP] Thread is running: {reply_thread.isRunning()}")
+                
+                self.log_debug(f"Reply thread started for {author}")
+                    
+            except Exception as e:
+                self.log_error(f"Error creating reply thread: {e}")
+                # Emergency fallback - create simple reply
+                try:
+                    fallback_reply = f"Halo {author}, maaf ada masalah teknis"
+                    self._on_reply(author, message, fallback_reply)
+                except Exception as fallback_error:
+                    self.log_error(f"Fallback reply error: {fallback_error}")
 
     def _cleanup_reply_thread(self, thread):
         """🔧 Clean up finished reply thread"""

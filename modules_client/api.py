@@ -144,7 +144,20 @@ def generate_reply(prompt: str, timeout: int = 30) -> str:
     """
     print(f"[API] generate_reply called with prompt length: {len(prompt)}")
     
-    # Method 1: Try Supabase API (preferred)
+    # Method 1: Try DeepSeek API directly (preferred for basic mode)
+    try:
+        print(f"[API] Trying DeepSeek AI endpoint...")
+        from modules_client.deepseek_ai import generate_reply as deepseek_generate
+        reply = deepseek_generate(prompt)
+        if reply and len(reply.strip()) > 0:
+            print(f"[API] DeepSeek AI success: {len(reply)} chars")
+            return reply
+        else:
+            print(f"[API] DeepSeek AI returned empty reply")
+    except Exception as e:
+        print(f"[API] DeepSeek AI error: {e}")
+    
+    # Method 2: Try Supabase API (fallback)
     if api_bridge.use_supabase:
         try:
             print(f"[API] Trying Supabase AI endpoint...")
@@ -157,7 +170,7 @@ def generate_reply(prompt: str, timeout: int = 30) -> str:
         except Exception as e:
             print(f"[API] Supabase AI error: {e}")
     
-    # Method 2: Try VPS API endpoint (fallback) - SKIP INVALID URLs
+    # Method 3: Try VPS API endpoint (fallback) - SKIP INVALID URLs
     if api_bridge.active_server and api_bridge.active_server.startswith(("http://", "https://")):
         try:
             print(f"[API] Trying VPS API endpoint...")
