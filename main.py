@@ -329,23 +329,15 @@ def main():
         # Apply dark theme
         app.setStyle('Fusion')
         
-        # ⚡ NEW: Show splash screen during loading
-        try:
-            from ui.splash_screen import show_splash_screen
-            splash = show_splash_screen()
-            splash.set_progress(10)
-            splash.show_message("Loading configuration...")
-        except Exception as e:
-            print(f"[WARNING] Could not load splash screen: {e}")
-            splash = None
+        # ⚡ LOADING INDICATOR: Simple console-based loading for now
+        print("[LOADING] StreamMate AI is starting up...")
+        splash = None  # Disable splash screen to prevent segfault
         
         # Import and create main window
         sys.path.insert(0, os.path.join(ROOT, "ui"))
         
-        # Update splash screen progress
-        if splash:
-            splash.set_progress(30)
-            splash.show_message("Setting up UI components...")
+        # Console loading progress
+        print("[LOADING] Setting up UI components...")
         
         # Fix relative imports for frozen executable
         import importlib.util
@@ -353,9 +345,7 @@ def main():
         # Load main_window module with proper path handling
         main_window_path = os.path.join(ROOT, "ui", "main_window.py")
         
-        if splash:
-            splash.set_progress(50)
-            splash.show_message("Loading main window...")
+        print("[LOADING] Loading main window...")
         
         # Check if running from frozen executable
         if getattr(sys, 'frozen', False):
@@ -386,25 +376,17 @@ def main():
                 MainWindow = main_window_module.MainWindow
                 print("[GUI] Loaded MainWindow via importlib (development mode fallback)")
         
-        # Update splash screen progress
-        if splash:
-            splash.set_progress(80)
-            splash.show_message("Initializing features...")
+        # Console loading progress
+        print("[LOADING] Initializing features...")
         
         # Create main window
         main_window = MainWindow()
         
-        if splash:
-            splash.set_progress(95)
-            splash.show_message("Finalizing startup...")
+        print("[LOADING] Finalizing startup...")
         
         main_window.show()
         
-        # Close splash screen
-        if splash:
-            splash.set_progress(100)
-            splash.show_message("Ready!")
-            splash.finish(main_window)  # This will close the splash screen
+        print("[LOADING] Ready!")
         
         print("[GUI] StreamMate AI GUI launched successfully")
         logger.info("GUI application started")

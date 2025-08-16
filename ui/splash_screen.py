@@ -11,11 +11,11 @@ from pathlib import Path
 
 
 class SplashScreen(QSplashScreen):
-    """Simple splash screen with progress bar and loading messages"""
+    """Simple splash screen with loading messages"""
     
     def __init__(self):
         # Create a simple colored pixmap since we don't have a logo
-        pixmap = QPixmap(400, 300)
+        pixmap = QPixmap(400, 200)
         pixmap.fill(QColor(45, 45, 45))  # Dark gray background
         
         super().__init__(pixmap)
@@ -26,7 +26,6 @@ class SplashScreen(QSplashScreen):
         
         # Progress tracking
         self.progress = 0
-        self.max_progress = 100
         
     def setup_ui(self):
         """Setup the splash screen UI"""
@@ -61,29 +60,14 @@ class SplashScreen(QSplashScreen):
         QApplication.processEvents()
         
     def set_progress(self, value):
-        """Update progress (0-100)"""
+        """Update progress (0-100) - simplified version"""
         self.progress = min(max(value, 0), 100)
-        # Draw progress bar
-        painter = QPainter(self.pixmap())
-        
-        # Clear previous progress bar area
-        painter.fillRect(50, 200, 300, 20, QColor(45, 45, 45))
-        
-        # Draw progress bar background
-        painter.fillRect(50, 200, 300, 20, QColor(60, 60, 60))
-        
-        # Draw progress bar fill
-        progress_width = int((self.progress / 100) * 300)
-        painter.fillRect(50, 200, progress_width, 20, QColor(0, 150, 255))
-        
-        # Draw progress text
-        painter.setPen(QColor(255, 255, 255))
-        font = QFont("Arial", 9)
-        painter.setFont(font)
-        painter.drawText(50, 240, f"Loading... {self.progress}%")
-        
-        painter.end()
-        self.update()
+        # ⚡ SIMPLIFIED: Just show progress in message instead of custom painting
+        self.showMessage(
+            f"Loading StreamMate AI... {self.progress}%",
+            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom,
+            QColor(255, 255, 255)
+        )
         QApplication.processEvents()
 
 
