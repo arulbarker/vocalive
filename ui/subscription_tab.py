@@ -70,6 +70,10 @@ class SubscriptionTab(QWidget):
         # Supabase client
         self.supabase = SupabaseClient()
         
+        # ⚡ FIX: Add server_url attribute for demo functionality
+        from modules_client.google_oauth import get_server_url
+        self.server_url = get_server_url() or "http://69.62.79.238:8000"
+        
         # TAMBAHKAN background setup seperti login_tab
         self.setup_background()
         

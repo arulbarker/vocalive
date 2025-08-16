@@ -205,17 +205,29 @@ class SupabaseClient:
                 if transaction_response.status_code == 200:
                     transactions = transaction_response.json()
                     
-                    # Calculate credits based on transaction history - ACCUMULATE multiple purchases
+                    # Calculate credits based on transaction history - ACCUMULATE purchases and SUBTRACT deductions
                     for tx in transactions:
                         amount = float(tx.get("amount", 0))
                         description = tx.get("description", "").lower()
+                        transaction_type = tx.get("transaction_type", "").lower()
                         
-                        # Accumulate Basic credits from multiple purchases
-                        if ("basic" in description or "basic mode" in description) and amount == 100000:
-                            basic_credits += 100000
-                        # Accumulate Pro credits from multiple purchases  
-                        elif ("pro" in description or "pro mode" in description) and amount == 100000:
-                            pro_credits += 100000
+                        # Handle Basic mode transactions
+                        if "basic" in description or "basic mode" in description:
+                            if amount == 100000 and transaction_type == "credit_purchase":
+                                # Credit purchase
+                                basic_credits += 100000
+                            elif transaction_type == "mode_usage" and amount > 0:
+                                # Credit usage/deduction
+                                basic_credits -= amount
+                        
+                        # Handle Pro mode transactions  
+                        elif "pro" in description or "pro mode" in description:
+                            if amount == 100000 and transaction_type == "credit_purchase":
+                                # Credit purchase
+                                pro_credits += 100000
+                            elif transaction_type == "mode_usage" and amount > 0:
+                                # Credit usage/deduction
+                                pro_credits -= amount
                     
                     # ✅ PERFORMANCE: Only log if values changed to reduce spam (less frequent logging)
                     if not hasattr(self, '_last_credit_calc') or self._last_credit_calc != (basic_credits, pro_credits):
@@ -271,6 +283,14 @@ class SupabaseClient:
                     "total_credits": 0
                 }
             }
+    
+    def _invalidate_credit_cache(self, email: str):
+        """Invalidate credit cache for specific user to force refresh"""
+        if hasattr(self, '_credit_cache'):
+            cache_key = f"credits_{email}"
+            if cache_key in self._credit_cache:
+                del self._credit_cache[cache_key]
+                print(f"[CACHE-INVALIDATE] Credit cache cleared for {email}")
     
     def get_user_data(self, email: str) -> Optional[Dict[str, Any]]:
         """Get user data from Supabase"""
@@ -537,6 +557,9 @@ class SupabaseClient:
             # Log mode-specific transaction
             self._log_transaction(email, amount, "mode_usage", credit_type, 
                                 component, f"{mode.upper()} Mode: {description}", is_deduction=True)
+            
+            # ⚡ PERFORMANCE FIX: Invalidate credit cache to force refresh
+            self._invalidate_credit_cache(email)
             
             return {
                 "status": "success",

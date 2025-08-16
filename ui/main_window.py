@@ -957,9 +957,19 @@ class MainWindow(QMainWindow):
         try:
             logger.info(f"Memanggil pilih_paket dengan paket: {paket}")
 
-            # Check what packages are actually purchased
-            purchased = self._check_purchased_packages()
-            print(f"[DEBUG] PILIH_PAKET: Purchased packages: {purchased}")
+            # ⚡ PERFORMANCE: Show loading indicator for mode switching
+            self.statusBar().showMessage(f"Switching to {paket.upper()} mode...")
+            
+            # ⚡ PERFORMANCE: Skip package check if already cached and same mode
+            if hasattr(self, '_last_mode') and self._last_mode == paket and hasattr(self, '_cached_purchased'):
+                purchased = self._cached_purchased
+                print(f"[DEBUG] PILIH_PAKET: Using cached packages: {purchased}")
+            else:
+                # Check what packages are actually purchased
+                purchased = self._check_purchased_packages()
+                self._cached_purchased = purchased
+                self._last_mode = paket
+                print(f"[DEBUG] PILIH_PAKET: Fresh packages check: {purchased}")
 
             # Determine which mode to use based on purchases
             # ✅ PERBAIKAN: Jika user memilih paket tertentu, gunakan paket tersebut
@@ -1020,6 +1030,9 @@ class MainWindow(QMainWindow):
 
             print(f"[DEBUG] PILIH_PAKET: {actual_mode} mode berhasil diaktifkan")
             logger.info(f"{actual_mode} mode berhasil diaktifkan")
+            
+            # ⚡ PERFORMANCE: Update status bar to show successful mode switch
+            self.statusBar().showMessage(f"{actual_mode.upper()} mode activated successfully", 3000)
             
             # Connect subscription tab signal
             if safe_attr_check(self, 'subscription_tab'):
