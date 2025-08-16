@@ -15,6 +15,17 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 
+# ✅ SUPABASE-ONLY MODE DETECTION
+def _is_supabase_only_mode() -> bool:
+    """Check if system should use Supabase-only mode (no VPS calls)"""
+    try:
+        supabase_config = Path("config/supabase_config.json")
+        if supabase_config.exists():
+            return True
+        return False
+    except:
+        return False
+
 # ========== PATH HANDLING FOR FROZEN EXE ==========
 def get_application_path():
     """Get the correct application path for both dev and exe modes"""
@@ -64,7 +75,11 @@ def get_server_url():
     except Exception as e:
         print(f"[DEBUG] Error in get_server_url: {e}")
     
-    # Default fallback - PRODUCTION SERVER
+    # Default fallback - PRODUCTION SERVER (skip in Supabase-only mode)
+    if _is_supabase_only_mode():
+        print(f"✅ Supabase-only mode: No VPS server URL needed")
+        return None
+    
     default_url = "http://69.62.79.238:8000"
     print(f"[DEBUG] Using default server URL: {default_url}")
     return default_url

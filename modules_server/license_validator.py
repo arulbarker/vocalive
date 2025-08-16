@@ -9,6 +9,17 @@ from datetime import datetime, timedelta, timezone
 # Import ConfigManager - server butuh akses user data juga  
 from modules_client.config_manager import ConfigManager
 
+# ✅ SUPABASE-ONLY MODE DETECTION
+def _is_supabase_only_mode() -> bool:
+    """Check if system should use Supabase-only mode (no VPS calls)"""
+    try:
+        supabase_config = Path("config/supabase_config.json")
+        if supabase_config.exists():
+            return True
+        return False
+    except:
+        return False
+
 # PRODUCTION MODE CHECK
 import sys
 
@@ -338,37 +349,37 @@ class LicenseValidator:
         except Exception as e:
             print(f"[LICENSE] Supabase validation failed: {e}")
         
-        # Fallback to VPS server
-        print(f"[LICENSE] Fallback to VPS server...")
-        vps_url = "http://69.62.79.238:8000/api/license/validate"
-        hardware_id = self._generate_hardware_id()
-        payload = {"email": email, "hardware_id": hardware_id}
+        # Fallback to VPS server - SKIP IN SUPABASE-ONLY MODE
+        if not _is_supabase_only_mode():
+            print(f"[LICENSE] Fallback to VPS server...")
+            vps_url = "http://69.62.79.238:8000/api/license/validate"
+            hardware_id = self._generate_hardware_id()
+            payload = {"email": email, "hardware_id": hardware_id}
 
-        try:
-            response = requests.post(vps_url, json=payload, timeout=10)
-            if response.status_code == 200:
-                vps_data = response.json()
-                print(f"[LICENSE] VPS response: {vps_data}")
-                
-                # Sinkronkan data dari VPS ke file lokal
-                self._sync_vps_to_subscription_file(vps_data, email)
-                self._remove_logout_marker() # Hapus marker setelah sync berhasil
-                
-                # Kembalikan hasil dari data VPS yang sudah disinkronkan
-                vps_data['source'] = 'vps_server'
-                return vps_data
-            else:
-                print(f"[LICENSE] VPS error: {response.status_code} - {response.text}")
-                return {"is_valid": False, "tier": "none", "message": f"Server error: {response.status_code}"}
-        
-        except requests.exceptions.RequestException as e:
-            print(f"[LICENSE] Cannot connect to license server: {e}")
-            return {"is_valid": False, "tier": "none", "message": f"Cannot connect to license server: {e}"}
-        except Exception as e:
-            print(f"[LICENSE] An unexpected error occurred: {e}")
-            import traceback
-            traceback.print_exc()
-            return {"is_valid": False, "tier": "none", "message": f"An unexpected error occurred: {e}"}
+            try:
+                response = requests.post(vps_url, json=payload, timeout=10)
+                if response.status_code == 200:
+                    vps_data = response.json()
+                    print(f"[LICENSE] VPS response: {vps_data}")
+                    
+                    # Sinkronkan data dari VPS ke file lokal
+                    self._sync_vps_to_subscription_file(vps_data, email)
+                    self._remove_logout_marker() # Hapus marker setelah sync berhasil
+                    
+                    # Kembalikan hasil dari data VPS yang sudah disinkronkan
+                    vps_data['source'] = 'vps_server'
+                    return vps_data
+                else:
+                    print(f"[LICENSE] VPS error: {response.status_code} - {response.text}")
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"[LICENSE] Cannot connect to license server: {e}")
+            except Exception as e:
+                print(f"[LICENSE] An unexpected error occurred: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"✅ Supabase-only mode: Skipping VPS license validation fallback")
 
     def _sync_supabase_to_subscription_file(self, supabase_data, email):
         """

@@ -1,7 +1,10 @@
 # ui/update_dialog.py
-from PyQt6.QtWidgets import *
-from PyQt6.QtCore import *
-from PyQt6.QtGui import *
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QTextEdit, 
+    QWidget, QProgressBar, QCheckBox, QPushButton, QMessageBox
+)
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, pyqtSlot
+from PyQt6.QtGui import QFont, QPixmap
 
 def safe_attr_check(obj, attr_name):
     """Safely check if an object has an attribute."""

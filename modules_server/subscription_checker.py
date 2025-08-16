@@ -19,8 +19,19 @@ IDLE_WARNING = 180  # 3 menit dalam detik
 MIN_SESSION_TIME = 120  # 2 menit dalam detik
 SAVE_INTERVAL = 60  # Interval save status (1 menit dalam detik)
 
-# Server API URLs
-SERVER_BASE_URL = "http://69.62.79.238:8000"  # TAMBAHKAN INI
+# Server API URLs - VPS Backend (legacy)
+SERVER_BASE_URL = "http://69.62.79.238:8000"  
+
+# ✅ SUPABASE-ONLY MODE DETECTION
+def _is_supabase_only_mode() -> bool:
+    """Check if system should use Supabase-only mode (no VPS calls)"""
+    try:
+        supabase_config = Path("config/supabase_config.json")
+        if supabase_config.exists():
+            return True
+        return False
+    except:
+        return False
 
 # Import debug manager
 try:
@@ -135,26 +146,29 @@ class HourlySubscriptionChecker:
         email = self._get_user_email()
         self.current_session_id = f"{email}_{feature_name}_{int(time.time())}"
         
-        # Start session di server
-        try:
-            response = requests.post(
-                f"{SERVER_BASE_URL}/api/session/start",
-                json={
-                    "email": email,
-                    "feature": feature_name,
-                    "session_id": self.current_session_id
-                },
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                logger.info(f"Server session started: {self.current_session_id}")
-            else:
-                logger.warning(f"Failed to start server session: {response.status_code}")
+        # Start session di server - SKIP IN SUPABASE-ONLY MODE
+        if not _is_supabase_only_mode():
+            try:
+                response = requests.post(
+                    f"{SERVER_BASE_URL}/api/session/start",
+                    json={
+                        "email": email,
+                        "feature": feature_name,
+                        "session_id": self.current_session_id
+                    },
+                    timeout=5
+                )
                 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error starting server session: {e}")
-            # Continue dengan local tracking sebagai fallback
+                if response.status_code == 200:
+                    logger.info(f"Server session started: {self.current_session_id}")
+                else:
+                    logger.warning(f"Failed to start server session: {response.status_code}")
+                    
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Error starting server session: {e}")
+                # Continue dengan local tracking sebagai fallback
+        else:
+            logger.info(f"✅ Supabase-only mode: Skipping VPS session start for {feature_name}")
         
         # Update session data (local fallback)
         self.session_data = {
@@ -217,9 +231,9 @@ class HourlySubscriptionChecker:
             logger.info(f"[CREDIT_DEBUG] Session stopping: {self.active_feature} - {total_active:.1f}s active")
         # =============================================
 
-        # End session di server
+        # End session di server - SKIP IN SUPABASE-ONLY MODE
         server_minutes = 0
-        if hasattr(self, 'current_session_id'):
+        if hasattr(self, 'current_session_id') and not _is_supabase_only_mode():
             try:
                 response = requests.post(
                     f"{SERVER_BASE_URL}/api/session/end",
@@ -236,6 +250,8 @@ class HourlySubscriptionChecker:
                     
             except requests.exceptions.RequestException as e:
                 logger.error(f"Error ending server session: {e}")
+        elif _is_supabase_only_mode():
+            logger.info(f"✅ Supabase-only mode: Skipping VPS session end")
         
         # Hitung kredit lokal sebagai fallback
         minutes_used = max(1, int((total_active + 59) / 60))  # Bulat ke atas
@@ -428,8 +444,8 @@ class HourlySubscriptionChecker:
                     self.session_active_time += active_time
                     self.last_activity = now
                 
-                # Send heartbeat ke server
-                if hasattr(self, 'current_session_id'):
+                # Send heartbeat ke server - SKIP IN SUPABASE-ONLY MODE
+                if hasattr(self, 'current_session_id') and not _is_supabase_only_mode():
                     try:
                         response = requests.post(
                             f"{SERVER_BASE_URL}/api/session/heartbeat",
@@ -447,6 +463,8 @@ class HourlySubscriptionChecker:
                             
                     except requests.exceptions.RequestException as e:
                         logger.error(f"Error sending heartbeat: {e}")
+                elif hasattr(self, 'current_session_id') and _is_supabase_only_mode():
+                    logger.debug(f"✅ Supabase-only mode: Skipping VPS heartbeat")
                 
                 # Save session data (local fallback)
                 self._save_session()

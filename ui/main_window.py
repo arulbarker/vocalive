@@ -14,6 +14,17 @@ import time
 logger = logging.getLogger('StreamMate')
 from datetime import timezone
 
+# ✅ SUPABASE-ONLY MODE DETECTION
+def _is_supabase_only_mode() -> bool:
+    """Check if system should use Supabase-only mode (no VPS calls)"""
+    try:
+        supabase_config = Path("config/supabase_config.json")
+        if supabase_config.exists():
+            return True
+        return False
+    except:
+        return False
+
 def safe_attr_check(obj, attr_name):
     """Safely check if an object has an attribute"""
     try:
@@ -1659,8 +1670,8 @@ class MainWindow(QMainWindow):
             self.cfg.set("user_data", {})
             print(f"[LOGOUT] Cleared user data from config")
             
-            # Track logout ke server jika memungkinkan
-            if email:
+            # Track logout ke server jika memungkinkan - SKIP IN SUPABASE-ONLY MODE
+            if email and not _is_supabase_only_mode():
                 try:
                     import requests
                     response = requests.post(
@@ -1676,6 +1687,8 @@ class MainWindow(QMainWindow):
                         
                 except Exception as e:
                     print(f"[LOGOUT] Logout tracking error: {e}")
+            elif email and _is_supabase_only_mode():
+                print(f"✅ Supabase-only mode: Skipping VPS logout tracking for {email}")
                 
                 # Fallback ke temp file untuk backward compatibility
                 temp_file = Path("temp/last_logout_email.txt")

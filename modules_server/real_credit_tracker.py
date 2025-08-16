@@ -10,6 +10,25 @@ from typing import Dict, Any
 
 logger = logging.getLogger('StreamMate')
 
+def _is_supabase_only_mode() -> bool:
+    """Check if system is in Supabase-only mode (no VPS calls)"""
+    try:
+        # Check for Supabase config
+        supabase_config = Path("config/supabase_config.json")
+        if supabase_config.exists():
+            return True
+        
+        # Check for production config indicating Supabase mode
+        prod_config = Path("config/production_config.json")
+        if prod_config.exists():
+            with open(prod_config, 'r') as f:
+                config = json.load(f)
+                return config.get("backend") == "supabase"
+        
+        return False
+    except:
+        return False
+
 class RealCreditTracker:
     """Tracker kredit berbasis penggunaan komponen aktual dengan multiplier 3x"""
     
@@ -264,14 +283,23 @@ class RealCreditTracker:
                 
             logger.info(f"[DEVELOPMENT CREDIT] Local: -{hours_used:.4f}h, remaining: {new_remaining_credit:.4f}h")
             
-            # Background VPS sync
-            self._sync_usage_to_vps_async(hours_used, new_total_used, sub_data.get("email"))
+            # Skip VPS sync if in Supabase-only mode
+            if not _is_supabase_only_mode():
+                # Background VPS sync
+                self._sync_usage_to_vps_async(hours_used, new_total_used, sub_data.get("email"))
+            else:
+                logger.debug("Skipping VPS sync - Supabase-only mode active")
             
         except Exception as e:
             logger.error(f"Error updating subscription: {e}")
 
     def _force_immediate_vps_sync(self, email: str, hours_used: float):
         """FORCE immediate VPS sync for production mode"""
+        # Skip VPS sync if in Supabase-only mode
+        if _is_supabase_only_mode():
+            logger.debug("Skipping VPS immediate sync - Supabase-only mode active")
+            return
+            
         import requests
         import threading
         
@@ -340,6 +368,11 @@ class RealCreditTracker:
 
     def _sync_usage_to_vps_async(self, hours_used: float, total_used: float, email: str = None):
         """Sync usage ke VPS server secara asynchronous"""
+        # Skip VPS sync if in Supabase-only mode
+        if _is_supabase_only_mode():
+            logger.debug("Skipping VPS async sync - Supabase-only mode active")
+            return
+            
         import threading
         import requests
         from modules_client.config_manager import ConfigManager
@@ -529,6 +562,33 @@ class RealCreditTracker:
 # Enhanced credit deduction functions
 def force_credit_deduction(credits_used: float, description: str = "Auto-reply usage", extra_desc: str = None) -> bool:
     """Force immediate credit deduction and update"""
+    # Skip VPS deduction if in Supabase-only mode
+    if _is_supabase_only_mode():
+        print(f"[CREDIT] ⚡ Supabase-only mode: Skipping VPS deduction entirely")
+        print(f"[CREDIT] 🔄 Trying Supabase fallback...")
+        
+        # Try Supabase directly
+        from modules_client.supabase_client import SupabaseClient
+        from modules_client.config_manager import ConfigManager
+        
+        try:
+            cfg = ConfigManager("config/settings.json")
+            user_data = cfg.get("user_data", {})
+            email = user_data.get("email", "")
+            
+            if email:
+                supabase = SupabaseClient()
+                result = supabase.deduct_credits(email, credits_used, "credits", "credit_deduction", description)
+                if result.get("status") == "success":
+                    print(f"[CREDIT] ✅ Supabase deduction SUCCESS!")
+                    return True
+                else:
+                    print(f"[CREDIT] ❌ Supabase deduction failed: {result.get('message', 'Unknown error')}")
+                    return False
+        except Exception as e:
+            print(f"[CREDIT] ❌ Supabase deduction error: {e}")
+            return False
+            
     try:
         # Use extra_desc if provided for more detailed description
         if extra_desc:

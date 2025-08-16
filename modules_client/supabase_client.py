@@ -205,19 +205,17 @@ class SupabaseClient:
                 if transaction_response.status_code == 200:
                     transactions = transaction_response.json()
                     
-                    # Calculate credits based on transaction history
+                    # Calculate credits based on transaction history - ACCUMULATE multiple purchases
                     for tx in transactions:
                         amount = float(tx.get("amount", 0))
                         description = tx.get("description", "").lower()
                         
-                        if "basic" in description and amount == 100000:
-                            basic_credits = 100000
-                        elif "pro" in description and amount == 100000:
-                            pro_credits = 100000
-                        elif "basic mode" in description and amount == 100000:
-                            basic_credits = 100000
-                        elif "pro mode" in description and amount == 100000:
-                            pro_credits = 100000
+                        # Accumulate Basic credits from multiple purchases
+                        if ("basic" in description or "basic mode" in description) and amount == 100000:
+                            basic_credits += 100000
+                        # Accumulate Pro credits from multiple purchases  
+                        elif ("pro" in description or "pro mode" in description) and amount == 100000:
+                            pro_credits += 100000
                     
                     # ✅ PERFORMANCE: Only log if values changed to reduce spam (less frequent logging)
                     if not hasattr(self, '_last_credit_calc') or self._last_credit_calc != (basic_credits, pro_credits):

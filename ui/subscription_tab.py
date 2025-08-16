@@ -23,6 +23,17 @@ import hmac
 
 logger = logging.getLogger('StreamMate')
 
+# ✅ SUPABASE-ONLY MODE DETECTION
+def _is_supabase_only_mode() -> bool:
+    """Check if system should use Supabase-only mode (no VPS calls)"""
+    try:
+        supabase_config = Path("config/supabase_config.json")
+        if supabase_config.exists():
+            return True
+        return False
+    except:
+        return False
+
 def safe_attr_check(obj, attr_name):
     """Safely check if an object has an attribute."""
     try:
@@ -1567,17 +1578,12 @@ class SubscriptionTab(QWidget):
                     )
                     return
                 
-                # Check if already has Pro package
+                # Allow multiple Pro credit purchases for top-up
+                # Removed active status check to enable continuous credit purchases
+                # Users should be able to buy Pro credits multiple times to top-up
+                
+                # Define subscription file for later use
                 subscription_file = Path("config/subscription_status.json")
-                if subscription_file.exists():
-                    with open(subscription_file, 'r', encoding='utf-8') as f:
-                        sub_data = json.load(f)
-                        if sub_data.get("pro", {}).get("active", False):
-                            QMessageBox.information(
-                                self, "Already Purchased",
-                                "You already have the Pro package active!"
-                            )
-                            return
                 
                 # Confirm purchase
                 reply = QMessageBox.question(
@@ -1642,11 +1648,10 @@ class SubscriptionTab(QWidget):
                 # Refresh UI
                 self.refresh_credits()
                 
-                # Activate Pro mode if parent available
-                if self.parent and safe_attr_check(self.parent, 'pilih_paket'):
-                    self.parent.pilih_paket("pro")
-                else:
-                    self.package_activated.emit("pro")
+                # Credit purchase successful - DO NOT auto-activate Pro mode
+                # User should manually activate Pro mode when needed
+                # Removed auto-activation: self.parent.pilih_paket("pro")
+                print(f"[DEBUG] Pro credits purchased successfully - manual activation required")
                     
             except Exception as e:
                 logger.error(f"Error purchasing pro package: {e}")
@@ -1684,17 +1689,12 @@ class SubscriptionTab(QWidget):
                     )
                     return
                 
-                # Check if already has Basic package
+                # Allow multiple Basic credit purchases for top-up
+                # Removed active status check to enable continuous credit purchases
+                # Users should be able to buy Basic credits multiple times to top-up
+                
+                # Define subscription file for later use
                 subscription_file = Path("config/subscription_status.json")
-                if subscription_file.exists():
-                    with open(subscription_file, 'r', encoding='utf-8') as f:
-                        sub_data = json.load(f)
-                        if sub_data.get("basic", {}).get("active", False):
-                            QMessageBox.information(
-                                self, "Already Purchased",
-                                "You already have the Basic package active!"
-                            )
-                            return
                 
                 # Confirm purchase
                 reply = QMessageBox.question(
@@ -1756,8 +1756,10 @@ class SubscriptionTab(QWidget):
                 # Refresh UI
                 self.refresh_credits()
                 
-                # Emit signal to activate Basic mode
-                self.package_activated.emit("basic")
+                # Credit purchase successful - DO NOT auto-activate Basic mode  
+                # User should manually activate Basic mode when needed
+                # Removed auto-activation: self.package_activated.emit("basic")
+                print(f"[DEBUG] Basic credits purchased successfully - manual activation required")
                 
             except Exception as e:
                 QMessageBox.critical(self, "Purchase Error", f"Failed to process purchase: {str(e)}")
@@ -3121,32 +3123,35 @@ class SubscriptionTab(QWidget):
             import time
             order_id = f"{email}_{int(time.time())}"
             
-            # Save transaction record to VPS server first
-            try:
-                import requests
-                vps_url = "http://69.62.79.238:8000"
-                transaction_data = {
-                    "email": email,
-                    "order_id": order_id,
-                    "package": package['name'],
-                    "amount": package['price_idr'],
-                    "credits": package['total_credits'],
-                    "status": "pending"
-                }
-                
-                response = requests.post(
-                    f"{vps_url}/api/payment/save_transaction",
-                    json=transaction_data,
-                    timeout=10
-                )
-                
-                if response.status_code != 200:
-                    print(f"[TOPUP] Failed to save transaction to VPS: {response.status_code}")
-                    # Continue anyway, callback will handle it
+            # Save transaction record to VPS server first - SKIP IN SUPABASE-ONLY MODE
+            if not _is_supabase_only_mode():
+                try:
+                    import requests
+                    vps_url = "http://69.62.79.238:8000"
+                    transaction_data = {
+                        "email": email,
+                        "order_id": order_id,
+                        "package": package['name'],
+                        "amount": package['price_idr'],
+                        "credits": package['total_credits'],
+                        "status": "pending"
+                    }
                     
-            except Exception as e:
-                print(f"[TOPUP] Error saving transaction to VPS: {e}")
-                # Continue anyway, callback will handle it
+                    response = requests.post(
+                        f"{vps_url}/api/payment/save_transaction",
+                        json=transaction_data,
+                        timeout=10
+                    )
+                    
+                    if response.status_code != 200:
+                        print(f"[TOPUP] Failed to save transaction to VPS: {response.status_code}")
+                        # Continue anyway, callback will handle it
+                        
+                except Exception as e:
+                    print(f"[TOPUP] Error saving transaction to VPS: {e}")
+                    # Continue anyway, callback will handle it
+            else:
+                print(f"✅ Supabase-only mode: Skipping VPS transaction save for {package['name']}")
             
             # Create payment transaction via Supabase first
             try:
