@@ -25,13 +25,23 @@ except ImportError:
 try:
     from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
         TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM)
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
+        btn_success, btn_danger, btn_ghost, CARD_ELEVATED_STYLE,
+        label_value, label_subtitle, label_muted, LOG_TEXTEDIT_STYLE)
 except ImportError:
     PRIMARY = "#D97706"; BG_BASE = "#1c1208"; BG_SURFACE = "#261509"; BG_ELEVATED = "#2E1A0A"
     TEXT_PRIMARY = "#FFFBEB"; TEXT_MUTED = "#D6B97B"; TEXT_DIM = "#92734A"
     ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
     BORDER_GOLD = "#92400E"; BORDER = "#3D2010"; ACCENT = "#FCD34D"
     SECONDARY = "#92400E"; RADIUS = "10px"; RADIUS_SM = "6px"
+    def btn_success(extra=""): return f"QPushButton {{ background-color: {SUCCESS}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #16A34A; }}"
+    def btn_danger(extra=""): return f"QPushButton {{ background-color: {ERROR}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #DC2626; }}"
+    def btn_ghost(extra=""): return f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; border-radius: 6px; padding: 7px 18px; {extra} }}"
+    CARD_ELEVATED_STYLE = f"QFrame {{ background-color: {BG_ELEVATED}; border: 1px solid {BORDER_GOLD}; border-radius: 10px; }}"
+    def label_value(size=22): return f"font-size: {size}pt; font-weight: 700; color: {ACCENT}; background: transparent;"
+    def label_subtitle(size=11): return f"font-size: {size}px; color: {TEXT_MUTED}; background: transparent;"
+    def label_muted(size=11): return f"font-size: {size}px; color: {TEXT_DIM}; background: transparent;"
+    LOG_TEXTEDIT_STYLE = f"QTextEdit {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER_GOLD}; border-radius: 6px; padding: 8px; font-family: Consolas, monospace; font-size: 11px; }}"
 
 # Try to import pyqtgraph for charts
 try:
@@ -171,58 +181,19 @@ class AnalyticsTab(QWidget):
         # Export CSV button
         export_btn = QPushButton("📥 Export CSV")
         export_btn.clicked.connect(self.export_current_session)
-        export_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {SUCCESS};
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: {ACCENT};
-                color: {BG_BASE};
-            }}
-        """)
+        export_btn.setStyleSheet(btn_success())
         layout.addWidget(export_btn)
 
         # Export PDF button
         pdf_btn = QPushButton("📄 Export PDF")
         pdf_btn.clicked.connect(self.export_to_pdf)
-        pdf_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {SECONDARY};
-                color: {TEXT_PRIMARY};
-                border: 1px solid {BORDER_GOLD};
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: {PRIMARY};
-                color: white;
-            }}
-        """)
+        pdf_btn.setStyleSheet(btn_ghost())
         layout.addWidget(pdf_btn)
 
         # Clear data button
         clear_btn = QPushButton("🗑️ Clear All Data")
         clear_btn.clicked.connect(self.clear_all_data)
-        clear_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {ERROR};
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: {WARNING};
-                color: {BG_BASE};
-            }}
-        """)
+        clear_btn.setStyleSheet(btn_danger())
         layout.addWidget(clear_btn)
 
         header.setLayout(layout)
@@ -336,17 +307,7 @@ class AnalyticsTab(QWidget):
         self.timeline_text = QTextEdit()
         self.timeline_text.setReadOnly(True)
         self.timeline_text.setMaximumHeight(150)
-        self.timeline_text.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {BG_ELEVATED};
-                color: {TEXT_MUTED};
-                border: 1px solid {BORDER_GOLD};
-                border-radius: 4px;
-                padding: 8px;
-                font-family: 'Consolas', monospace;
-                font-size: 11px;
-            }}
-        """)
+        self.timeline_text.setStyleSheet(LOG_TEXTEDIT_STYLE)
 
         timeline_layout.addWidget(self.timeline_text)
         timeline_group.setLayout(timeline_layout)
@@ -361,28 +322,22 @@ class AnalyticsTab(QWidget):
     def _create_stat_card(self, title, value, subtitle):
         """Create a statistics card"""
         card = QFrame()
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {BG_ELEVATED};
-                border-radius: 8px;
-                border: 1px solid {BORDER_GOLD};
-                padding: 15px;
-            }}
-        """)
+        card.setStyleSheet(CARD_ELEVATED_STYLE + "QFrame { padding: 15px; }")
 
         layout = QVBoxLayout()
+        layout.setSpacing(4)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
+        title_label.setStyleSheet(label_subtitle())
         layout.addWidget(title_label)
 
         value_label = QLabel(value)
-        value_label.setStyleSheet(f"color: {ACCENT}; font-size: 24px; font-weight: bold;")
+        value_label.setStyleSheet(label_value(size=20))
         value_label.setObjectName("value")
         layout.addWidget(value_label)
 
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px;")
+        subtitle_label.setStyleSheet(label_muted())
         subtitle_label.setObjectName("subtitle")
         layout.addWidget(subtitle_label)
 

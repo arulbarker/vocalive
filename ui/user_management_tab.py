@@ -25,13 +25,19 @@ except ImportError:
 try:
     from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
         TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM)
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
+        btn_success, btn_danger, btn_ghost, btn_primary, label_title)
 except ImportError:
     PRIMARY = "#D97706"; BG_BASE = "#1c1208"; BG_SURFACE = "#261509"; BG_ELEVATED = "#2E1A0A"
     TEXT_PRIMARY = "#FFFBEB"; TEXT_MUTED = "#D6B97B"; TEXT_DIM = "#92734A"
     ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
     BORDER_GOLD = "#92400E"; BORDER = "#3D2010"; ACCENT = "#FCD34D"
     SECONDARY = "#92400E"; RADIUS = "10px"; RADIUS_SM = "6px"
+    def btn_success(extra=""): return f"QPushButton {{ background-color: {SUCCESS}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }}"
+    def btn_danger(extra=""): return f"QPushButton {{ background-color: {ERROR}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }}"
+    def btn_ghost(extra=""): return f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; border-radius: 6px; padding: 7px 18px; {extra} }}"
+    def btn_primary(extra=""): return f"QPushButton {{ background-color: {PRIMARY}; color: {BG_BASE}; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }}"
+    def label_title(size=16): return f"font-size: {size}pt; font-weight: 700; color: {PRIMARY}; background: transparent;"
 
 
 class UserManagementTab(QWidget):
@@ -145,8 +151,7 @@ class UserManagementTab(QWidget):
         
         # Title
         title = QLabel("👥 User Management")
-        title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {PRIMARY};")
+        title.setStyleSheet(label_title())
         layout.addWidget(title)
         
         layout.addStretch()
@@ -154,20 +159,7 @@ class UserManagementTab(QWidget):
         # Refresh button
         refresh_btn = QPushButton("🔄 Refresh")
         refresh_btn.clicked.connect(self._load_lists)
-        refresh_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {BG_SURFACE};
-                color: {TEXT_PRIMARY};
-                border: 1px solid {BORDER_GOLD};
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: {PRIMARY};
-                color: white;
-            }}
-        """)
+        refresh_btn.setStyleSheet(btn_ghost())
         layout.addWidget(refresh_btn)
         
         header.setLayout(layout)
@@ -220,20 +212,7 @@ class UserManagementTab(QWidget):
             
             add_btn = QPushButton("+ Tambah")
             add_btn.clicked.connect(self._add_to_blacklist)
-            add_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color};
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {WARNING};
-                    color: {BG_BASE};
-                }}
-            """)
+            add_btn.setStyleSheet(btn_danger())
             input_layout.addWidget(add_btn)
         else:
             self.whitelist_input = QLineEdit()
@@ -252,20 +231,7 @@ class UserManagementTab(QWidget):
             
             add_btn = QPushButton("+ Tambah VIP")
             add_btn.clicked.connect(self._add_to_whitelist)
-            add_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color};
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {ACCENT};
-                    color: {BG_BASE};
-                }}
-            """)
+            add_btn.setStyleSheet(btn_success())
             input_layout.addWidget(add_btn)
         
         layout.addLayout(input_layout)
@@ -295,19 +261,7 @@ class UserManagementTab(QWidget):
             # Remove button
             remove_btn = QPushButton("🗑️ Hapus")
             remove_btn.clicked.connect(self._remove_from_blacklist)
-            remove_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {BG_SURFACE};
-                    color: {ERROR};
-                    border: 1px solid {ERROR};
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                }}
-                QPushButton:hover {{
-                    background-color: {ERROR};
-                    color: white;
-                }}
-            """)
+            remove_btn.setStyleSheet(btn_danger())
             layout.addWidget(remove_btn)
         else:
             self.whitelist_widget = QListWidget()
@@ -333,19 +287,7 @@ class UserManagementTab(QWidget):
             # Remove button
             remove_btn = QPushButton("🗑️ Hapus VIP")
             remove_btn.clicked.connect(self._remove_from_whitelist)
-            remove_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {BG_SURFACE};
-                    color: {SUCCESS};
-                    border: 1px solid {SUCCESS};
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                }}
-                QPushButton:hover {{
-                    background-color: {SUCCESS};
-                    color: white;
-                }}
-            """)
+            remove_btn.setStyleSheet(btn_ghost())
             layout.addWidget(remove_btn)
         
         group.setLayout(layout)

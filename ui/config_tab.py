@@ -36,13 +36,20 @@ from sales_templates import get_template_list, get_template
 try:
     from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
         TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM)
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
+        btn_success, btn_danger, btn_ghost, btn_primary, status_badge, label_subtitle)
 except ImportError:
     PRIMARY = "#D97706"; BG_BASE = "#1c1208"; BG_SURFACE = "#261509"; BG_ELEVATED = "#2E1A0A"
     TEXT_PRIMARY = "#FFFBEB"; TEXT_MUTED = "#D6B97B"; TEXT_DIM = "#92734A"
     ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
     BORDER_GOLD = "#92400E"; BORDER = "#3D2010"; ACCENT = "#FCD34D"
     SECONDARY = "#92400E"; RADIUS = "10px"; RADIUS_SM = "6px"
+    def btn_success(extra=""): return f"QPushButton {{ background-color: {SUCCESS}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #16A34A; }}"
+    def btn_danger(extra=""): return f"QPushButton {{ background-color: {ERROR}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #DC2626; }}"
+    def btn_ghost(extra=""): return f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; border-radius: 6px; padding: 7px 18px; font-weight: 600; {extra} }}"
+    def btn_primary(extra=""): return f"QPushButton {{ background-color: {PRIMARY}; color: {BG_BASE}; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #F59E0B; }}"
+    def status_badge(color=None, size=11): c = color or PRIMARY; return f"color: {c}; font-weight: 600; font-size: {size}px; padding: 4px 10px; background-color: {BG_ELEVATED}; border: 1px solid {c}; border-radius: 6px;"
+    def label_subtitle(size=11): return f"font-size: {size}px; color: {TEXT_MUTED}; background: transparent;"
 
 class APITestThread(QThread):
     """Thread untuk test API connection"""
@@ -447,7 +454,7 @@ class ConfigTab(QWidget):
         # Status with better styling
         self.ai_status = QLabel("Status: Belum ada API key")
         self.ai_status.setProperty("class", "status-info")
-        self.ai_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+        self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
         group_layout.addWidget(self.ai_status)
         
         layout.addWidget(group)
@@ -597,41 +604,13 @@ class ConfigTab(QWidget):
 
         # Save all slots button
         save_btn = QPushButton("💾 Simpan Semua Slot")
-        save_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {SUCCESS};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: {ACCENT};
-                color: {BG_BASE};
-            }}
-        """)
+        save_btn.setStyleSheet(btn_success())
         save_btn.clicked.connect(self.save_all_greeting_slots)
         control_layout.addWidget(save_btn)
 
         # Clear all slots button
         clear_btn = QPushButton("🗑️ Kosongkan Semua")
-        clear_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {ERROR};
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background-color: {WARNING};
-                color: {BG_BASE};
-            }}
-        """)
+        clear_btn.setStyleSheet(btn_danger())
         clear_btn.clicked.connect(self.clear_all_greeting_slots)
         control_layout.addWidget(clear_btn)
 
@@ -856,7 +835,7 @@ class ConfigTab(QWidget):
         # Status with better styling
         self.tts_status = QLabel("Status: Belum ada API Key")
         self.tts_status.setProperty("class", "status-info")
-        self.tts_status.setStyleSheet(f"color: {TEXT_DIM}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px;")
+        self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
         group_layout.addWidget(self.tts_status)
 
         layout.addWidget(group)
@@ -1016,11 +995,11 @@ class ConfigTab(QWidget):
         if len(api_key) > 0:
             self.ai_status.setText("Status: API key siap untuk ditest")
             self.ai_status.setProperty("class", "status-warning")
-            self.ai_status.setStyleSheet(f"color: {WARNING}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
+            self.ai_status.setStyleSheet(status_badge(WARNING))
         else:
             self.ai_status.setText("Status: Belum ada API key")
             self.ai_status.setProperty("class", "status-info")
-            self.ai_status.setStyleSheet(f"color: {TEXT_DIM}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px;")
+            self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
         
         self.update_status_overview()
     
@@ -1061,12 +1040,12 @@ class ConfigTab(QWidget):
             self.tts_test_btn.setEnabled(True)
             self.tts_status.setText("Status: API Key siap untuk ditest")
             self.tts_status.setProperty("class", "status-warning")
-            self.tts_status.setStyleSheet(f"color: {WARNING}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
+            self.tts_status.setStyleSheet(status_badge(WARNING))
         else:
             self.tts_test_btn.setEnabled(False)
             self.tts_status.setText("Status: Belum ada API Key")
             self.tts_status.setProperty("class", "status-info")
-            self.tts_status.setStyleSheet(f"color: {TEXT_DIM}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px;")
+            self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
 
         self.update_status_overview()
     
@@ -1157,7 +1136,7 @@ class ConfigTab(QWidget):
         
         if not api_key:
             self.ai_status.setText("Status: ❌ API key kosong")
-            self.ai_status.setStyleSheet(f"color: {ERROR}; font-size: 12px;")
+            self.ai_status.setStyleSheet(status_badge(ERROR))
             return
         
         self.ai_test_btn.setText("⏳ Testing...")
@@ -1182,7 +1161,7 @@ class ConfigTab(QWidget):
 
         if not api_key:
             self.tts_status.setText("Status: ❌ Belum ada API Key")
-            self.tts_status.setStyleSheet(f"color: {ERROR}; font-size: 12px;")
+            self.tts_status.setStyleSheet(status_badge(ERROR))
             return
 
         self.tts_test_btn.setText("⏳ Testing...")
@@ -1228,7 +1207,7 @@ class ConfigTab(QWidget):
             if success:
                 self.tts_status.setText("Status: ✅ API Key valid dan TTS berfungsi!")
                 self.tts_status.setProperty("class", "status-success")
-                self.tts_status.setStyleSheet(f"color: {SUCCESS}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
+                self.tts_status.setStyleSheet(status_badge(SUCCESS))
                 logger.info("[CONFIG_TEST] ✅ Google TTS test successful")
             else:
                 raise Exception("TTS gagal dijalankan. Periksa API Key dan quota Anda.")
@@ -1236,7 +1215,7 @@ class ConfigTab(QWidget):
         except Exception as e:
             self.tts_status.setText(f"Status: ❌ Error: {str(e)}")
             self.tts_status.setProperty("class", "status-error")
-            self.tts_status.setStyleSheet(f"color: {ERROR}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
+            self.tts_status.setStyleSheet(status_badge(ERROR))
             logger.error(f"[CONFIG_TEST] ❌ Google TTS test failed: {e}")
 
             # Restore backup settings on failure
@@ -1265,11 +1244,11 @@ class ConfigTab(QWidget):
         if success:
             self.ai_status.setText(f"Status: {message}")
             self.ai_status.setProperty("class", "status-success")
-            self.ai_status.setStyleSheet(f"color: {SUCCESS}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
+            self.ai_status.setStyleSheet(status_badge(SUCCESS))
         else:
             self.ai_status.setText(f"Status: {message}")
             self.ai_status.setProperty("class", "status-error")
-            self.ai_status.setStyleSheet(f"color: {ERROR}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
+            self.ai_status.setStyleSheet(status_badge(ERROR))
         
         self.update_status_overview()
     
@@ -1497,11 +1476,11 @@ class ConfigTab(QWidget):
             
             self.ai_status.setText("Status: Belum ada API key")
             self.ai_status.setProperty("class", "status-info")
-            self.ai_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+            self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
             
             self.tts_status.setText("Status: Belum ada file kredensial")
             self.tts_status.setProperty("class", "status-info")
-            self.tts_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+            self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
             
             if hasattr(self, 'template_status'):
                 self.template_status.setText("Status: Semua konfigurasi direset")

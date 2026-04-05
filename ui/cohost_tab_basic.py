@@ -34,13 +34,24 @@ except ImportError as e:
 try:
     from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
         TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM)
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
+        btn_success, btn_danger, btn_ghost, btn_accent, btn_secondary,
+        status_badge, label_title, label_subtitle, LOG_TEXTEDIT_STYLE)
 except ImportError:
     PRIMARY = "#D97706"; BG_BASE = "#1c1208"; BG_SURFACE = "#261509"; BG_ELEVATED = "#2E1A0A"
     TEXT_PRIMARY = "#FFFBEB"; TEXT_MUTED = "#D6B97B"; TEXT_DIM = "#92734A"
     ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
     BORDER_GOLD = "#92400E"; BORDER = "#3D2010"; ACCENT = "#FCD34D"
     SECONDARY = "#92400E"; RADIUS = "10px"; RADIUS_SM = "6px"
+    def btn_success(extra=""): return f"QPushButton {{ background-color: {SUCCESS}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; font-size: 12px; {extra} }} QPushButton:hover {{ background-color: #16A34A; }}"
+    def btn_danger(extra=""): return f"QPushButton {{ background-color: {ERROR}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; font-size: 12px; {extra} }} QPushButton:hover {{ background-color: #DC2626; }}"
+    def btn_ghost(extra=""): return f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; border-radius: 6px; padding: 7px 18px; font-weight: 600; {extra} }}"
+    def btn_accent(extra=""): return f"QPushButton {{ background-color: {ACCENT}; color: {BG_BASE}; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }}"
+    def btn_secondary(extra=""): return f"QPushButton {{ background-color: transparent; color: {PRIMARY}; border: 1px solid {PRIMARY}; border-radius: 6px; padding: 7px 18px; font-weight: 600; {extra} }}"
+    def status_badge(color=None, size=11): c = color or PRIMARY; return f"color: {c}; font-weight: 600; font-size: {size}px; padding: 4px 10px; background-color: {BG_ELEVATED}; border: 1px solid {c}; border-radius: 6px;"
+    def label_title(size=16): return f"font-size: {size}pt; font-weight: 700; color: {PRIMARY}; background: transparent;"
+    def label_subtitle(size=11): return f"font-size: {size}px; color: {TEXT_MUTED}; background: transparent;"
+    LOG_TEXTEDIT_STYLE = f"QTextEdit {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER_GOLD}; border-radius: 6px; padding: 8px; font-family: Consolas, monospace; font-size: 11px; }}"
 
 # Helper function untuk safe attribute check
 def safe_attr_check(obj, attr_name):
@@ -679,21 +690,7 @@ class CohostTabBasicSimplified(QWidget):
         
         # Add tutorial button at the top
         tutorial_button = QPushButton("📺 Tutorial Video")
-        tutorial_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 10px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 5px;
-                margin: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
+        tutorial_button.setStyleSheet(btn_accent("font-size: 13px; padding: 10px 20px; margin: 4px;"))
         tutorial_button.clicked.connect(self.open_tutorial)
         main_layout.addWidget(tutorial_button)
         
@@ -708,31 +705,31 @@ class CohostTabBasicSimplified(QWidget):
         layout = QVBoxLayout(content_widget)
         
         # Basic controls with status indicator
-        controls_group = QGroupBox("Controls")
+        controls_group = QGroupBox("⚡ Controls")
         controls_layout = QHBoxLayout()
-        
-        self.start_button = QPushButton("Start")
+        controls_layout.setSpacing(12)
+
+        self.start_button = QPushButton("▶  Mulai Auto Reply")
+        self.start_button.setStyleSheet(btn_success("font-size: 13px; padding: 10px 22px; min-width: 160px;"))
         self.start_button.clicked.connect(self.start)
-        self.stop_button = QPushButton("Stop")
+
+        self.stop_button = QPushButton("■  Stop")
+        self.stop_button.setStyleSheet(btn_danger("font-size: 13px; padding: 10px 22px; min-width: 120px;"))
         self.stop_button.clicked.connect(self.stop)
-        
-        # Status indicator (lampu)
-        self.status_indicator = QLabel("🔴 OFF")
-        self.status_indicator.setStyleSheet("""
-            QLabel {
-                font-weight: bold;
-                font-size: 14px;
-                padding: 5px 10px;
-                border: 2px solid #ccc;
-                border-radius: 5px;
-                background-color: #f0f0f0;
-            }
-        """)
-        
+
+        # Status indicator — pakai status_badge
+        self.status_indicator = QLabel("🔴  OFF")
+        self.status_indicator.setStyleSheet(status_badge(ERROR, size=13))
+
+        status_text = QLabel("Status:")
+        status_text.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
+
         controls_layout.addWidget(self.start_button)
         controls_layout.addWidget(self.stop_button)
-        controls_layout.addWidget(QLabel("Auto Reply Status:"))
+        controls_layout.addSpacing(16)
+        controls_layout.addWidget(status_text)
         controls_layout.addWidget(self.status_indicator)
+        controls_layout.addStretch()
         controls_group.setLayout(controls_layout)
         
         # Platform selection
@@ -817,13 +814,14 @@ class CohostTabBasicSimplified(QWidget):
         trigger_layout.addWidget(self.trigger_input)
         
         save_trigger_btn = QPushButton("💾 Save")
+        save_trigger_btn.setStyleSheet(btn_ghost())
         save_trigger_btn.clicked.connect(self.save_trigger_settings)
         trigger_layout.addWidget(save_trigger_btn)
         settings_layout.addLayout(trigger_layout)
-        
+
         # Trigger info label
         trigger_info = QLabel("💡 Tips: Kosongkan untuk membalas semua komentar. Tanda tanya (?) otomatis dibalas.")
-        trigger_info.setStyleSheet("color: #666; font-style: italic; font-size: 11px;")
+        trigger_info.setStyleSheet(label_subtitle())
         settings_layout.addWidget(trigger_info)
         
         # Cooldown settings
@@ -955,23 +953,23 @@ class CohostTabBasicSimplified(QWidget):
         # System Status Summary Row (below table)
         summary_layout = QHBoxLayout()
         
-        # Connection indicators
+        # Connection indicators — status_badge gives bordered pill style
         self.ai_status_label = QLabel("🔴 AI: Disconnected")
-        self.ai_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+        self.ai_status_label.setStyleSheet(status_badge(ERROR))
 
         self.listener_status_label = QLabel("🔴 Listener: Stopped")
-        self.listener_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+        self.listener_status_label.setStyleSheet(status_badge(ERROR))
 
         self.tts_status_label = QLabel("🔴 TTS: Not Ready")
-        self.tts_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+        self.tts_status_label.setStyleSheet(status_badge(ERROR))
 
         # Greeting status
         self.greeting_status_label = QLabel("⏹️ Greeting: Disabled")
-        self.greeting_status_label.setStyleSheet(f"color: {TEXT_DIM}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+        self.greeting_status_label.setStyleSheet(status_badge(TEXT_DIM))
 
         # Statistics
-        self.stats_label = QLabel("📈 Comments: 0 | AI Replies: 0 | Triggers: 0")
-        self.stats_label.setStyleSheet(f"color: {INFO}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+        self.stats_label = QLabel("📈 0 Komentar | 0 Balasan | 0 Trigger")
+        self.stats_label.setStyleSheet(status_badge(INFO))
         
         summary_layout.addWidget(self.ai_status_label)
         summary_layout.addWidget(self.listener_status_label)  
@@ -1237,31 +1235,11 @@ class CohostTabBasicSimplified(QWidget):
     def update_status_indicator(self, is_active):
         """Update the status indicator lamp"""
         if is_active:
-            self.status_indicator.setText("🟢 ON")
-            self.status_indicator.setStyleSheet("""
-                QLabel {
-                    font-weight: bold;
-                    font-size: 14px;
-                    padding: 5px 10px;
-                    border: 2px solid #4caf50;
-                    border-radius: 5px;
-                    background-color: #e8f5e8;
-                    color: #2e7d32;
-                }
-            """)
+            self.status_indicator.setText("🟢  ON — Active")
+            self.status_indicator.setStyleSheet(status_badge(SUCCESS, size=13))
         else:
-            self.status_indicator.setText("🔴 OFF")
-            self.status_indicator.setStyleSheet("""
-                QLabel {
-                    font-weight: bold;
-                    font-size: 14px;
-                    padding: 5px 10px;
-                    border: 2px solid #f44336;
-                    border-radius: 5px;
-                    background-color: #ffebee;
-                    color: #c62828;
-                }
-            """)
+            self.status_indicator.setText("🔴  OFF")
+            self.status_indicator.setStyleSheet(status_badge(ERROR, size=13))
     
     def start(self):
         """Start simplified listener"""
@@ -1893,20 +1871,20 @@ class CohostTabBasicSimplified(QWidget):
 
                 if ai_configured:
                     self.ai_status_label.setText("🟢 AI: Ready")
-                    self.ai_status_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.ai_status_label.setStyleSheet(status_badge(SUCCESS))
                 else:
                     self.ai_status_label.setText("🔴 AI: Not Ready")
-                    self.ai_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
-            
+                    self.ai_status_label.setStyleSheet(status_badge(ERROR))
+
             if hasattr(self, 'listener_status_label'):
                 # Check listener status
                 is_running = (self.listener_thread and self.listener_thread.isRunning()) or (self.tiktok_listener_thread and self.tiktok_listener_thread.isRunning())
                 if is_running:
                     self.listener_status_label.setText("🟢 Listener: Active")
-                    self.listener_status_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.listener_status_label.setStyleSheet(status_badge(SUCCESS))
                 else:
                     self.listener_status_label.setText("🔴 Listener: Stopped")
-                    self.listener_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.listener_status_label.setStyleSheet(status_badge(ERROR))
                     
             if hasattr(self, 'tts_status_label'):
                 # TTS status based on API key or credentials file
@@ -1916,10 +1894,10 @@ class CohostTabBasicSimplified(QWidget):
                 # Check if either API key or credentials file exists
                 if (tts_api_key) or (tts_file and os.path.exists(tts_file)):
                     self.tts_status_label.setText("🟢 TTS: Ready")
-                    self.tts_status_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.tts_status_label.setStyleSheet(status_badge(SUCCESS))
                 else:
                     self.tts_status_label.setText("🔴 TTS: Not Ready")
-                    self.tts_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.tts_status_label.setStyleSheet(status_badge(ERROR))
                     
             if hasattr(self, 'stats_label'):
                 # Update statistics
@@ -2042,13 +2020,13 @@ class CohostTabBasicSimplified(QWidget):
                 
                 # Update style based on status
                 if "Detecting" in status_message:
-                    self.greeting_status_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.greeting_status_label.setStyleSheet(status_badge(SUCCESS))
                 elif "Processing" in status_message:
-                    self.greeting_status_label.setStyleSheet(f"color: {WARNING}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.greeting_status_label.setStyleSheet(status_badge(WARNING))
                 elif "Waiting" in status_message:
-                    self.greeting_status_label.setStyleSheet(f"color: {INFO}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.greeting_status_label.setStyleSheet(status_badge(INFO))
                 else:
-                    self.greeting_status_label.setStyleSheet(f"color: {TEXT_DIM}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+                    self.greeting_status_label.setStyleSheet(status_badge(TEXT_DIM))
                 
         except Exception as e:
             self.log_message("ERROR", f"Error updating greeting status: {e}")

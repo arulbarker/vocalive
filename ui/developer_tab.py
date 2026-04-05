@@ -11,13 +11,17 @@ from PyQt6.QtGui import QFont, QPixmap, QDesktopServices
 try:
     from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
         TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM)
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
+        CARD_ELEVATED_STYLE, label_title, label_subtitle)
 except ImportError:
     PRIMARY = "#D97706"; BG_BASE = "#1c1208"; BG_SURFACE = "#261509"; BG_ELEVATED = "#2E1A0A"
     TEXT_PRIMARY = "#FFFBEB"; TEXT_MUTED = "#D6B97B"; TEXT_DIM = "#92734A"
     ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
     BORDER_GOLD = "#92400E"; BORDER = "#3D2010"; ACCENT = "#FCD34D"
     SECONDARY = "#92400E"; RADIUS = "10px"; RADIUS_SM = "6px"
+    CARD_ELEVATED_STYLE = f"QFrame {{ background-color: {BG_ELEVATED}; border: 1px solid {BORDER_GOLD}; border-radius: 10px; }}"
+    def label_title(size=16): return f"font-size: {size}pt; font-weight: 700; color: {PRIMARY}; background: transparent;"
+    def label_subtitle(size=11): return f"font-size: {size}px; color: {TEXT_MUTED}; background: transparent;"
 
 class DeveloperTab(QWidget):
     """Tab untuk menampilkan link media sosial developer dengan UI yang menarik."""
@@ -79,19 +83,12 @@ class DeveloperTab(QWidget):
         # Title
         title_label = QLabel("VocaLive Developer")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_font = QFont()
-        title_font.setPointSize(24)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setStyleSheet(f"color: {PRIMARY}; margin: 10px;")
+        title_label.setStyleSheet(label_title(size=22) + " margin: 10px;")
         
         # Subtitle
-        subtitle_label = QLabel("Arul CG - Full Stack Developer & Content Creator")
+        subtitle_label = QLabel("Arul CG — Full Stack Developer & Content Creator")
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_font = QFont()
-        subtitle_font.setPointSize(14)
-        subtitle_label.setFont(subtitle_font)
-        subtitle_label.setStyleSheet(f"color: {TEXT_PRIMARY}; margin-bottom: 20px;")
+        subtitle_label.setStyleSheet(label_subtitle(size=13) + " margin-bottom: 20px;")
         
         header_layout.addWidget(title_label)
         header_layout.addWidget(subtitle_label)
@@ -222,14 +219,11 @@ class DeveloperTab(QWidget):
         button_layout.addWidget(desc_label)
         button_layout.addWidget(visit_btn)
         
-        # Frame styling
-        button_frame.setStyleSheet(f"""
+        # Frame styling — use CARD_ELEVATED_STYLE as base
+        button_frame.setStyleSheet(CARD_ELEVATED_STYLE + f"""
             QFrame {{
-                background-color: {BG_ELEVATED};
-                border: 2px solid {BORDER_GOLD};
-                border-radius: 12px;
-                padding: 10px;
-                margin: 5px;
+                padding: 12px;
+                margin: 4px;
             }}
             QFrame:hover {{
                 border-color: {PRIMARY};
