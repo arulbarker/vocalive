@@ -31,6 +31,17 @@ except ImportError as e:
     print(f"Import error: {e}")
     sys.exit(1)
 
+try:
+    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
+        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM)
+except ImportError:
+    PRIMARY = "#D97706"; BG_BASE = "#1c1208"; BG_SURFACE = "#261509"; BG_ELEVATED = "#2E1A0A"
+    TEXT_PRIMARY = "#FFFBEB"; TEXT_MUTED = "#D6B97B"; TEXT_DIM = "#92734A"
+    ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
+    BORDER_GOLD = "#92400E"; BORDER = "#3D2010"; ACCENT = "#FCD34D"
+    SECONDARY = "#92400E"; RADIUS = "10px"; RADIUS_SM = "6px"
+
 # Helper function untuk safe attribute check
 def safe_attr_check(obj, attr_name):
     """Safely check if object has attribute"""
@@ -757,7 +768,7 @@ class CohostTabBasicSimplified(QWidget):
         
         # Context info (managed via Config tab)
         context_info = QLabel("📋 Context Setting: Diatur melalui Config Tab → Template Live Selling")
-        context_info.setStyleSheet("color: #1877F2; font-weight: bold; padding: 8px; background-color: #2a2a2a; border-radius: 6px; margin: 5px;")
+        context_info.setStyleSheet(f"color: {PRIMARY}; font-weight: bold; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 6px; margin: 5px;")
         
         # Language & Voice Settings Group
         language_group = QGroupBox("Language & Voice Settings")
@@ -854,7 +865,7 @@ class CohostTabBasicSimplified(QWidget):
         # Mode info (Random only)
         mode_info_layout = QHBoxLayout()
         mode_info = QLabel("🎲 Mode Sapaan: Random (Acak dari slot yang terisi)")
-        mode_info.setStyleSheet("color: #28a745; font-weight: bold; font-size: 12px; padding: 5px; background-color: #1a2e1a; border-radius: 4px;")
+        mode_info.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; font-size: 12px; padding: 5px; background-color: {BG_ELEVATED}; border-radius: 4px;")
         mode_info_layout.addWidget(mode_info)
         mode_info_layout.addStretch()
         settings_layout.addLayout(mode_info_layout)
@@ -909,34 +920,34 @@ class CohostTabBasicSimplified(QWidget):
         self.status_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         
         # Enhanced table styling
-        self.status_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #1a1a1a;
-                color: #ffffff;
-                gridline-color: #404040;
+        self.status_table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {BG_BASE};
+                color: {TEXT_PRIMARY};
+                gridline-color: {BORDER};
                 font-size: 12px;
-                border: 2px solid #404040;
+                border: 2px solid {BORDER_GOLD};
                 border-radius: 8px;
-            }
-            QTableWidget::item {
+            }}
+            QTableWidget::item {{
                 padding: 8px;
-                border-bottom: 1px solid #333333;
-            }
-            QTableWidget::item:selected {
-                background-color: #1877F2;
+                border-bottom: 1px solid {BORDER};
+            }}
+            QTableWidget::item:selected {{
+                background-color: {PRIMARY};
                 color: white;
-            }
-            QTableWidget::item:alternate {
-                background-color: #2a2a2a;
-            }
-            QHeaderView::section {
-                background-color: #404040;
-                color: white;
+            }}
+            QTableWidget::item:alternate {{
+                background-color: {BG_ELEVATED};
+            }}
+            QHeaderView::section {{
+                background-color: {SECONDARY};
+                color: {TEXT_PRIMARY};
                 padding: 12px;
-                border: 1px solid #555555;
+                border: 1px solid {BORDER_GOLD};
                 font-weight: bold;
                 font-size: 13px;
-            }
+            }}
         """)
         
         status_layout.addWidget(self.status_table)
@@ -946,21 +957,21 @@ class CohostTabBasicSimplified(QWidget):
         
         # Connection indicators
         self.ai_status_label = QLabel("🔴 AI: Disconnected")
-        self.ai_status_label.setStyleSheet("color: #dc3545; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
-        
-        self.listener_status_label = QLabel("🔴 Listener: Stopped")  
-        self.listener_status_label.setStyleSheet("color: #dc3545; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
-        
+        self.ai_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+
+        self.listener_status_label = QLabel("🔴 Listener: Stopped")
+        self.listener_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+
         self.tts_status_label = QLabel("🔴 TTS: Not Ready")
-        self.tts_status_label.setStyleSheet("color: #dc3545; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
-        
+        self.tts_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+
         # Greeting status
         self.greeting_status_label = QLabel("⏹️ Greeting: Disabled")
-        self.greeting_status_label.setStyleSheet("color: #6c757d; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
-        
+        self.greeting_status_label.setStyleSheet(f"color: {TEXT_DIM}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
+
         # Statistics
         self.stats_label = QLabel("📈 Comments: 0 | AI Replies: 0 | Triggers: 0")
-        self.stats_label.setStyleSheet("color: #17a2b8; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+        self.stats_label.setStyleSheet(f"color: {INFO}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
         
         summary_layout.addWidget(self.ai_status_label)
         summary_layout.addWidget(self.listener_status_label)  
@@ -1817,15 +1828,15 @@ class CohostTabBasicSimplified(QWidget):
             # Color-code status
             status_item = QTableWidgetItem(status)
             if status == "AI Reply":
-                status_item.setBackground(QColor("#28a745"))  # Green
+                status_item.setBackground(QColor(SUCCESS))
             elif status == "Triggered":
-                status_item.setBackground(QColor("#ffc107"))  # Yellow
+                status_item.setBackground(QColor(WARNING))
             elif status == "Error":
-                status_item.setBackground(QColor("#dc3545"))  # Red
+                status_item.setBackground(QColor(ERROR))
             elif status == "Filtered":
-                status_item.setBackground(QColor("#6c757d"))  # Gray
+                status_item.setBackground(QColor(TEXT_DIM))
             else:
-                status_item.setBackground(QColor("#17a2b8"))  # Blue
+                status_item.setBackground(QColor(INFO))
             
             self.status_table.setItem(0, 5, status_item)
             
@@ -1852,7 +1863,7 @@ class CohostTabBasicSimplified(QWidget):
                     
                     # Update status
                     status_item = QTableWidgetItem("AI Reply")
-                    status_item.setBackground(QColor("#28a745"))  # Green
+                    status_item.setBackground(QColor(SUCCESS))
                     self.status_table.setItem(row, 5, status_item)
                     
                     self.total_ai_replies += 1
@@ -1882,20 +1893,20 @@ class CohostTabBasicSimplified(QWidget):
 
                 if ai_configured:
                     self.ai_status_label.setText("🟢 AI: Ready")
-                    self.ai_status_label.setStyleSheet("color: #28a745; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.ai_status_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                 else:
                     self.ai_status_label.setText("🔴 AI: Not Ready")
-                    self.ai_status_label.setStyleSheet("color: #dc3545; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.ai_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
             
             if hasattr(self, 'listener_status_label'):
                 # Check listener status
                 is_running = (self.listener_thread and self.listener_thread.isRunning()) or (self.tiktok_listener_thread and self.tiktok_listener_thread.isRunning())
                 if is_running:
                     self.listener_status_label.setText("🟢 Listener: Active")
-                    self.listener_status_label.setStyleSheet("color: #28a745; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.listener_status_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                 else:
                     self.listener_status_label.setText("🔴 Listener: Stopped")
-                    self.listener_status_label.setStyleSheet("color: #dc3545; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.listener_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                     
             if hasattr(self, 'tts_status_label'):
                 # TTS status based on API key or credentials file
@@ -1905,10 +1916,10 @@ class CohostTabBasicSimplified(QWidget):
                 # Check if either API key or credentials file exists
                 if (tts_api_key) or (tts_file and os.path.exists(tts_file)):
                     self.tts_status_label.setText("🟢 TTS: Ready")
-                    self.tts_status_label.setStyleSheet("color: #28a745; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.tts_status_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                 else:
                     self.tts_status_label.setText("🔴 TTS: Not Ready")
-                    self.tts_status_label.setStyleSheet("color: #dc3545; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.tts_status_label.setStyleSheet(f"color: {ERROR}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                     
             if hasattr(self, 'stats_label'):
                 # Update statistics
@@ -2031,13 +2042,13 @@ class CohostTabBasicSimplified(QWidget):
                 
                 # Update style based on status
                 if "Detecting" in status_message:
-                    self.greeting_status_label.setStyleSheet("color: #28a745; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.greeting_status_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                 elif "Processing" in status_message:
-                    self.greeting_status_label.setStyleSheet("color: #ffc107; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.greeting_status_label.setStyleSheet(f"color: {WARNING}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                 elif "Waiting" in status_message:
-                    self.greeting_status_label.setStyleSheet("color: #17a2b8; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.greeting_status_label.setStyleSheet(f"color: {INFO}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                 else:
-                    self.greeting_status_label.setStyleSheet("color: #6c757d; font-weight: bold; padding: 6px; background-color: #2a2a2a; border-radius: 4px; margin: 2px;")
+                    self.greeting_status_label.setStyleSheet(f"color: {TEXT_DIM}; font-weight: bold; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px; margin: 2px;")
                 
         except Exception as e:
             self.log_message("ERROR", f"Error updating greeting status: {e}")

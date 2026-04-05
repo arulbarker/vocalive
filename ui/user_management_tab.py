@@ -22,6 +22,17 @@ except ImportError:
     USER_LIST_AVAILABLE = False
     logger.warning("User list manager not available")
 
+try:
+    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
+        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM)
+except ImportError:
+    PRIMARY = "#D97706"; BG_BASE = "#1c1208"; BG_SURFACE = "#261509"; BG_ELEVATED = "#2E1A0A"
+    TEXT_PRIMARY = "#FFFBEB"; TEXT_MUTED = "#D6B97B"; TEXT_DIM = "#92734A"
+    ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
+    BORDER_GOLD = "#92400E"; BORDER = "#3D2010"; ACCENT = "#FCD34D"
+    SECONDARY = "#92400E"; RADIUS = "10px"; RADIUS_SM = "6px"
+
 
 class UserManagementTab(QWidget):
     """Tab untuk mengelola blacklist dan whitelist users"""
@@ -54,7 +65,7 @@ class UserManagementTab(QWidget):
         # Check if module available
         if not USER_LIST_AVAILABLE:
             error_label = QLabel("⚠️ User List Manager module tidak tersedia")
-            error_label.setStyleSheet("color: #FA383E; font-size: 14px; padding: 20px;")
+            error_label.setStyleSheet(f"color: {ERROR}; font-size: 14px; padding: 20px;")
             error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             main_layout.addWidget(error_label)
             self.setLayout(main_layout)
@@ -62,24 +73,25 @@ class UserManagementTab(QWidget):
         
         # ===== INFO SECTION =====
         info_frame = QFrame()
-        info_frame.setStyleSheet("""
-            QFrame {
-                background-color: #1e3a5f;
+        info_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_ELEVATED};
                 border-radius: 8px;
                 padding: 10px;
-            }
+                border: 1px solid {BORDER_GOLD};
+            }}
         """)
         info_layout = QVBoxLayout()
         
         info_title = QLabel("ℹ️ Cara Kerja:")
-        info_title.setStyleSheet("color: #4da6ff; font-weight: bold; font-size: 12px;")
+        info_title.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 12px;")
         info_layout.addWidget(info_title)
         
         info_text = QLabel(
             "• 🚫 <b>Blacklist</b>: User di blacklist akan DIABAIKAN sepenuhnya (tidak di-reply)\n"
             "• ⭐ <b>Whitelist (VIP)</b>: User VIP akan SELALU dijawab (bypass cooldown)"
         )
-        info_text.setStyleSheet("color: #b0b3b8; font-size: 11px;")
+        info_text.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
         info_text.setWordWrap(True)
         info_layout.addWidget(info_text)
         
@@ -93,16 +105,16 @@ class UserManagementTab(QWidget):
         blacklist_widget = self._create_list_section(
             "🚫 Blacklist (Blokir)",
             "Pengguna yang diblokir tidak akan mendapat reply",
-            "#FA383E",
+            ERROR,
             is_blacklist=True
         )
         splitter.addWidget(blacklist_widget)
-        
+
         # RIGHT: Whitelist
         whitelist_widget = self._create_list_section(
             "⭐ Whitelist (VIP)",
             "Pengguna VIP selalu dijawab, bypass cooldown",
-            "#42B72A",
+            SUCCESS,
             is_blacklist=False
         )
         splitter.addWidget(whitelist_widget)
@@ -120,12 +132,13 @@ class UserManagementTab(QWidget):
     def _create_header(self):
         """Create header section"""
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
-                background-color: #242526;
+        header.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_ELEVATED};
                 border-radius: 8px;
                 padding: 10px;
-            }
+                border: 1px solid {BORDER_GOLD};
+            }}
         """)
         
         layout = QHBoxLayout()
@@ -133,7 +146,7 @@ class UserManagementTab(QWidget):
         # Title
         title = QLabel("👥 User Management")
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        title.setStyleSheet("color: #1877F2;")
+        title.setStyleSheet(f"color: {PRIMARY};")
         layout.addWidget(title)
         
         layout.addStretch()
@@ -141,18 +154,19 @@ class UserManagementTab(QWidget):
         # Refresh button
         refresh_btn = QPushButton("🔄 Refresh")
         refresh_btn.clicked.connect(self._load_lists)
-        refresh_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3A3B3C;
-                color: white;
-                border: none;
+        refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {BG_SURFACE};
+                color: {TEXT_PRIMARY};
+                border: 1px solid {BORDER_GOLD};
                 padding: 8px 16px;
                 border-radius: 6px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #4E4F50;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {PRIMARY};
+                color: white;
+            }}
         """)
         layout.addWidget(refresh_btn)
         
@@ -183,7 +197,7 @@ class UserManagementTab(QWidget):
         
         # Description
         desc_label = QLabel(description)
-        desc_label.setStyleSheet("color: #B0B3B8; font-size: 11px; font-weight: normal;")
+        desc_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-weight: normal;")
         layout.addWidget(desc_label)
         
         # Input area
@@ -192,14 +206,14 @@ class UserManagementTab(QWidget):
         if is_blacklist:
             self.blacklist_input = QLineEdit()
             self.blacklist_input.setPlaceholderText("Masukkan username...")
-            self.blacklist_input.setStyleSheet("""
-                QLineEdit {
-                    background-color: #3A3B3C;
-                    color: white;
-                    border: 1px solid #FA383E;
+            self.blacklist_input.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {BG_SURFACE};
+                    color: {TEXT_PRIMARY};
+                    border: 1px solid {ERROR};
                     border-radius: 4px;
                     padding: 8px;
-                }
+                }}
             """)
             self.blacklist_input.returnPressed.connect(self._add_to_blacklist)
             input_layout.addWidget(self.blacklist_input)
@@ -216,21 +230,22 @@ class UserManagementTab(QWidget):
                     font-weight: bold;
                 }}
                 QPushButton:hover {{
-                    background-color: #E02D32;
+                    background-color: {WARNING};
+                    color: {BG_BASE};
                 }}
             """)
             input_layout.addWidget(add_btn)
         else:
             self.whitelist_input = QLineEdit()
             self.whitelist_input.setPlaceholderText("Masukkan username VIP...")
-            self.whitelist_input.setStyleSheet("""
-                QLineEdit {
-                    background-color: #3A3B3C;
-                    color: white;
-                    border: 1px solid #42B72A;
+            self.whitelist_input.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {BG_SURFACE};
+                    color: {TEXT_PRIMARY};
+                    border: 1px solid {SUCCESS};
                     border-radius: 4px;
                     padding: 8px;
-                }
+                }}
             """)
             self.whitelist_input.returnPressed.connect(self._add_to_whitelist)
             input_layout.addWidget(self.whitelist_input)
@@ -247,7 +262,8 @@ class UserManagementTab(QWidget):
                     font-weight: bold;
                 }}
                 QPushButton:hover {{
-                    background-color: #36A420;
+                    background-color: {ACCENT};
+                    color: {BG_BASE};
                 }}
             """)
             input_layout.addWidget(add_btn)
@@ -257,20 +273,21 @@ class UserManagementTab(QWidget):
         # List widget
         if is_blacklist:
             self.blacklist_widget = QListWidget()
-            self.blacklist_widget.setStyleSheet("""
-                QListWidget {
-                    background-color: #242526;
-                    color: white;
-                    border: 1px solid #3A3B3C;
+            self.blacklist_widget.setStyleSheet(f"""
+                QListWidget {{
+                    background-color: {BG_ELEVATED};
+                    color: {TEXT_PRIMARY};
+                    border: 1px solid {BORDER_GOLD};
                     border-radius: 4px;
-                }
-                QListWidget::item {
+                }}
+                QListWidget::item {{
                     padding: 8px;
-                    border-bottom: 1px solid #3A3B3C;
-                }
-                QListWidget::item:selected {
-                    background-color: #FA383E;
-                }
+                    border-bottom: 1px solid {BORDER};
+                }}
+                QListWidget::item:selected {{
+                    background-color: {ERROR};
+                    color: white;
+                }}
             """)
             self.blacklist_widget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             layout.addWidget(self.blacklist_widget)
@@ -278,36 +295,37 @@ class UserManagementTab(QWidget):
             # Remove button
             remove_btn = QPushButton("🗑️ Hapus")
             remove_btn.clicked.connect(self._remove_from_blacklist)
-            remove_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #3A3B3C;
-                    color: #FA383E;
-                    border: 1px solid #FA383E;
+            remove_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {BG_SURFACE};
+                    color: {ERROR};
+                    border: 1px solid {ERROR};
                     padding: 6px 12px;
                     border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #FA383E;
+                }}
+                QPushButton:hover {{
+                    background-color: {ERROR};
                     color: white;
-                }
+                }}
             """)
             layout.addWidget(remove_btn)
         else:
             self.whitelist_widget = QListWidget()
-            self.whitelist_widget.setStyleSheet("""
-                QListWidget {
-                    background-color: #242526;
-                    color: white;
-                    border: 1px solid #3A3B3C;
+            self.whitelist_widget.setStyleSheet(f"""
+                QListWidget {{
+                    background-color: {BG_ELEVATED};
+                    color: {TEXT_PRIMARY};
+                    border: 1px solid {BORDER_GOLD};
                     border-radius: 4px;
-                }
-                QListWidget::item {
+                }}
+                QListWidget::item {{
                     padding: 8px;
-                    border-bottom: 1px solid #3A3B3C;
-                }
-                QListWidget::item:selected {
-                    background-color: #42B72A;
-                }
+                    border-bottom: 1px solid {BORDER};
+                }}
+                QListWidget::item:selected {{
+                    background-color: {SUCCESS};
+                    color: white;
+                }}
             """)
             self.whitelist_widget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             layout.addWidget(self.whitelist_widget)
@@ -315,18 +333,18 @@ class UserManagementTab(QWidget):
             # Remove button
             remove_btn = QPushButton("🗑️ Hapus VIP")
             remove_btn.clicked.connect(self._remove_from_whitelist)
-            remove_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #3A3B3C;
-                    color: #42B72A;
-                    border: 1px solid #42B72A;
+            remove_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {BG_SURFACE};
+                    color: {SUCCESS};
+                    border: 1px solid {SUCCESS};
                     padding: 6px 12px;
                     border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #42B72A;
+                }}
+                QPushButton:hover {{
+                    background-color: {SUCCESS};
                     color: white;
-                }
+                }}
             """)
             layout.addWidget(remove_btn)
         
@@ -336,26 +354,27 @@ class UserManagementTab(QWidget):
     def _create_stats_section(self):
         """Create statistics section"""
         frame = QFrame()
-        frame.setStyleSheet("""
-            QFrame {
-                background-color: #242526;
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_ELEVATED};
                 border-radius: 8px;
                 padding: 10px;
-            }
+                border: 1px solid {BORDER_GOLD};
+            }}
         """)
         
         layout = QHBoxLayout()
         
         # Blacklist count
         self.blacklist_count_label = QLabel("🚫 Blacklist: 0 users")
-        self.blacklist_count_label.setStyleSheet("color: #FA383E; font-weight: bold;")
+        self.blacklist_count_label.setStyleSheet(f"color: {ERROR}; font-weight: bold;")
         layout.addWidget(self.blacklist_count_label)
         
         layout.addStretch()
         
         # Whitelist count
         self.whitelist_count_label = QLabel("⭐ Whitelist: 0 users")
-        self.whitelist_count_label.setStyleSheet("color: #42B72A; font-weight: bold;")
+        self.whitelist_count_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold;")
         layout.addWidget(self.whitelist_count_label)
         
         frame.setLayout(layout)
