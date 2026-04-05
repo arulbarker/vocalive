@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Version History
+
+> Selalu cek tabel ini sebelum rilis agar tidak salah penomoran versi.
+
+| Versi | Tanggal | Deskripsi |
+|-------|---------|-----------|
+| **v1.0.0** | 2026-04-05 | Versi awal baru — hapus Avatar Lip-sync & OBS Overlay, fokus ke Cohost AI + TTS |
+
+**Versi saat ini: v1.0.0**
+
+### Aturan Penomoran Versi (Semantic Versioning)
+- `MAJOR` (v**X**.0.0) — perubahan besar / breaking change / fitur utama baru
+- `MINOR` (v1.**X**.0) — fitur baru yang backward-compatible
+- `PATCH` (v1.0.**X**) — bug fix, perbaikan kecil
+
+Saat akan rilis versi baru, **update tabel di atas** dan ubah baris "Versi saat ini".
+
 ## What This App Does
 
 **VocaLive** is a Windows desktop application for live streaming automation. It listens to YouTube/TikTok live chat, generates AI replies (ChatGPT/DeepSeek), converts them to speech (Google Cloud TTS / gTTS), and plays them during the stream. It is distributed as a licensed Windows EXE.
