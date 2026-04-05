@@ -67,101 +67,29 @@ try:
 except ImportError:
     pass  # dotenv is optional
 
-# Skema warna Facebook Theme - DARK MODE
-FB_COLORS = {
-    "primary": "#1877F2",
-    "secondary": "#4267B2", 
-    "light_bg": "#18191A",
-    "dark_bg": "#0F1419",
-    "text_primary": "#FFFFFF",
-    "text_secondary": "#B0B3B8",
-    "button_primary": "#1877F2",
-    "button_secondary": "#3A3B3C",
-    "success": "#42B72A",
-    "warning": "#F5B800",
-    "error": "#FA383E",
+# Gold Seller brand colors — import dari ui/theme.py
+try:
+    from ui.theme import (
+        GLOBAL_QSS, PRIMARY, BG_BASE, BG_ELEVATED, BG_SURFACE,
+        TEXT_PRIMARY, TEXT_MUTED, BORDER_GOLD, SUCCESS, ACCENT
+    )
+except ImportError:
+    from theme import (
+        GLOBAL_QSS, PRIMARY, BG_BASE, BG_ELEVATED, BG_SURFACE,
+        TEXT_PRIMARY, TEXT_MUTED, BORDER_GOLD, SUCCESS, ACCENT
+    )
+
+GOLD_COLORS = {
+    "primary":    PRIMARY,
+    "background": BG_BASE,
+    "surface":    BG_SURFACE,
+    "text":       TEXT_PRIMARY,
+    "text_muted": TEXT_MUTED,
+    "success":    SUCCESS,
+    "accent":     ACCENT,
 }
 
-# Global dark theme styles
-DARK_THEME = """
-    QMainWindow, QWidget {
-        background-color: #18191A;
-        color: #FFFFFF;
-    }
-    
-    QTabWidget::pane {
-        border: 1px solid #3A3B3C;
-        background-color: #18191A;
-    }
-    
-    QTabBar::tab {
-        background-color: #242526;
-        color: #B0B3B8;
-        padding: 8px 12px;
-        border: none;
-        border-top-left-radius: 4px;
-        border-top-right-radius: 4px;
-    }
-    
-    QTabBar::tab:selected {
-        background-color: #3A3B3C;
-        color: #FFFFFF;
-    }
-    
-    QTabBar::tab:hover:!selected {
-        background-color: #2C2D2E;
-    }
-    
-    QStatusBar {
-        background-color: #242526;
-        color: #B0B3B8;
-    }
-    
-    QLineEdit, QTextEdit {
-        background-color: #3A3B3C;
-        color: #FFFFFF;
-        border: 1px solid #4E4F50;
-        border-radius: 4px;
-        padding: 4px;
-    }
-    
-    QLineEdit:focus, QTextEdit:focus {
-        border: 1px solid #1877F2;
-    }
-    
-    QComboBox {
-        background-color: #3A3B3C;
-        color: #FFFFFF;
-        border: 1px solid #4E4F50;
-        border-radius: 4px;
-        padding: 4px;
-    }
-    
-    QCheckBox {
-        color: #FFFFFF;
-    }
-    
-    QMessageBox {
-        background-color: #18191A;
-    }
-    
-    QMessageBox QLabel {
-        color: #FFFFFF;
-    }
-    
-    QProgressBar {
-        background-color: #3A3B3C;
-        border: none;
-        border-radius: 4px;
-        text-align: center;
-        color: #FFFFFF;
-    }
-    
-    QProgressBar::chunk {
-        background-color: #1877F2;
-        border-radius: 4px;
-    }
-"""
+DARK_THEME = GLOBAL_QSS
 
 # Fallback ConfigManager
 class ConfigManager:
@@ -497,32 +425,34 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # Log mode yang digunakan
-        logger.info("VocaLive - Basic Mode Only")
-        
+        logger.info("VocaLive v1.0.0 — Gold Seller Edition")
+
         # Setup window properties
-        self.setWindowTitle("VocaLive - Basic Mode")
-        self.resize(1000, 700)
-        self.setMinimumSize(800, 600)
+        self.setWindowTitle("VocaLive v1.0.0")
+        self.resize(1100, 750)
+        self.setMinimumSize(900, 620)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        
+
+        # Apply Gold Seller theme globally
+        self.setStyleSheet(DARK_THEME)
+
         # Setup status bar
         self._setup_status_bar()
-        
+
         # Setup icon jika tersedia
         self._setup_icon()
-        
+
         # Load configuration
         self.cfg = ConfigManager("config/settings.json")
-        version = "v7.2"
-        self.cfg.set("app_version", version)
-        
+        self.cfg.set("app_version", "v1.0.0")
+
         # Create main tabs directly
         self._create_main_tabs()
-        
+
         # Initialize unified comment processor after tabs are created
         self.unified_processor = None
         self._setup_unified_processor()
-        
+
         # Show main tabs
         self.setCentralWidget(self.main_tabs)
         
@@ -597,13 +527,23 @@ class MainWindow(QMainWindow):
             event.accept()
     
     def _setup_status_bar(self):
-        """Setup status bar dengan label yang diperlukan."""
+        """Setup status bar dengan Gold Seller styling."""
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        
+
         # API status label
-        self.api_status_label = QLabel("API Status: Ready")
+        self.api_status_label = QLabel("● Ready")
+        self.api_status_label.setStyleSheet(
+            f"color: {SUCCESS}; font-size: 11px; font-weight: 600; padding: 0 4px;"
+        )
         self.status_bar.addPermanentWidget(self.api_status_label)
+
+        # Version label
+        version_label = QLabel("VocaLive v1.0.0")
+        version_label.setStyleSheet(
+            f"color: {PRIMARY}; font-size: 11px; font-weight: 700; padding-right: 10px;"
+        )
+        self.status_bar.addPermanentWidget(version_label)
     
     def _setup_icon(self):
         """Setup aplikasi icon jika tersedia."""
