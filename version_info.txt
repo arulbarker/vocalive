@@ -18,13 +18,13 @@ VSVersionInfo(
       [
         StringTable(
           u'040904B0',
-          [StringStruct(u'CompanyName', u'StreamMate AI'),
-           StringStruct(u'FileDescription', u'StreamMate AI - Live Stream Assistant'),
+          [StringStruct(u'CompanyName', u'VocaLive'),
+           StringStruct(u'FileDescription', u'VocaLive - Live Stream Assistant'),
            StringStruct(u'FileVersion', u'1.0.11.0'),
-           StringStruct(u'InternalName', u'StreamMateAI'),
-           StringStruct(u'LegalCopyright', u'Copyright (C) 2024-2025 StreamMate AI'),
-           StringStruct(u'OriginalFilename', u'StreamMateAI.exe'),
-           StringStruct(u'ProductName', u'StreamMate AI'),
+           StringStruct(u'InternalName', u'VocaLive'),
+           StringStruct(u'LegalCopyright', u'Copyright (C) 2024-2025 VocaLive'),
+           StringStruct(u'OriginalFilename', u'VocaLive.exe'),
+           StringStruct(u'ProductName', u'VocaLive'),
            StringStruct(u'ProductVersion', u'1.0.11.0')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])

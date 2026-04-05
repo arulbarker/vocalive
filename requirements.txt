@@ -1,4 +1,4 @@
-﻿# StreamMate AI Requirements - Fixed
+﻿# VocaLive Requirements - Fixed
 # Core Dependencies
 PyQt6
 PyQt6-Qt6

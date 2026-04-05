@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-API Bridge untuk StreamMate AI Client
+API Bridge untuk VocaLive Client
 Menghubungkan aplikasi client dengan server VPS untuk AI processing
 """
 
@@ -8,9 +8,12 @@ import json
 import requests
 import logging
 import os
+import time
 from modules_client.config_manager import ConfigManager
 from pathlib import Path
 from dotenv import load_dotenv
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
@@ -18,39 +21,107 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 class APIClient:
-    """API Client - SUPABASE ONLY MODE"""
-    SUPABASE_ONLY = True
-    VPS_DISABLED = True
+    """API Client - Local mode only"""
     def __init__(self):
         self.cfg = ConfigManager()
-        # SUPABASE ONLY MODE - No VPS dependencies
-        self.base_url = "supabase_backend"
-        print(f"[API] SUPABASE ONLY MODE: Using Supabase backend")
+        self.base_url = "http://localhost:8888"
+        print(f"[API] Local mode: Using local server")
         
         self.timeout = 30
+        self.session = self._create_session()
+    
+    def cleanup(self):
+        """Cleanup resources to prevent connection leaks"""
+        try:
+            if hasattr(self, 'session') and self.session:
+                self.session.close()
+                logger.info("APIClient session closed successfully")
+        except Exception as e:
+            logger.warning(f"Error closing APIClient session: {e}")
+        
+    def _create_session(self):
+        """Create a requests session with connection pooling and retry strategy"""
+        session = requests.Session()
+        
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        
+        # Mount adapter with retry strategy
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=10,
+            pool_maxsize=20
+        )
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        return session
         
     def _get_server_url(self):
-        """SUPABASE ONLY MODE: Use Supabase backend"""
-        return "supabase_backend"
+        """Use local server"""
+        return "http://localhost:8888"
     
-    def _make_request(self, endpoint, data, timeout=None):
-        """Make request dengan error handling"""
+    def _make_request(self, endpoint, data, timeout=None, max_retries=3):
+        """Make request dengan error handling dan retry mechanism"""
         if timeout is None:
             timeout = self.timeout
             
-        try:
-            url = f"{self.base_url}/{endpoint}"
-            response = requests.post(url, json=data, timeout=timeout)
-            response.raise_for_status()
-            return response
-        except requests.exceptions.ConnectionError:
-            if self.base_url == "https://api.streammateai.com":
-                # Production server down, fallback ke localhost
-                logger.warning("Production server unavailable, trying localhost...")
-                self.base_url = "supabase_backend"
-                return self._make_request(endpoint, data, timeout)
-            else:
-                raise
+        base_delay = 1.0
+        last_exception = None
+        
+        for attempt in range(max_retries):
+            try:
+                url = f"{self.base_url}/{endpoint}"
+                # Progressive timeout: shorter for first attempts
+                current_timeout = timeout if attempt == 0 else min(timeout * 1.5, 15)
+                
+                response = self.session.post(url, json=data, timeout=current_timeout)
+                response.raise_for_status()
+                return response
+                
+            except requests.exceptions.ConnectionError as conn_err:
+                logger.warning(f"Connection error to {self.base_url} (attempt {attempt + 1}): {conn_err}")
+                last_exception = conn_err
+                
+                if self.base_url == "https://api.vocalive.com" and attempt == 0:
+                    # Production server down, fallback ke localhost
+                    logger.warning("Production server unavailable, trying localhost...")
+                    self.base_url = "http://localhost:8888"
+                    continue
+                    
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                    continue
+                    
+            except requests.exceptions.Timeout as timeout_err:
+                logger.warning(f"Request timeout to {self.base_url}/{endpoint} (attempt {attempt + 1}): {timeout_err}")
+                last_exception = timeout_err
+                
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                    continue
+                    
+            except requests.exceptions.RequestException as req_err:
+                logger.warning(f"Request error to {self.base_url}/{endpoint} (attempt {attempt + 1}): {req_err}")
+                last_exception = req_err
+                
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                    continue
+        
+        # All retries failed, raise the last exception
+        logger.error(f"All {max_retries} attempts failed for {self.base_url}/{endpoint}")
+        raise last_exception
     
     def generate_reply(self, prompt: str) -> str:
         """Generate AI reply melalui server"""
@@ -59,15 +130,14 @@ class APIClient:
             return response.json().get("reply", "")
         except Exception as e:
             logger.error(f"AI API failed: {e}")
-            # Fallback untuk developer mode saja
-            if "localhost" in self.base_url:
-                try:
-                    from modules_server.deepseek_ai import generate_reply as local_gen
-                    logger.info("Using local DeepSeek fallback")
-                    return local_gen(prompt)
-                except Exception as local_error:
-                    logger.error(f"Local fallback failed: {local_error}")
-            
+            # Fallback ke client-side DeepSeek
+            try:
+                from modules_client.deepseek_ai import generate_reply as local_gen
+                logger.info("Using local DeepSeek fallback")
+                return local_gen(prompt)
+            except Exception as local_error:
+                logger.error(f"Local fallback failed: {local_error}")
+
             return "Maaf, sistem AI sedang dalam maintenance"
 
 # Global instance
@@ -77,6 +147,12 @@ _api_client = APIClient()
 def generate_reply(prompt: str) -> str:
     return _api_client.generate_reply(prompt)
 
+def cleanup_api_client():
+    """Cleanup global API client resources"""
+    global _api_client
+    if _api_client:
+        _api_client.cleanup()
+
 def get_server_info():
     """Info server yang sedang digunakan (untuk debugging)"""
     return {
@@ -85,353 +161,206 @@ def get_server_info():
     }
 
 class APIBridge:
-    """Bridge untuk komunikasi dengan Supabase server"""
+    """Bridge untuk komunikasi dengan API server"""
     
     def __init__(self):
         # Initialize server URLs first
-        self.vps_server = "supabase_backend"
         self.local_server = "http://localhost:8888"
+        self.session = self._create_session()
         self.active_server = self._get_active_server()
-        
-        # Import Supabase client
+        print("[API] Using local backend only")
+    
+    def cleanup(self):
+        """Cleanup resources to prevent connection leaks"""
         try:
-            from modules_client.supabase_client import get_supabase_client
-            self.supabase_client = get_supabase_client()
-            self.use_supabase = True
-            print("[API] Using Supabase backend")
-        except ImportError:
-            # Fallback to VPS server if Supabase not available
-            self.use_supabase = False
-            print("[API] Using VPS backend (fallback)")
+            if hasattr(self, 'session') and self.session:
+                self.session.close()
+                logger.info("APIBridge session closed successfully")
+        except Exception as e:
+            logger.warning(f"Error closing APIBridge session: {e}")
+        
+    def _create_session(self):
+        """Create requests session with connection pooling and retry strategy"""
+        session = requests.Session()
+        
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST"],
+            backoff_factor=1
+        )
+        
+        # Configure HTTP adapter with connection pooling
+        adapter = HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=20,
+            max_retries=retry_strategy
+        )
+        
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        return session
         
     def _get_active_server(self):
         """Test koneksi server dan return yang aktif"""
-        # Test VPS server dulu
-        try:
-            response = requests.get(f"{self.vps_server}/api/health", timeout=3)
-            if response.status_code == 200:
-                print(f"[API] VPS server active: {self.vps_server}")
-                return self.vps_server
-        except Exception:
-            pass
-        
         # Test local server
         try:
-            response = requests.get(f"{self.local_server}/api/health", timeout=10)
+            response = self.session.get(f"{self.local_server}/api/health", timeout=10)
             if response.status_code == 200:
                 print(f"[API] Local server active: {self.local_server}")
                 return self.local_server
         except Exception:
             pass
         
-        # Default ke VPS jika keduanya gagal
-        print(f"[API] No server responded, defaulting to VPS: {self.vps_server}")
-        return self.vps_server
+        # Default ke local server
+        print(f"[API] No server responded, defaulting to local: {self.local_server}")
+        return self.local_server
 
 # Global API bridge instance
 api_bridge = APIBridge()
 
-def generate_reply(prompt: str, timeout: int = 30) -> str:
+def cleanup_api_bridge():
+    """Cleanup global API bridge resources"""
+    global api_bridge
+    if api_bridge:
+        api_bridge.cleanup()
+
+def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_tokens: int = None) -> str:
     """
-    Generate AI reply using Supabase with VPS fallback
-    
+    Generate AI reply using ONLY the configured AI provider - NO FALLBACK
+    Clear error messages instead of confusing fallbacks
+
     Args:
         prompt: User prompt for AI
-        timeout: Request timeout in seconds
-        
+        timeout: Request timeout in seconds (not used with direct AI calls)
+        fast_mode: If True, use aggressive timeout for faster response (OBS triggers)
+        max_tokens: Max tokens in response (default based on mode: 80 fast, 150 normal)
+
     Returns:
-        AI generated reply string, or fallback response if failed
+        AI generated reply string, or clear error message if failed
     """
     print(f"[API] generate_reply called with prompt length: {len(prompt)}")
+    if fast_mode:
+        print(f"[API] ⚡ FAST MODE enabled - aggressive timeout for quick response")
     
-    # Method 1: Try DeepSeek API directly (preferred for basic mode)
-    try:
-        print(f"[API] Trying DeepSeek AI endpoint...")
-        from modules_client.deepseek_ai import generate_reply as deepseek_generate
-        reply = deepseek_generate(prompt)
-        if reply and len(reply.strip()) > 0:
-            print(f"[API] DeepSeek AI success: {len(reply)} chars")
-            return reply
-        else:
-            print(f"[API] DeepSeek AI returned empty reply")
-    except Exception as e:
-        print(f"[API] DeepSeek AI error: {e}")
+    # Get AI provider from config
+    from modules_client.config_manager import ConfigManager
+    cfg = ConfigManager()
+    ai_provider = cfg.get("ai_provider", "deepseek").lower()
+    print(f"[API] Using ONLY configured provider: {ai_provider} (NO FALLBACK)")
     
-    # Method 2: Try Supabase API (fallback)
-    if api_bridge.use_supabase:
+    # Use ONLY the configured AI provider - NO FALLBACK
+    if ai_provider == "chatgpt" or ai_provider == "openai":
         try:
-            print(f"[API] Trying Supabase AI endpoint...")
-            reply = api_bridge.supabase_client.generate_ai_reply(prompt, timeout)
+            print(f"[API] Using ChatGPT API (as configured)...")
+
+            # Check API key first
+            openai_key = cfg.get("api_keys", {}).get("OPENAI_API_KEY")
+            if not openai_key:
+                error_msg = "ERROR: ChatGPT dipilih sebagai AI provider, tetapi OPENAI_API_KEY tidak ditemukan di konfigurasi. Silakan tambahkan API key di Settings."
+                print(f"[API] {error_msg}")
+                return error_msg
+
+            # Use global instance (already initialized with API key)
+            from modules_client.chatgpt_ai import generate_reply as chatgpt_generate
+            reply = chatgpt_generate(prompt, max_tokens=(max_tokens or 150))
+            
             if reply and len(reply.strip()) > 0:
-                print(f"[API] Supabase AI success: {len(reply)} chars")
+                print(f"[API] ChatGPT success: {len(reply)} chars")
                 return reply
             else:
-                print(f"[API] Supabase AI returned empty reply")
+                error_msg = "ERROR: ChatGPT API tidak memberikan respons. Kemungkinan API key habis saldo atau server overload. Coba lagi atau ganti ke DeepSeek di Settings."
+                print(f"[API] {error_msg}")
+                return error_msg
+                
         except Exception as e:
-            print(f"[API] Supabase AI error: {e}")
+            error_msg = f"ERROR ChatGPT: {str(e)}. Periksa API key dan saldo akun ChatGPT Anda, atau ganti ke DeepSeek di Settings."
+            print(f"[API] {error_msg}")
+            return error_msg
     
-    # Method 3: Try VPS API endpoint (fallback) - SKIP INVALID URLs
-    if api_bridge.active_server and api_bridge.active_server.startswith(("http://", "https://")):
+    elif ai_provider == "deepseek":
         try:
-            print(f"[API] Trying VPS API endpoint...")
-            
-            response = requests.post(
-                f"{api_bridge.active_server}/api/ai/generate",
-                json={"prompt": prompt},
-                timeout=timeout,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                
-                # Handle FastAPI response format
-                if result.get("status") == "success" and "data" in result:
-                    reply = result["data"].get("reply", "").strip()
-                    if reply:
-                        print(f"[API] VPS API success: {len(reply)} chars")
-                        return reply
-                
-                # Handle old format (fallback)
-                elif "reply" in result:
-                    reply = result.get("reply", "").strip()
-                    if reply:
-                        print(f"[API] VPS API success (old format): {len(reply)} chars")
-                        return reply
-                
-                print(f"[API] VPS API returned empty reply")
-                
-            else:
-                print(f"[API] VPS API error: {response.status_code}")
-                if response.status_code == 404:
-                    print(f"[API] Endpoint /api/ai/generate not found on server")
-                try:
-                    error_detail = response.json()
-                    print(f"[API] Error detail: {error_detail}")
-                except:
-                    print(f"[API] Error response: {response.text[:200]}")
-                
-        except requests.exceptions.RequestException as e:
-            print(f"[API] VPS API request failed: {e}")
-        except Exception as e:
-            print(f"[API] VPS API unexpected error: {e}")
-    else:
-        print(f"[API] Skipping VPS API (invalid URL: {api_bridge.active_server})")
-    
-    # Method 1.5: Try existing /api/ai/reply endpoint as fallback
-    if api_bridge.active_server and api_bridge.active_server.startswith(("http://", "https://")):
-        try:
-            print(f"[API] Trying existing /api/ai/reply endpoint...")
-            
-            response = requests.post(
-                f"{api_bridge.active_server}/api/ai/reply",
-                json={"text": prompt},  # Different format for existing endpoint
-                timeout=timeout,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                
-                # Handle various response formats
-                reply = ""
-                if "data" in result and isinstance(result["data"], dict):
-                    reply = result["data"].get("reply", "").strip()
-                elif "reply" in result:
-                    reply = result.get("reply", "").strip()
-                elif "data" in result and isinstance(result["data"], str):
-                    reply = result["data"].strip()
-                
-                if reply:
-                    print(f"[API] Existing endpoint success: {len(reply)} chars")
-                    return reply
-                else:
-                    print(f"[API] Existing endpoint returned empty reply")
-                    
-            else:
-                print(f"[API] Existing endpoint error: {response.status_code}")
-                
-        except Exception as e:
-            print(f"[API] Existing endpoint error: {e}")
-    else:
-        print(f"[API] Skipping existing endpoint (invalid URL: {api_bridge.active_server})")
-    
-    # Method 2: Try direct DeepSeek API if local API key available
-    try:
-        print(f"[API] Trying direct DeepSeek API...")
-        
-        # Check if we have local API key from config or env
-        from modules_client.config_manager import ConfigManager
-        cfg = ConfigManager()
-        deepseek_key = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
-        if deepseek_key and len(deepseek_key) > 10:
-            print(f"[API] Using local DeepSeek API key...")
-            
-            headers = {
-                "Authorization": f"Bearer {deepseek_key}",
-                "Content-Type": "application/json",
-            }
-            
-            payload = {
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 400,
-                "temperature": 0.8,
-                "top_p": 0.95,
-            }
-            
-            response = requests.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=timeout
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                reply = result["choices"][0]["message"]["content"].strip()
-                if reply:
-                    # Clean reply for safe encoding
-                    try:
-                        reply_clean = reply.encode('utf-8', errors='replace').decode('utf-8')
-                        print(f"[API] Direct DeepSeek success: {len(reply_clean)} chars")
-                        return reply_clean
-                    except Exception as enc_error:
-                        print(f"[API] Encoding fix failed: {enc_error}")
-                        return reply
-            else:
-                print(f"[API] Direct DeepSeek error: {response.status_code}")
-                
-        else:
-            print(f"[API] No local DeepSeek API key found")
-            
-    except Exception as e:
-        print(f"[API] Direct DeepSeek API error: {e}")
-    
-    # Method 3: Fallback response
-    print(f"[API] All methods failed, using fallback response")
-    return _get_fallback_response(prompt)
+            print(f"[API] Using DeepSeek API (as configured)...")
 
-def _get_fallback_response(prompt: str) -> str:
-    """Generate enhanced fallback response when AI API fails"""
-    prompt_lower = prompt.lower()
-    
-    # Extract author name from prompt if possible
-    author = "teman"
-    if "penonton" in prompt and "bertanya" in prompt:
-        # Try to extract author name from typical prompt format
-        import re
-        author_match = re.search(r'Penonton (\w+) bertanya', prompt)
-        if author_match:
-            author = author_match.group(1)
-    
-    # Enhanced rule-based responses for gaming context
-    if any(word in prompt_lower for word in ["halo", "hai", "hello", "hi"]):
-        responses = [
-            f"Hai {author}! Lagi push rank nih, gimana kabarmu?",
-            f"Halo {author}! Welcome to stream, lagi main MOBA nih",
-            f"Hai {author}! Thanks udah join stream, enjoy ya!"
-        ]
-        import random
-        return random.choice(responses)
-    
-    elif any(word in prompt_lower for word in ["kabar", "apa kabar", "gimana"]):
-        responses = [
-            f"Baik {author}! Lagi semangat push rank, kamu gimana?",
-            f"Alhamdulillah baik {author}, lagi fokus main nih",
-            f"Baik dong {author}, lagi grinding rank soalnya hehe"
-        ]
-        import random
-        return random.choice(responses)
-    
-    elif any(word in prompt_lower for word in ["build", "item", "gear", "equipment"]):
-        responses = [
-            f"{author} untuk build sekarang meta damage penetration dulu bro",
-            f"Build {author}? War axe, hunter strike, malefic roar meta banget",
-            f"{author} coba build damage dulu, nanti tank item terakhir"
-        ]
-        import random
-        return random.choice(responses)
-    
-    elif any(word in prompt_lower for word in ["rank", "ranking", "tier", "main"]):
-        responses = [
-            f"{author} lagi push rank nih, target mythic season ini",
-            f"Rank {author}? Lagi di legend, target mythic nih",
-            f"{author} main rank yuk, butuh duo partner nih"
-        ]
-        import random
-        return random.choice(responses)
-    
-    elif any(word in prompt_lower for word in ["hero", "champion", "character"]):
-        responses = [
-            f"{author} hero favorit gue Layla, damage nya gila sih",
-            f"Hero {author}? Coba main marksman, enak buat carry",
-            f"{author} hero meta sekarang assassin sama marksman"
-        ]
-        import random
-        return random.choice(responses)
-    
-    elif any(word in prompt_lower for word in ["makan", "udah makan", "lunch", "dinner"]):
-        responses = [
-            f"Udah makan {author}, sekarang lagi fokus main nih",
-            f"{author} udah makan dong, kamu jangan lupa makan ya",
-            f"Alhamdulillah udah makan {author}, energy full buat main"
-        ]
-        import random
-        return random.choice(responses)
-    
-    elif any(word in prompt_lower for word in ["col", "bang"]):
-        responses = [
-            f"Iya {author}! Ada yang bisa gue bantu?",
-            f"Hai {author}! Gimana ada pertanyaan?",
-            f"Yes {author}! Mau tanya apa nih?"
-        ]
-        import random
-        return random.choice(responses)
+            # Check API key first
+            deepseek_key = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY")
+            if not deepseek_key:
+                error_msg = "ERROR: DeepSeek dipilih sebagai AI provider, tetapi DEEPSEEK_API_KEY tidak ditemukan di konfigurasi. Silakan tambahkan API key di Settings."
+                print(f"[API] {error_msg}")
+                return error_msg
+
+            # PERFORMANCE: Set tokens based on mode
+            if max_tokens is None:
+                max_tokens = 80 if fast_mode else 150  # Aggressive for OBS triggers
+
+            print(f"[API] DeepSeek config: fast_mode={fast_mode}, max_tokens={max_tokens}")
+
+            # Use global instance (already initialized with API key)
+            from modules_client.deepseek_ai import generate_reply as deepseek_generate
+            reply = deepseek_generate(prompt, max_tokens=max_tokens)
+
+            if reply and len(reply.strip()) > 0:
+                print(f"[API] DeepSeek success: {len(reply)} chars")
+                return reply
+            else:
+                error_msg = "ERROR: DeepSeek API tidak memberikan respons. Periksa API key dan koneksi internet, atau coba lagi nanti."
+                print(f"[API] {error_msg}")
+                return error_msg
+
+        except Exception as e:
+            error_msg = f"ERROR DeepSeek: {str(e)}. Periksa API key dan koneksi internet."
+            print(f"[API] {error_msg}")
+            return error_msg
     
     else:
-        # General responses
-        responses = [
-            f"Hai {author}! Thanks udah nonton stream",
-            f"{author} ada yang mau ditanyain tentang game?",
-            f"Halo {author}! Enjoy streamnya ya, jangan lupa follow",
-            f"{author} gimana pendapat kamu tentang gameplay tadi?",
-            f"Thanks {author}! Semoga terhibur sama streamnya"
-        ]
-        import random
-        return random.choice(responses)
+        error_msg = f"ERROR: AI provider '{ai_provider}' tidak dikenal. Pilih 'chatgpt' atau 'deepseek' di Settings."
+        print(f"[API] {error_msg}")
+        return error_msg
+
+# REMOVED: _get_fallback_response - No more fallback responses
+# Users will get clear error messages instead of confusing fallbacks
 
 def test_api_connection():
     """Test API connection and return status"""
+    from modules_client.config_manager import ConfigManager
+    cfg = ConfigManager()
+    ai_provider = cfg.get("ai_provider", "deepseek").lower()
+    
     results = {
-        "vps_server": False,
         "local_server": False,
         "deepseek_direct": False,
-        "active_server": None
+        "chatgpt_direct": False,
+        "active_server": None,
+        "ai_provider": ai_provider
     }
-    
-    # Test VPS server
-    try:
-        response = requests.get(f"{api_bridge.vps_server}/api/health", timeout=3)
-        results["vps_server"] = response.status_code == 200
-    except:
-        pass
     
     # Test local server  
     try:
-        response = requests.get(f"{api_bridge.local_server}/api/health", timeout=10)
+        response = api_bridge.session.get(f"{api_bridge.local_server}/api/health", timeout=10)
         results["local_server"] = response.status_code == 200
-    except:
+    except (requests.exceptions.RequestException, ConnectionError) as e:
         pass
     
     # Test direct DeepSeek
-    deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+    deepseek_key = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
     if deepseek_key and len(deepseek_key) > 10:
         try:
             headers = {"Authorization": f"Bearer {deepseek_key}"}
-            response = requests.get("https://api.deepseek.com/v1/models", headers=headers, timeout=5)
+            response = api_bridge.session.get("https://api.deepseek.com/v1/models", headers=headers, timeout=5)
             results["deepseek_direct"] = response.status_code == 200
-        except:
+        except (requests.exceptions.RequestException, ConnectionError) as e:
+            pass
+    
+    # Test direct ChatGPT/OpenAI
+    openai_key = cfg.get("api_keys", {}).get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if openai_key and len(openai_key) > 10:
+        try:
+            headers = {"Authorization": f"Bearer {openai_key}"}
+            response = api_bridge.session.get("https://api.openai.com/v1/models", headers=headers, timeout=5)
+            results["chatgpt_direct"] = response.status_code == 200
+        except (requests.exceptions.RequestException, ConnectionError) as e:
             pass
     
     results["active_server"] = api_bridge.active_server
@@ -443,9 +372,10 @@ if __name__ == "__main__":
     status = test_api_connection()
     
     print("\n=== API Connection Status ===")
-    print(f"VPS Server (69.62.79.238): {'✅' if status['vps_server'] else '❌'}")
+    print(f"AI Provider: {status['ai_provider'].upper()}")
     print(f"Local Server (localhost:8888): {'✅' if status['local_server'] else '❌'}")
     print(f"Direct DeepSeek API: {'✅' if status['deepseek_direct'] else '❌'}")
+    print(f"Direct ChatGPT API: {'✅' if status['chatgpt_direct'] else '❌'}")
     print(f"Active Server: {status['active_server']}")
     
     # Test generate_reply

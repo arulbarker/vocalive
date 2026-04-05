@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-StreamMate AI - Live Streaming Automation
+VocaLive - Live Streaming Automation
 Main Entry Point - Fixed Version for Windows Encoding
 """
 
@@ -48,6 +48,45 @@ if sys.platform == "win32":
             pass
 
 import traceback
+import warnings
+
+# Filter out annoying Qt CSS warnings
+warnings.filterwarnings('ignore', message='.*Unknown property.*')
+
+# ========== SETUP VALIDATOR IMPORT ==========
+# Validate setup BEFORE anything else
+try:
+    from modules_client.setup_validator import validate_setup
+    SETUP_VALIDATOR_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARNING] Setup validator not available: {e}")
+    SETUP_VALIDATOR_AVAILABLE = False
+
+# ========== LICENSE SYSTEM IMPORT ==========
+# Import license system SEBELUM GUI setup
+try:
+    from modules_client.license_manager import LicenseManager
+    LICENSE_SYSTEM_AVAILABLE = True
+    logger_license = None  # Will be set after logger setup
+except ImportError as e:
+    print(f"[WARNING] License system not available: {e}")
+    LICENSE_SYSTEM_AVAILABLE = False
+
+# Suppress Qt stylesheet warnings that spam the console
+def qt_message_handler(mode, context, message):
+    """Custom Qt message handler to filter out CSS warnings"""
+    # Ignore "Unknown property" warnings from Qt stylesheets
+    if "Unknown property" in message:
+        return
+    # Allow other important Qt messages through
+    print(f"Qt: {message}")
+
+# Set up Qt message filtering if available
+try:
+    from PyQt6.QtCore import qInstallMessageHandler
+    qInstallMessageHandler(qt_message_handler)
+except ImportError:
+    pass  # PyQt6 not loaded yet
 import json
 import time
 import importlib.util
@@ -63,8 +102,13 @@ os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
 os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
 
-# Root project directory PERTAMA
-ROOT = os.path.dirname(os.path.abspath(__file__))
+# Root project directory PERTAMA - handle EXE mode
+if getattr(sys, 'frozen', False):
+    # Running as frozen EXE
+    ROOT = os.path.dirname(sys.executable)
+else:
+    # Running as regular Python script
+    ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # Setup logging system SEBELUM import lainnya
 LOG_DIR = Path(ROOT) / "logs"
@@ -72,7 +116,7 @@ LOG_DIR.mkdir(exist_ok=True)
 SYSTEM_LOG = LOG_DIR / "system.log"
 
 # Configure logging dengan format yang lebih informatif
-logger = logging.getLogger('StreamMate')
+logger = logging.getLogger('VocaLive')
 logger.setLevel(logging.INFO)
 
 # File handler dengan rotation
@@ -100,12 +144,20 @@ console_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
+# Set license logger
+if LICENSE_SYSTEM_AVAILABLE:
+    logger_license = logger
+
 # ========== LOG STARTUP INFO ==========
 logger.info("=" * 60)
-logger.info("StreamMate AI Starting - Version 1.0.9")
+logger.info("VocaLive Starting - Version 1.0.9")
 logger.info(f"Python {sys.version}")
 logger.info(f"Root directory: {ROOT}")
 logger.info(f"Platform: {sys.platform}")
+if LICENSE_SYSTEM_AVAILABLE:
+    logger.info("License system: ENABLED")
+else:
+    logger.warning("License system: DISABLED")
 logger.info("=" * 60)
 
 # ========== FORCE PRODUCTION MODE ==========
@@ -119,7 +171,7 @@ APP_MODE = detect_application_mode()
 logger.info(f"Application mode: {APP_MODE}")
 
 # Export ke environment untuk module lain
-os.environ["STREAMMATE_APP_MODE"] = APP_MODE
+os.environ["VOCALIVE_APP_MODE"] = APP_MODE
 
 # ========== SETUP PYTHON PATH ==========
 # Add project paths to Python path SEBELUM import modules
@@ -200,7 +252,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
                 print(f"[FORCE-CLOSE-DEBUG] Showing critical error dialog and forcing exit")
                 reply = QMessageBox.critical(
                     None, 
-                    "StreamMate AI - Critical Error",
+                    "VocaLive - Critical Error",
                     f"Application encountered a critical error and must close:\n\n"
                     f"{exc_type.__name__}: {exc_value}\n\n"
                     f"Error details saved to: {error_log_path}\n\n"
@@ -213,7 +265,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
                 print(f"[FORCE-CLOSE-DEBUG] Showing recoverable error dialog")
                 reply = QMessageBox.warning(
                     None, 
-                    "StreamMate AI - Error Recovered",
+                    "VocaLive - Error Recovered",
                     f"Application encountered an error but will continue:\n\n"
                     f"{exc_type.__name__}: {exc_value}\n\n"
                     f"Error details saved to: {error_log_path}\n\n"
@@ -278,8 +330,8 @@ def initialize_directories():
     logger.info("Initializing directory structure...")
     
     required_dirs = [
-        "temp", "logs", "config", "knowledge", 
-        "knowledge_bases", "avatars", "assets",
+        "temp", "logs", "config", "knowledge",
+        "knowledge_bases", "assets",
         "temp/cache", "resources"
     ]
     
@@ -295,42 +347,166 @@ def initialize_directories():
     logger.info("Directory structure initialized successfully")
     return True
 
+def validate_application_license():
+    """Validate application license before starting GUI"""
+    if not LICENSE_SYSTEM_AVAILABLE:
+        logger.warning("License system disabled - continuing without validation")
+        return True
+    
+    logger.info("Checking application license...")
+    
+    try:
+        license_manager = LicenseManager(ROOT)
+        
+        # Check if license exists and is valid
+        is_valid, message = license_manager.is_license_valid()
+        
+        if is_valid:
+            # License is valid
+            license_info = license_manager.get_license_info()
+            logger.info(f"License validation successful: {message}")
+            
+            if 'days_remaining' in license_info:
+                days = license_info['days_remaining']
+                if license_info.get('is_unlimited', False):
+                    logger.info("License: UNLIMITED duration")
+                    print("[LICENSE] ✅ Unlimited license")
+                else:
+                    logger.info(f"License expires in {days} days")
+                    print(f"[LICENSE] ✅ {days} days remaining")
+                
+            print(f"[LICENSE] ✅ {message}")
+            return True
+        else:
+            # License invalid or not found - show license dialog
+            logger.warning(f"License validation failed: {message}")
+            print(f"[LICENSE] ❌ {message}")
+            
+            # Import and show license dialog
+            try:
+                # Create minimal QApplication for license dialog
+                from PyQt6.QtWidgets import QApplication
+                from PyQt6.QtCore import Qt
+                
+                # Create QApplication jika belum ada
+                app = QApplication.instance()
+                if not app:
+                    app = QApplication(sys.argv)
+                    app.setStyle('Fusion')
+                
+                # Import license dialog
+                sys.path.insert(0, os.path.join(ROOT, "ui"))
+                from ui.license_dialog import show_license_dialog
+                
+                print("[LICENSE] Opening license activation dialog...")
+                logger.info("Showing license activation dialog")
+                
+                # Show license dialog
+                success, license_key = show_license_dialog()
+                
+                if success:
+                    logger.info("License activated successfully via dialog")
+                    print("[LICENSE] ✅ License activated successfully!")
+                    return True
+                else:
+                    logger.warning("License activation cancelled by user")
+                    print("[LICENSE] ❌ License activation cancelled")
+                    return False
+                    
+            except Exception as dialog_error:
+                logger.error(f"License dialog error: {dialog_error}")
+                print(f"[LICENSE] Dialog error: {dialog_error}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"License validation error: {e}")
+        print(f"[LICENSE] Validation error: {e}")
+        return False
+
+
 def main():
     """Main application entry point"""
     logger.info("Starting main application...")
-    
+
+    # ========== STEP 1: VALIDATE SETUP ==========
+    # This MUST run FIRST before any other checks
+    if SETUP_VALIDATOR_AVAILABLE:
+        print("[SETUP] Validating application configuration...")
+        try:
+            is_valid = validate_setup(root_dir=ROOT, show_gui=True)
+            if not is_valid:
+                logger.critical("Setup validation failed - missing required configuration files")
+                print("[SETUP] ❌ Application cannot start due to configuration errors")
+                print("[SETUP] 📖 Please read PANDUAN_INSTALL_USER.md for setup instructions")
+                return 1
+            print("[SETUP] ✅ Configuration validation passed")
+        except Exception as e:
+            logger.error(f"Setup validation error: {e}")
+            print(f"[SETUP] ⚠️ Warning: Could not complete setup validation: {e}")
+            # Continue anyway - don't block if validator has issues
+    else:
+        logger.warning("Setup validator not available - skipping validation")
+
     # Check dependencies
     if not check_dependencies():
         logger.critical("Critical dependencies missing, exiting...")
         return 1
-    
+
     # Initialize directories
     if not initialize_directories():
         logger.critical("Failed to initialize directories, exiting...")
         return 1
-    
-    print("[SUCCESS] StreamMate AI main application initialized successfully")
+
+    print("[SUCCESS] VocaLive main application initialized successfully")
     print(f"[INFO] Mode: {APP_MODE}")
     print(f"[INFO] Root directory: {ROOT}")
+
+    # ========== LICENSE VALIDATION ==========
+    print("[LICENSE] Validating application license...")
+    if not validate_application_license():
+        logger.critical("License validation failed - application cannot start")
+        print("[LICENSE] ❌ Application cannot start without valid license")
+        
+        # Show final message and exit
+        try:
+            from PyQt6.QtWidgets import QApplication, QMessageBox
+            app = QApplication.instance() or QApplication(sys.argv)
+            QMessageBox.critical(
+                None,
+                "VocaLive - License Required",
+                "VocaLive requires a valid license to run.\n\n"
+                "Please contact support to obtain a license key.\n\n"
+                "Application will now exit.",
+                QMessageBox.StandardButton.Ok
+            )
+        except Exception:
+            pass
+            
+        return 1
+    
+    logger.info("License validation completed successfully")
     
     # LAUNCH GUI APPLICATION
     try:
-        print("[GUI] Launching StreamMate AI GUI...")
+        print("[GUI] Launching VocaLive GUI...")
         
-        # Create QApplication
-        app = QApplication(sys.argv)
+        from PyQt6.QtWidgets import QApplication, QMessageBox
         
+        # Create or get existing QApplication
+        app = QApplication.instance()
+        if not app:
+            app = QApplication(sys.argv)
         # Set application properties
-        app.setApplicationName("StreamMate AI")
+        app.setApplicationName("VocaLive")
         app.setApplicationVersion("1.0.9")
-        app.setOrganizationName("StreamMate AI")
-        app.setOrganizationDomain("streammate-ai.com")
+        app.setOrganizationName("VocaLive")
+        app.setOrganizationDomain("vocalive.com")
         
         # Apply dark theme
         app.setStyle('Fusion')
         
         # ⚡ LOADING INDICATOR: Simple console-based loading for now
-        print("[LOADING] StreamMate AI is starting up...")
+        print("[LOADING] VocaLive is starting up...")
         splash = None  # Disable splash screen to prevent segfault
         
         # Import and create main window
@@ -378,26 +554,80 @@ def main():
         
         # Console loading progress
         print("[LOADING] Initializing features...")
-        
+
         # Create main window
         main_window = MainWindow()
-        
+
+        # CRITICAL: Start real-time license monitoring
+        if LICENSE_SYSTEM_AVAILABLE:
+            try:
+                from modules_client.license_monitor import create_license_monitor
+                license_monitor = create_license_monitor(main_window)
+                license_monitor.start_monitoring()
+                print("[LICENSE] Real-time license monitoring started")
+            except Exception as e:
+                print(f"[LICENSE] Warning: License monitoring failed to start: {e}")
+
         print("[LOADING] Finalizing startup...")
-        
+
         main_window.show()
         
         print("[LOADING] Ready!")
         
-        print("[GUI] StreamMate AI GUI launched successfully")
+        print("[GUI] VocaLive GUI launched successfully")
         logger.info("GUI application started")
         
-        # Start event loop
-        exit_code = app.exec()
-        
-        print("[GUI] StreamMate AI GUI closed")
-        logger.info("GUI application closed")
-        
-        return exit_code
+        # Enhanced application exit handling
+        try:
+            # Set up proper signal handling for graceful shutdown
+            import signal
+            
+            def signal_handler(signum, frame):
+                logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+                try:
+                    main_window.close()
+                    app.quit()
+                except Exception as e:
+                    logger.error(f"Error during signal shutdown: {e}")
+                    app.exit(1)
+            
+            # Register signal handlers (Windows compatible)
+            if hasattr(signal, 'SIGTERM'):
+                signal.signal(signal.SIGTERM, signal_handler)
+            if hasattr(signal, 'SIGINT'):
+                signal.signal(signal.SIGINT, signal_handler)
+            
+            # Set quit on last window closed
+            app.setQuitOnLastWindowClosed(True)
+            
+            # Start event loop with proper error handling
+            logger.info("Starting Qt event loop...")
+            exit_code = app.exec()
+            
+            print("[GUI] VocaLive GUI closed")
+            logger.info(f"GUI application closed with exit code: {exit_code}")
+            
+            # Force cleanup before exit
+            try:
+                app.closeAllWindows()
+                app.quit()
+                
+                # Force garbage collection
+                import gc
+                gc.collect()
+                
+            except Exception as cleanup_error:
+                logger.error(f"Error during final cleanup: {cleanup_error}")
+            
+            return exit_code
+            
+        except Exception as event_loop_error:
+            logger.error(f"Event loop error: {event_loop_error}")
+            try:
+                app.exit(1)
+            except Exception:
+                pass
+            return 1
         
     except Exception as e:
         error_msg = f"Failed to launch GUI: {e}"
@@ -406,7 +636,8 @@ def main():
         
         # Show error in message box if possible
         try:
-            QMessageBox.critical(None, "StreamMate AI Error", error_msg)
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(None, "VocaLive Error", error_msg)
         except:
             pass
             

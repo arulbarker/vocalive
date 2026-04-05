@@ -1,6 +1,4 @@
-"""
-Config Manager - Updated to use Supabase for configuration
-"""
+"""Config Manager - Local configuration only"""
 
 import json
 import os
@@ -8,43 +6,18 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 import logging
 
-logger = logging.getLogger('StreamMate')
+logger = logging.getLogger('VocaLive')
 
 class ConfigManager:
-    """Configuration manager with Supabase integration"""
+    """Configuration manager for local settings"""
     
     def __init__(self, config_file: str = "config/settings.json"):
         self.config_file = Path(config_file)
-        self.supabase_config = None
-        self._load_supabase_config()
         
-    def _load_supabase_config(self):
-        """Load Supabase configuration"""
-        try:
-            supabase_config_file = Path("config/supabase_config.json")
-            if supabase_config_file.exists():
-                with open(supabase_config_file, 'r', encoding='utf-8') as f:
-                    self.supabase_config = json.load(f)
-                logger.info("Supabase config loaded")
-            else:
-                logger.warning("Supabase config file not found")
-        except Exception as e:
-            logger.error(f"Error loading Supabase config: {e}")
+
     
     def get_api_key(self, key_name: str) -> Optional[str]:
-        """Get API key from Supabase or fallback to local config"""
-        try:
-            # Try to get from Supabase first
-            if self.supabase_config:
-                from modules_client.supabase_config_client import config_client
-                api_key = config_client.get_api_key(key_name)
-                if api_key:
-                    logger.debug(f"Got {key_name} from Supabase")
-                    return api_key
-        except Exception as e:
-            logger.warning(f"Failed to get {key_name} from Supabase: {e}")
-        
-        # Fallback to local config
+        """Get API key from local config"""
         try:
             if self.config_file.exists():
                 with open(self.config_file, 'r', encoding='utf-8') as f:
@@ -63,41 +36,12 @@ class ConfigManager:
         
         return None
     
-    def get_payment_config(self, provider: str, config_key: str) -> Optional[str]:
-        """Get payment configuration from Supabase"""
-        try:
-            if self.supabase_config:
-                from modules_client.supabase_config_client import config_client
-                return config_client.get_payment_config(provider, config_key)
-        except Exception as e:
-            logger.warning(f"Failed to get payment config {provider}.{config_key}: {e}")
-        return None
-    
-    def get_server_config(self, config_key: str) -> Optional[str]:
-        """Get server configuration from Supabase"""
-        try:
-            if self.supabase_config:
-                from modules_client.supabase_config_client import config_client
-                return config_client.get_server_config(config_key)
-        except Exception as e:
-            logger.warning(f"Failed to get server config {config_key}: {e}")
-        return None
-    
-    def get_google_credentials(self, credential_type: str) -> Optional[Dict[str, Any]]:
-        """Get Google credentials from Supabase"""
-        try:
-            if self.supabase_config:
-                from modules_client.supabase_config_client import config_client
-                return config_client.get_google_credentials(credential_type)
-        except Exception as e:
-            logger.warning(f"Failed to get Google credentials {credential_type}: {e}")
-        return None
+
     
     def load_settings(self) -> Dict[str, Any]:
-        """Load all settings with Supabase integration"""
+        """Load all settings from local config"""
         settings = {}
         
-        # Load local settings first
         if self.config_file.exists():
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
@@ -105,39 +49,7 @@ class ConfigManager:
             except Exception as e:
                 logger.error(f"Error loading local settings: {e}")
         
-        # Override with Supabase configs
-        try:
-            if self.supabase_config:
-                from modules_client.supabase_config_client import config_client
-                
-                # Get API keys
-                api_keys = {}
-                for key_name in ['DEEPSEEK_API_KEY', 'YOUTUBE_API_KEY', 'TRAKTEER_API_KEY', 'TR_API_KEY']:
-                    api_key = config_client.get_api_key(key_name)
-                    if api_key:
-                        api_keys[key_name] = api_key
-                
-                if api_keys:
-                    settings['api_keys'] = api_keys
-                
-                # Get payment config
-                ipaymu_config = config_client.get_ipaymu_config()
-                if ipaymu_config:
-                    settings['ipaymu_config'] = ipaymu_config
-                
-                # Get server config
-                environment = config_client.get_environment()
-                if environment:
-                    settings['environment'] = environment
-                
-                debug_mode = config_client.is_debug_mode()
-                settings['debug_mode'] = debug_mode
-                
-                safety_mode = config_client.is_safety_mode()
-                settings['safety_mode'] = safety_mode
-                
-        except Exception as e:
-            logger.warning(f"Error loading Supabase settings: {e}")
+        logger.debug("Loading settings from local config only")
         
         return settings
     
@@ -170,6 +82,10 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Error saving settings: {e}")
             return False
+    
+    def get_all_settings(self) -> Dict[str, Any]:
+        """Get all settings from configuration"""
+        return self.load_settings()
 
 # Global instance
 config_manager = ConfigManager()

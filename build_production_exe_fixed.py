@@ -286,13 +286,13 @@ VSVersionInfo(
       [
         StringTable(
           u'040904B0',
-          [StringStruct(u'CompanyName', u'StreamMate AI'),
-           StringStruct(u'FileDescription', u'StreamMate AI - Live Stream Assistant'),
+          [StringStruct(u'CompanyName', u'VocaLive'),
+           StringStruct(u'FileDescription', u'VocaLive - Live Stream Assistant'),
            StringStruct(u'FileVersion', u'1.0.11.0'),
-           StringStruct(u'InternalName', u'StreamMateAI'),
-           StringStruct(u'LegalCopyright', u'Copyright (C) 2024-2025 StreamMate AI'),
-           StringStruct(u'OriginalFilename', u'StreamMateAI.exe'),
-           StringStruct(u'ProductName', u'StreamMate AI'),
+           StringStruct(u'InternalName', u'VocaLive'),
+           StringStruct(u'LegalCopyright', u'Copyright (C) 2024-2025 VocaLive'),
+           StringStruct(u'OriginalFilename', u'VocaLive.exe'),
+           StringStruct(u'ProductName', u'VocaLive'),
            StringStruct(u'ProductVersion', u'1.0.11.0')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
@@ -319,7 +319,7 @@ VSVersionInfo(
         
         # Try to sign the executable if certificate exists
         exe_path = Path("dist/StreamMateAI_Production.exe")
-        cert_path = Path("StreamMateAI.pfx")
+        cert_path = Path("VocaLive.pfx")
         
         if exe_path.exists() and cert_path.exists():
             print("[SIGNING] Attempting to sign executable...")
@@ -328,7 +328,7 @@ VSVersionInfo(
                 sign_cmd = [
                     "signtool", "sign",
                     "/f", str(cert_path),
-                    "/p", "StreamMateAI123",  # Certificate password
+                    "/p", "VocaLive123",  # Certificate password
                     "/t", "http://timestamp.digicert.com",
                     "/v",
                     str(exe_path)
@@ -375,7 +375,7 @@ def create_production_package(version="1.0.11"):
     # Copy EXE
     exe_src = Path("dist/StreamMateAI_Production.exe")
     if exe_src.exists():
-        shutil.copy2(exe_src, package_dir / "StreamMateAI.exe")
+        shutil.copy2(exe_src, package_dir / "VocaLive.exe")
         print(f"  [COPY] EXE copied")
     else:
         print(f"  [ERROR] EXE not found!")
@@ -523,7 +523,7 @@ def create_production_package(version="1.0.11"):
     
     # Create README - UPDATED for v1.0.9 + Certificate Signing
     readme_content = f"""
-StreamMate AI v{version} - Production Package (Super Direct STT + Signed)
+VocaLive v{version} - Production Package (Super Direct STT + Signed)
 =========================================================================
 
 🆕 NEW IN v1.0.9:
@@ -545,7 +545,7 @@ EXE is digitally signed to reduce SmartScreen warnings.
 
 Architecture:
 -------------
-- **PyTchat**: BUNDLED (included in StreamMateAI.exe)
+- **PyTchat**: BUNDLED (included in VocaLive.exe)
 - **Super Direct Google STT**: BUNDLED (ultra-fast, 1-second response)
 - **FFmpeg**: External (in thirdparty folder)
 - **Whisper**: REMOVED (replaced by Super Direct Google STT)
@@ -553,8 +553,8 @@ Architecture:
 
 Folder Structure:
 -----------------
-StreamMateAI/
-├── StreamMateAI.exe     (Main Application - SIGNED)
+VocaLive/
+├── VocaLive.exe     (Main Application - SIGNED)
 ├── thirdparty/
 │   └── ffmpeg/          (Audio processing only)
 ├── config/
@@ -627,13 +627,13 @@ Version: {version} (Latest Stable)
     
     # Create installer batch file - UPDATED
     installer_content = """@echo off
-echo StreamMate AI v1.0 - Installation Checker (Super Direct STT)
+echo VocaLive v1.0 - Installation Checker (Super Direct STT)
 echo =============================================================
 echo.
 echo [1/4] Checking file structure...
 
-if not exist "StreamMateAI.exe" (
-    echo [ERROR] StreamMateAI.exe not found!
+if not exist "VocaLive.exe" (
+    echo [ERROR] VocaLive.exe not found!
     echo Please extract all files from ZIP first.
     pause
     exit /b 1
@@ -662,7 +662,7 @@ echo ^> Requires Google Cloud credentials for STT
 echo ^> Requires internet connection for AI and license
 echo ^> Keep all folders together in same directory
 echo.
-echo Ready to run! Double-click StreamMateAI.exe to start.
+echo Ready to run! Double-click VocaLive.exe to start.
 echo.
 pause
 """
@@ -688,7 +688,7 @@ def clean_build():
         print(f"  [DELETE] Removed: {spec}")
 
 if __name__ == "__main__":
-    print("StreamMate AI - Enhanced Production Build (Super Direct STT)")
+    print("VocaLive - Enhanced Production Build (Super Direct STT)")
     print("=" * 60)
     
     # SECURITY CHECK FIRST

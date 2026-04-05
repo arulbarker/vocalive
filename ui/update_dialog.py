@@ -20,7 +20,7 @@ class UpdateDialog(QDialog):
         super().__init__(parent)
         self.update_manager = update_manager
         self.update_info = None
-        self.setWindowTitle("StreamMate AI - Update Available")
+        self.setWindowTitle("VocaLive - Update Available")
         self.setMinimumSize(500, 400)
         self.setMaximumSize(600, 500)
         self.init_ui()
@@ -210,7 +210,7 @@ class UpdateDialog(QDialog):
         if update_info:
             # Update title dan versi
             version = update_info.get("tag_name", "Unknown")
-            self.title_label.setText(f"StreamMate AI {version} available!")
+            self.title_label.setText(f"VocaLive {version} available!")
             self.version_label.setText(f"Current version: {self.update_manager.current_version} → {version}")
             
             # Update changelog

@@ -5,9 +5,9 @@
   "paket": "basic",
   "user_data": {
     "email": "mursalinasrul@gmail.com",
-    "last_login": "2025-08-16T09:29:13.843945"
+    "last_login": "2026-02-08T13:26:58.988414"
   },
-  "app_version": "v1.0.0-basic",
+  "app_version": "v7.2",
   "last_update_check": 1755262043.4575105,
   "trigger_words": [
     "aga",
@@ -75,5 +75,6 @@
   "youtube_url": "https://www.youtube.com/watch?v=4tu0Q1LcsuY",
   "backend_type": "supabase_only",
   "vps_disabled": true,
-  "force_supabase": true
+  "force_supabase": true,
+  "greeting_play_mode": "random"
 }

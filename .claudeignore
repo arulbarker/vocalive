@@ -1,0 +1,12 @@
+﻿build/
+dist/
+__pycache__/
+*.exe
+*.pkg
+*.rar
+*.zip
+*.bin
+*.pth
+*.pt
+*.onnx
+.git/

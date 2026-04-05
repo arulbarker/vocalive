@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-StreamMate AI - Text-to-Speech Engine
+VocaLive - Text-to-Speech Engine
 Google Cloud Text-to-Speech implementation with fallback to pyttsx3
 """
 
@@ -31,7 +31,7 @@ except ImportError:
     texttospeech = None
 
 # Setup logging
-logger = logging.getLogger('StreamMate')
+logger = logging.getLogger('VocaLive')
 
 class TTSEngine:
     """Text-to-Speech Engine with Google Cloud TTS and pyttsx3 fallback"""
@@ -336,7 +336,7 @@ def speak_text(text: str) -> bool:
 
 if __name__ == "__main__":
     # Test the TTS engine
-    test_text = "Halo, ini adalah test Text-to-Speech engine StreamMate AI."
+    test_text = "Halo, ini adalah test Text-to-Speech engine VocaLive."
     print(f"Testing TTS with text: {test_text}")
     
     success = speak(test_text)

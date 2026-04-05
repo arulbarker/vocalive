@@ -1,0 +1,18 @@
+# Requirements for Daily License Checker
+# Install with: pip install -r requirements-license-checker.txt
+
+# Google Sheets API
+gspread>=5.7.0
+google-auth>=2.16.0
+google-auth-oauthlib>=0.8.0
+google-auth-httplib2>=0.1.0
+
+# Scheduling
+schedule>=1.2.0
+
+# Security & Encryption
+cryptography>=3.4.8
+
+# Basic dependencies
+requests>=2.28.0
+pathlib2>=2.3.7

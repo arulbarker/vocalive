@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from modules_client.config_manager import config_manager
 
-logger = logging.getLogger('StreamMate')
+logger = logging.getLogger('VocaLive')
 
 class GoogleTTS:
     """Google Cloud TTS client with Supabase credentials"""

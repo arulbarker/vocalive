@@ -15,7 +15,7 @@ def get_log():
 
 def setup_logger(name, level=logging.INFO):
     """
-    Setup logger untuk komponen StreamMate AI
+    Setup logger untuk komponen VocaLive
     """
     logger = logging.getLogger(name)
     
@@ -42,8 +42,14 @@ def setup_logger(name, level=logging.INFO):
         import os
         from pathlib import Path
         
-        # Buat direktori logs jika belum ada
-        logs_dir = Path(__file__).parent.parent / "logs"
+        # Buat direktori logs jika belum ada - handle EXE mode
+        import sys
+        if getattr(sys, 'frozen', False):
+            # Running as frozen EXE
+            logs_dir = Path(sys.executable).parent / "logs"
+        else:
+            # Running as regular Python script
+            logs_dir = Path(__file__).parent.parent / "logs"
         logs_dir.mkdir(exist_ok=True)
         
         # File handler
@@ -59,4 +65,22 @@ def setup_logger(name, level=logging.INFO):
         pass
     
     return logger
+
+class Logger:
+    """Simple Logger class untuk kompatibilitas"""
+    
+    def __init__(self, name="VocaLive"):
+        self.logger = setup_logger(name)
+    
+    def info(self, message):
+        self.logger.info(message)
+    
+    def error(self, message):
+        self.logger.error(message)
+    
+    def warning(self, message):
+        self.logger.warning(message)
+    
+    def debug(self, message):
+        self.logger.debug(message)
 
