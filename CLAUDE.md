@@ -2,17 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Branding Colors — Gold Seller 💰
+## Branding Colors — Ocean Blue 🌊
 
 Palet warna resmi VocaLive. Gunakan ini sebagai acuan di semua perombakan UI.
 
 | Token | Nilai | Kegunaan |
 |-------|-------|---------|
-| Primary | `#D97706` / `hsl(38,80%,48%)` | Warna utama, CTA button, active state |
-| Secondary | `#92400E` / `hsl(38,65%,36%)` | Depth, hover state, border |
-| Accent | `#FCD34D` / `hsl(48,70%,63%)` | Badge, notifikasi, highlight |
-| Background | `#1c1208` | Dark background utama |
-| Text | `#FFFBEB` | Warna teks utama |
+| Primary | `#2563EB` | Biru cerah — CTA button, active state |
+| Secondary | `#1E3A5F` | Biru tua — depth, hover state, border |
+| Accent | `#60A5FA` | Biru muda — badge, notifikasi, highlight |
+| Background | `#0F1623` | Dark navy background utama |
+| BG Surface | `#162032` | Card / panel surface |
+| BG Elevated | `#1E2A3B` | Elevated card / header |
+| Text | `#F0F6FF` | Putih biru — teks utama |
 | Border Radius | `10px` | Rounded medium untuk semua komponen |
 
 > Jangan ganti palet ini tanpa konfirmasi eksplisit dari user.

@@ -1,37 +1,37 @@
-# ui/theme.py — VocaLive Gold Seller Design System
+# ui/theme.py — VocaLive Ocean Blue Design System
 """
 Centralized design system untuk VocaLive v1.0.0.
 Semua warna, QSS stylesheet, dan helper functions ada di sini.
 Import dari file ini — jangan hardcode warna di file UI lain.
 
-Branding: Gold Seller 💰
+Branding: Ocean Blue 🌊
 """
 
 # ── Color Tokens ──────────────────────────────────────────────
-BG_BASE       = "#1c1208"   # Background utama
-BG_SURFACE    = "#261509"   # Card / panel surface
-BG_ELEVATED   = "#2E1A0A"   # Elevated card / header
+BG_BASE       = "#0F1623"   # Dark navy background utama
+BG_SURFACE    = "#162032"   # Card / panel surface
+BG_ELEVATED   = "#1E2A3B"   # Elevated card / header
 
-PRIMARY       = "#D97706"   # Emas vibrant — CTA, active, highlight
-PRIMARY_DARK  = "#B45309"   # Emas gelap — hover/pressed
-PRIMARY_LIGHT = "#F59E0B"   # Emas terang — hover light
+PRIMARY       = "#2563EB"   # Biru cerah — CTA, active, highlight
+PRIMARY_DARK  = "#1D4ED8"   # Biru gelap — hover/pressed
+PRIMARY_LIGHT = "#3B82F6"   # Biru terang — hover light
 
-SECONDARY     = "#92400E"   # Emas tua — border, depth, table header
-ACCENT        = "#FCD34D"   # Kuning emas terang — badge, notif, subtitle value
+SECONDARY     = "#1E3A5F"   # Biru tua — border, depth, table header
+ACCENT        = "#60A5FA"   # Biru muda — badge, notif, subtitle value
 
-TEXT_PRIMARY  = "#FFFBEB"   # Teks utama (krem putih)
-TEXT_MUTED    = "#D6B97B"   # Teks sekunder / placeholder
-TEXT_DIM      = "#92734A"   # Teks sangat redup / disabled
+TEXT_PRIMARY  = "#F0F6FF"   # Teks utama (putih biru)
+TEXT_MUTED    = "#93C5FD"   # Teks sekunder / placeholder
+TEXT_DIM      = "#4B7BBA"   # Teks sangat redup / disabled
 
-BORDER        = "#3D2010"   # Border default (gelap)
-BORDER_GOLD   = "#92400E"   # Border aksen emas
+BORDER        = "#1A2E4A"   # Border default (navy gelap)
+BORDER_GOLD   = "#1E4585"   # Border aksen biru (nama dipertahankan untuk kompatibilitas)
 
 SUCCESS       = "#22C55E"   # Hijau
 SUCCESS_DARK  = "#16A34A"
 ERROR         = "#EF4444"   # Merah
 ERROR_DARK    = "#DC2626"
-WARNING       = "#FCD34D"   # Kuning (sama dengan ACCENT)
-INFO          = "#38BDF8"   # Biru info
+WARNING       = "#F59E0B"   # Kuning amber
+INFO          = "#38BDF8"   # Biru sky
 
 RADIUS        = "10px"
 RADIUS_SM     = "6px"

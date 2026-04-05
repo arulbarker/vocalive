@@ -29,11 +29,11 @@ try:
         btn_success, btn_danger, btn_ghost, CARD_ELEVATED_STYLE,
         label_value, label_subtitle, label_muted, LOG_TEXTEDIT_STYLE)
 except ImportError:
-    PRIMARY = "#D97706"; BG_BASE = "#1c1208"; BG_SURFACE = "#261509"; BG_ELEVATED = "#2E1A0A"
-    TEXT_PRIMARY = "#FFFBEB"; TEXT_MUTED = "#D6B97B"; TEXT_DIM = "#92734A"
+    PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"; BG_ELEVATED = "#1E2A3B"
+    TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#93C5FD"; TEXT_DIM = "#4B7BBA"
     ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
-    BORDER_GOLD = "#92400E"; BORDER = "#3D2010"; ACCENT = "#FCD34D"
-    SECONDARY = "#92400E"; RADIUS = "10px"; RADIUS_SM = "6px"
+    BORDER_GOLD = "#1E4585"; BORDER = "#1A2E4A"; ACCENT = "#60A5FA"
+    SECONDARY = "#1E3A5F"; RADIUS = "10px"; RADIUS_SM = "6px"
     def btn_success(extra=""): return f"QPushButton {{ background-color: {SUCCESS}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #16A34A; }}"
     def btn_danger(extra=""): return f"QPushButton {{ background-color: {ERROR}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #DC2626; }}"
     def btn_ghost(extra=""): return f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; border-radius: 6px; padding: 7px 18px; {extra} }}"
