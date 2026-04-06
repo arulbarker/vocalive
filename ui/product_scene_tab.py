@@ -7,7 +7,8 @@ import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
-    QSpinBox, QFrame, QMessageBox, QAbstractItemView
+    QSpinBox, QFrame, QMessageBox, QAbstractItemView,
+    QDialog, QLineEdit, QDialogButtonBox
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 
@@ -32,6 +33,96 @@ except ImportError:
     def label_subtitle(s=11): return f"font-size: {s}px; color: {TEXT_MUTED}; background: transparent;"
 
 from modules_client.product_scene_manager import ProductSceneManager
+
+
+class AddProductDialog(QDialog):
+    """Dialog untuk menambah produk baru — user isi nama manual + pilih file video."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Tambah Produk Baru")
+        self.setMinimumWidth(480)
+        self.setModal(True)
+        self._video_path = ""
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(14)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        # Nama produk
+        layout.addWidget(QLabel("Nama Produk:"))
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Contoh: Celana Jeans Slim Fit Premium")
+        self.name_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {BG_SURFACE};
+                color: {TEXT_PRIMARY};
+                border: 1px solid {BORDER};
+                border-radius: 6px;
+                padding: 8px 10px;
+                font-size: 13px;
+            }}
+            QLineEdit:focus {{ border-color: {PRIMARY}; }}
+        """)
+        layout.addWidget(self.name_input)
+
+        # File video
+        layout.addWidget(QLabel("File Video:"))
+        video_row = QHBoxLayout()
+        self.video_label = QLabel("Belum ada file dipilih")
+        self.video_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; padding: 2px;")
+        self.video_label.setWordWrap(True)
+
+        btn_browse = QPushButton("📁 Pilih File")
+        btn_browse.setStyleSheet(btn_secondary("font-size: 12px; padding: 7px 14px;"))
+        btn_browse.clicked.connect(self._browse_video)
+
+        video_row.addWidget(self.video_label, 1)
+        video_row.addWidget(btn_browse)
+        layout.addLayout(video_row)
+
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Save).setText("Simpan")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Batal")
+        buttons.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(btn_success())
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(btn_ghost())
+        buttons.accepted.connect(self._on_save)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.setStyleSheet(f"QDialog {{ background-color: {BG_BASE}; }} QLabel {{ color: {TEXT_PRIMARY}; font-size: 12px; }}")
+
+    @pyqtSlot()
+    def _browse_video(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Pilih File Video Produk", "",
+            "Video Files (*.mp4 *.avi *.mov *.mkv *.webm);;All Files (*)"
+        )
+        if path:
+            self._video_path = path
+            self.video_label.setText(os.path.basename(path))
+            self.video_label.setToolTip(path)
+            self.video_label.setStyleSheet(f"color: {TEXT_PRIMARY}; font-size: 12px; padding: 2px;")
+
+    @pyqtSlot()
+    def _on_save(self):
+        name = self.name_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Nama Kosong", "Nama produk tidak boleh kosong.")
+            return
+        if not self._video_path:
+            QMessageBox.warning(self, "File Belum Dipilih", "Pilih file video terlebih dahulu.")
+            return
+        self.accept()
+
+    def get_result(self) -> tuple[str, str]:
+        """Kembalikan (nama_produk, video_path)."""
+        return self.name_input.text().strip(), self._video_path
 
 
 class ProductSceneTab(QWidget):
@@ -177,14 +268,11 @@ class ProductSceneTab(QWidget):
 
     @pyqtSlot()
     def _add_scene(self):
-        """Tambah baris produk baru — user pilih file video."""
-        video_path, _ = QFileDialog.getOpenFileName(
-            self, "Pilih File Video Produk", "",
-            "Video Files (*.mp4 *.avi *.mov *.mkv *.webm);;All Files (*)"
-        )
-        if not video_path:
+        """Tambah produk baru — dialog user isi nama manual + pilih video."""
+        dialog = AddProductDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        name = os.path.splitext(os.path.basename(video_path))[0]  # default nama dari filename
+        name, video_path = dialog.get_result()
         self._psm.add_scene(name, video_path)
         self._load_table()
 
