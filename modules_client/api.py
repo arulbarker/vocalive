@@ -8,6 +8,8 @@ import json
 import requests
 import logging
 import os
+import re
+import json as _json
 import time
 from modules_client.config_manager import ConfigManager
 from pathlib import Path
@@ -321,6 +323,70 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
 
 # REMOVED: _get_fallback_response - No more fallback responses
 # Users will get clear error messages instead of confusing fallbacks
+
+def generate_reply_with_scene(prompt: str, fast_mode: bool = False) -> tuple[str, int]:
+    """
+    Generate AI reply dan deteksi scene_id produk dalam satu API call.
+
+    Returns:
+        (reply_text, scene_id) — scene_id=0 berarti tidak ada produk yang relevan.
+    """
+    from modules_client.product_scene_manager import ProductSceneManager
+    from modules_client.config_manager import ConfigManager
+
+    psm = ProductSceneManager()
+    product_context = psm.build_product_context()
+
+    if not product_context:
+        # Tidak ada produk terdaftar — gunakan reply biasa
+        reply = generate_reply(prompt, fast_mode=fast_mode)
+        return (reply or ""), 0
+
+    cfg = ConfigManager()
+    ai_provider = cfg.get("ai_provider", "deepseek").lower()
+    max_tokens = 80 if fast_mode else 150
+
+    raw = None
+    if ai_provider in ("chatgpt", "openai"):
+        openai_key = cfg.get("api_keys", {}).get("OPENAI_API_KEY")
+        if not openai_key:
+            return "ERROR: OPENAI_API_KEY tidak ditemukan di konfigurasi.", 0
+        try:
+            from modules_client.chatgpt_ai import generate_reply as chatgpt_gen
+            raw = chatgpt_gen(prompt, max_tokens=max_tokens, product_context=product_context)
+        except Exception as e:
+            logger.error(f"generate_reply_with_scene ChatGPT error: {e}")
+            return f"ERROR ChatGPT: {e}", 0
+    else:
+        deepseek_key = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY")
+        if not deepseek_key:
+            return "ERROR: DEEPSEEK_API_KEY tidak ditemukan di konfigurasi.", 0
+        try:
+            from modules_client.deepseek_ai import generate_reply as deepseek_gen
+            raw = deepseek_gen(prompt, max_tokens=max_tokens, fast_mode=fast_mode, product_context=product_context)
+        except Exception as e:
+            logger.error(f"generate_reply_with_scene DeepSeek error: {e}")
+            return f"ERROR DeepSeek: {e}", 0
+
+    if not raw:
+        return "", 0
+
+    # Parse JSON response dari AI
+    try:
+        # AI kadang tambahkan teks di luar JSON — cari JSON block saja
+        match = re.search(r'\{[^{}]*"reply"[^{}]*\}', raw, re.DOTALL)
+        if match:
+            data = _json.loads(match.group())
+            reply_text = str(data.get("reply", "")).strip()
+            scene_id = int(data.get("scene_id", 0))
+            logger.info(f"generate_reply_with_scene: reply={len(reply_text)}chars, scene_id={scene_id}")
+            return reply_text, scene_id
+    except Exception as e:
+        logger.warning(f"generate_reply_with_scene: gagal parse JSON: {e}. Raw: {raw[:100]}")
+
+    # Fallback: gunakan raw sebagai reply, scene_id=0
+    return raw.strip(), 0
+
 
 def test_api_connection():
     """Test API connection and return status"""
