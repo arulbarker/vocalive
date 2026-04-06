@@ -184,6 +184,24 @@ except ImportError:
                 layout.addWidget(QLabel("Config Tab tidak tersedia"))
                 self.setLayout(layout)
 
+# Import ProductPopupWindow
+try:
+    from ui.product_popup_window import ProductPopupWindow
+    PRODUCT_POPUP_AVAILABLE = True
+    logger.info("ProductPopupWindow imported successfully")
+except ImportError as e:
+    PRODUCT_POPUP_AVAILABLE = False
+    logger.warning(f"ProductPopupWindow not available: {e}")
+
+# Import ProductSceneTab
+try:
+    from ui.product_scene_tab import ProductSceneTab
+    PRODUCT_SCENE_TAB_AVAILABLE = True
+    logger.info("ProductSceneTab imported successfully")
+except ImportError as e:
+    PRODUCT_SCENE_TAB_AVAILABLE = False
+    logger.warning(f"ProductSceneTab not available: {e}")
+
 # Virtual Audio Tab removed - user requested removal
 
 # Utility functions
@@ -556,6 +574,18 @@ class MainWindow(QMainWindow):
     
     def _create_main_tabs(self):
         """Create main tab widget dengan Cohost Basic dan Config Tab."""
+        # Inisialisasi popup window (top-level, tidak ada parent)
+        self.product_popup = None
+        if PRODUCT_POPUP_AVAILABLE:
+            try:
+                from modules_client.product_scene_manager import ProductSceneManager
+                psm = ProductSceneManager()
+                w, h = psm.get_popup_size()
+                self.product_popup = ProductPopupWindow(w, h)
+                logger.info("ProductPopupWindow created successfully")
+            except Exception as e:
+                logger.error(f"Failed to create ProductPopupWindow: {e}")
+
         self.main_tabs = QTabWidget()
         
         # Add Cohost Basic tab
@@ -564,6 +594,11 @@ class MainWindow(QMainWindow):
                 self.cohost_tab = CohostTabBasic()
                 self.main_tabs.addTab(self.cohost_tab, "Cohost Basic")
                 logger.info("Cohost Basic tab added successfully")
+
+                # Wire popup window ke cohost tab
+                if self.product_popup is not None and hasattr(self.cohost_tab, 'set_popup_window'):
+                    self.cohost_tab.set_popup_window(self.product_popup)
+                    logger.info("ProductPopupWindow wired to CohostTabBasic")
             except Exception as e:
                 logger.error(f"Failed to create Cohost Basic tab: {e}")
                 placeholder = QWidget()
@@ -629,7 +664,21 @@ class MainWindow(QMainWindow):
             self.main_tabs.addTab(placeholder, "👨‍💻 Developer (Error)")
 
         # Virtual Audio tab removed - user requested removal
-        
+
+        # Add Product Scene tab
+        if PRODUCT_SCENE_TAB_AVAILABLE:
+            try:
+                self.product_scene_tab = ProductSceneTab(popup_window=self.product_popup)
+                self.main_tabs.addTab(self.product_scene_tab, "🎬 Product Scene")
+                logger.info("Product Scene tab added successfully")
+            except Exception as e:
+                logger.error(f"Failed to create Product Scene tab: {e}")
+                placeholder = QWidget()
+                layout = QVBoxLayout()
+                layout.addWidget(QLabel(f"Error loading Product Scene Tab: {e}"))
+                placeholder.setLayout(layout)
+                self.main_tabs.addTab(placeholder, "🎬 Product Scene (Error)")
+
         # DISABLED: Old direct connection system - causes double processing
         # Using unified processor system instead to prevent duplicate replies
         logger.info("Direct Cohost-OBS connection disabled - using unified processor system")
