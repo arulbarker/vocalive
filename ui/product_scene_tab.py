@@ -7,17 +7,16 @@ import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
-    QSpinBox, QGroupBox, QFrame, QMessageBox, QAbstractItemView
+    QSpinBox, QFrame, QMessageBox, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtGui import QFont
 
 try:
     from ui.theme import (
         PRIMARY, BG_BASE, BG_SURFACE, BG_ELEVATED, TEXT_PRIMARY, TEXT_MUTED,
         BORDER, BORDER_GOLD, SUCCESS, ERROR, WARNING, RADIUS,
-        btn_primary, btn_success, btn_danger, btn_ghost, btn_secondary,
-        label_title, label_subtitle, CARD_STYLE, GLOBAL_QSS
+        btn_success, btn_danger, btn_ghost, btn_secondary,
+        label_title, label_subtitle, CARD_STYLE
     )
 except ImportError:
     PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"
@@ -192,14 +191,16 @@ class ProductSceneTab(QWidget):
     @pyqtSlot()
     def _remove_selected(self):
         """Hapus baris yang dipilih."""
-        selected = self.table.selectedItems()
-        if not selected:
-            return
         row = self.table.currentRow()
+        if row < 0:
+            return
         id_item = self.table.item(row, 0)
         if not id_item:
             return
-        scene_id = int(id_item.text())
+        try:
+            scene_id = int(id_item.text())
+        except ValueError:
+            return
         reply = QMessageBox.question(
             self, "Konfirmasi Hapus",
             f"Hapus produk ID {scene_id}?",
@@ -219,11 +220,18 @@ class ProductSceneTab(QWidget):
         if row < 0:
             QMessageBox.information(self, "Info", "Pilih produk dari tabel terlebih dahulu.")
             return
-        path_item = self.table.item(row, 2)
-        if not path_item or not path_item.text():
+        id_item = self.table.item(row, 0)
+        if not id_item:
+            return
+        try:
+            scene_id = int(id_item.text())
+        except ValueError:
+            return
+        scene = self._psm.get_scene_by_id(scene_id)
+        if not scene or not scene.get("video_path"):
             QMessageBox.warning(self, "Error", "File video belum dipilih untuk produk ini.")
             return
-        self._popup_window.show_product(path_item.text())
+        self._popup_window.show_product(scene["video_path"])
 
     @pyqtSlot()
     def _open_preview(self):
@@ -250,7 +258,10 @@ class ProductSceneTab(QWidget):
         id_item = self.table.item(row, 0)
         if not id_item:
             return
-        scene_id = int(id_item.text())
+        try:
+            scene_id = int(id_item.text())
+        except ValueError:
+            return
         if col == 1:  # Nama produk
             self._psm.update_scene(scene_id, name=item.text())
         elif col == 2:  # Path video
