@@ -488,7 +488,15 @@ class MainWindow(QMainWindow):
         """Handle application close event with comprehensive cleanup"""
         try:
             logger.info("Application closing...")
-            
+
+            # Close product popup window (top-level, not in tab widget)
+            if hasattr(self, 'product_popup') and self.product_popup is not None:
+                try:
+                    self.product_popup.close()
+                    logger.info("ProductPopupWindow closed")
+                except Exception as e:
+                    logger.error(f"Error closing ProductPopupWindow: {e}")
+
             # Force cleanup all tabs before closing
             for i in range(self.main_tabs.count()):
                 tab = self.main_tabs.widget(i)
