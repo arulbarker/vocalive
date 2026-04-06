@@ -372,18 +372,28 @@ def generate_reply_with_scene(prompt: str, fast_mode: bool = False) -> tuple[str
         return "", 0
 
     # Parse JSON response dari AI
-    try:
-        # AI kadang tambahkan teks di luar JSON — cari JSON block saja
-        match = re.search(r'\{[^{}]*"reply"[^{}]*\}', raw, re.DOTALL)
-        if match:
-            data = _json.loads(match.group())
-            reply_text = str(data.get("reply", "")).strip()
-            scene_id = int(data.get("scene_id", 0))
-            logger.info(f"generate_reply_with_scene: reply={len(reply_text)}chars, scene_id={scene_id}")
-            return reply_text, scene_id
-    except Exception as e:
-        logger.warning(f"generate_reply_with_scene: gagal parse JSON: {e}. Raw: {raw[:100]}")
+    # Coba direct parse dulu, baru regex sebagai fallback
+    def _parse_scene_json(text: str):
+        try:
+            data = _json.loads(text.strip())
+            return str(data.get("reply", "")).strip(), int(data.get("scene_id", 0))
+        except Exception:
+            pass
+        try:
+            match = re.search(r'\{[^{}]*"reply"[^{}]*\}', text, re.DOTALL)
+            if match:
+                data = _json.loads(match.group())
+                return str(data.get("reply", "")).strip(), int(data.get("scene_id", 0))
+        except Exception:
+            pass
+        return None, None
 
+    reply_text, scene_id = _parse_scene_json(raw)
+    if reply_text is not None:
+        logger.debug(f"generate_reply_with_scene: reply={len(reply_text)}chars, scene_id={scene_id}")
+        return reply_text, scene_id
+
+    logger.warning(f"generate_reply_with_scene: gagal parse JSON. Raw: {raw[:100]}")
     # Fallback: gunakan raw sebagai reply, scene_id=0
     return raw.strip(), 0
 
