@@ -22,7 +22,7 @@ class ChatGPTAI:
         if not self.api_key:
             logger.warning("OpenAI API key not found")
     
-    def generate_reply(self, prompt: str, max_tokens: int = 500) -> Optional[str]:
+    def generate_reply(self, prompt: str, max_tokens: int = 500, product_context: str = "") -> Optional[str]:
         """Generate AI reply using ChatGPT with custom context support"""
         if not self.api_key:
             logger.error("OpenAI API key not available")
@@ -56,7 +56,11 @@ class ChatGPTAI:
                 system_content = lang_prompts["with_context"]
             else:
                 system_content = lang_prompts["default"]
-            
+
+            # Inject product context jika ada
+            if product_context:
+                system_content += f"\n\n{product_context}"
+
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
@@ -143,6 +147,6 @@ def reinitialize_chatgpt():
     chatgpt_ai = ChatGPTAI()
     logger.info("[CHATGPT_REINIT] ✅ ChatGPT AI reinitialized successfully")
 
-def generate_reply(prompt: str, max_tokens: int = 500) -> Optional[str]:
+def generate_reply(prompt: str, max_tokens: int = 500, product_context: str = "") -> Optional[str]:
     """Generate AI reply using ChatGPT"""
-    return chatgpt_ai.generate_reply(prompt, max_tokens)
+    return chatgpt_ai.generate_reply(prompt, max_tokens, product_context)
