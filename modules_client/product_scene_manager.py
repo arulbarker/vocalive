@@ -2,6 +2,9 @@
 ProductSceneManager - Load/save daftar produk untuk popup video overlay
 """
 
+from __future__ import annotations
+
+import copy
 import json
 import os
 import logging
@@ -27,17 +30,17 @@ class ProductSceneManager:
 
     def _load(self) -> dict:
         if not os.path.exists(self.config_path):
-            return dict(DEFAULT_CONFIG)
+            return copy.deepcopy(DEFAULT_CONFIG)
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             # Pastikan semua key ada
             for k, v in DEFAULT_CONFIG.items():
-                data.setdefault(k, v)
+                data.setdefault(k, copy.deepcopy(v))
             return data
         except Exception as e:
             logger.error(f"ProductSceneManager: gagal load config: {e}")
-            return dict(DEFAULT_CONFIG)
+            return copy.deepcopy(DEFAULT_CONFIG)
 
     def save(self):
         """Simpan config ke disk."""
@@ -75,8 +78,8 @@ class ProductSceneManager:
         self.save()
         return scene
 
-    def update_scene(self, scene_id: int, name: str = None, video_path: str = None):
-        """Update nama atau path video scene."""
+    def update_scene(self, scene_id: int, name: str = None, video_path: str = None) -> bool:
+        """Update nama atau path video scene. Return True jika berhasil, False jika scene_id tidak ditemukan."""
         for scene in self._config["scenes"]:
             if scene["id"] == scene_id:
                 if name is not None:
@@ -84,7 +87,9 @@ class ProductSceneManager:
                 if video_path is not None:
                     scene["video_path"] = video_path
                 self.save()
-                return
+                return True
+        logger.warning(f"ProductSceneManager: scene_id {scene_id} tidak ditemukan untuk update")
+        return False
 
     def remove_scene(self, scene_id: int):
         """Hapus scene berdasarkan id."""
@@ -100,8 +105,8 @@ class ProductSceneManager:
         return self._config.get("popup_width", 608), self._config.get("popup_height", 1080)
 
     def set_popup_size(self, width: int, height: int):
-        self._config["popup_width"] = width
-        self._config["popup_height"] = min(height, 1080)  # max 1080
+        self._config["popup_width"] = max(1, min(width, 1920))
+        self._config["popup_height"] = min(height, 1080)
         self.save()
 
     # --- AI prompt helper ---
