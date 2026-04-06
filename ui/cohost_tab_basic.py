@@ -25,7 +25,7 @@ from PyQt6.QtGui import QFont, QTextCursor, QPalette, QColor
 try:
     from modules_client.config_manager import ConfigManager
     from modules_client.logger import Logger
-    from modules_client.api import generate_reply
+    from modules_client.api import generate_reply_with_scene
     from modules_server.tts_engine import speak
 except ImportError as e:
     print(f"Import error: {e}")
@@ -151,7 +151,6 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
             
             # API call dengan context-aware prompt
             # PERFORMANCE: Use fast_mode for chat replies (5s timeout, 80 tokens)
-            from modules_client.api import generate_reply_with_scene
             reply, scene_id = generate_reply_with_scene(prompt, fast_mode=True)
             
             # Clean AI response from emojis, formatting, and special chars
@@ -590,6 +589,7 @@ class CohostTabBasicSimplified(QWidget):
 
         # Popup window reference (set from main_window via set_popup_window)
         self._popup_window = None
+        self._psm_cache = None  # cached ProductSceneManager untuk popup
 
         # Core configuration
         self.cfg = ConfigManager("config/settings.json")
@@ -1700,16 +1700,17 @@ class CohostTabBasicSimplified(QWidget):
         print(f"[OVERLAY] Signal emitted successfully")
 
         # Trigger product popup jika ada scene_id
-        if scene_id > 0 and hasattr(self, '_popup_window') and self._popup_window is not None:
+        if scene_id > 0 and self._popup_window is not None:
             try:
                 from modules_client.product_scene_manager import ProductSceneManager
-                psm = ProductSceneManager()
-                scene = psm.get_scene_by_id(scene_id)
+                if self._psm_cache is None:
+                    self._psm_cache = ProductSceneManager()
+                scene = self._psm_cache.get_scene_by_id(scene_id)
                 if scene and scene.get('video_path'):
                     self._popup_window.show_product(scene['video_path'])
-                    print(f"[POPUP] Product popup triggered: scene_id={scene_id}, name={scene.get('name')}")
+                    self.logger.info(f"[POPUP] Product popup triggered: scene_id={scene_id}, name={scene.get('name')}")
             except Exception as e:
-                print(f"[POPUP] Product popup error: {e}")
+                self.logger.warning(f"[POPUP] Product popup error: {e}")
 
         # Track analytics - mark this comment as replied
         if self.analytics:
