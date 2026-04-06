@@ -63,14 +63,16 @@ class ProductPopupWindow(QWidget):
         # Thread-safe hide dari watcher thread
         self._hide_requested.connect(self._do_hide)
 
-        self._stop_watcher = False
+        self._stop_event = threading.Event()
         self._watcher_thread: threading.Thread | None = None
 
     def _on_media_status(self, status: QMediaPlayer.MediaStatus):
         """Loop video saat EndOfMedia."""
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
-            self._player.setPosition(0)
-            self._player.play()
+            source = self._player.source()
+            if source and source.isValid():
+                self._player.setPosition(0)
+                self._player.play()
 
     def show_product(self, video_path: str):
         """
@@ -81,8 +83,11 @@ class ProductPopupWindow(QWidget):
             logger.warning(f"ProductPopupWindow: file tidak ditemukan: {video_path}")
             return
 
-        # Stop watcher sebelumnya jika masih jalan
-        self._stop_watcher = True
+        # Stop watcher sebelumnya dan tunggu exit
+        self._stop_event.set()
+        if self._watcher_thread and self._watcher_thread.is_alive():
+            self._watcher_thread.join(timeout=1.0)
+        self._stop_event.clear()
 
         # Load dan play video
         self._player.stop()
@@ -91,25 +96,24 @@ class ProductPopupWindow(QWidget):
         self._player.play()
 
         # Start TTS watcher
-        self._stop_watcher = False
         self._start_tts_watcher()
 
     def _start_tts_watcher(self):
         """Background thread yang deteksi TTS selesai lalu hide window."""
         def watch():
             import time
+            time.sleep(0.5)
             try:
                 import pygame
-                # Tunggu sebentar agar pygame TTS sempat start
-                time.sleep(0.5)
-                while not self._stop_watcher:
+                while not self._stop_event.is_set():
                     if not pygame.mixer.music.get_busy():
                         break
                     time.sleep(0.2)
             except Exception as e:
                 logger.warning(f"ProductPopupWindow watcher error: {e}")
+                return  # jangan hide jika ada error pygame
 
-            if not self._stop_watcher:
+            if not self._stop_event.is_set():
                 self._hide_requested.emit()  # thread-safe: emit ke main thread
 
         self._watcher_thread = threading.Thread(target=watch, daemon=True)
@@ -120,6 +124,12 @@ class ProductPopupWindow(QWidget):
         """Hide window dan stop player. Dipanggil dari main thread via signal."""
         self._player.stop()
         self.hide()
+
+    def closeEvent(self, event):
+        """Cleanup saat window ditutup."""
+        self._stop_event.set()
+        self._player.stop()
+        super().closeEvent(event)
 
     def resize_popup(self, width: int, height: int):
         """Update ukuran window (dipanggil dari ProductSceneTab saat user ubah size)."""
