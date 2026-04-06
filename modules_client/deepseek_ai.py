@@ -21,7 +21,7 @@ class DeepSeekAI:
         if not self.api_key:
             logger.warning("DeepSeek API key not found")
     
-    def generate_reply(self, prompt: str, max_tokens: int = 150, fast_mode: bool = False) -> Optional[str]:
+    def generate_reply(self, prompt: str, max_tokens: int = 150, fast_mode: bool = False, product_context: str = "") -> Optional[str]:
         """
         Generate AI reply using DeepSeek with retry mechanism
 
@@ -29,6 +29,7 @@ class DeepSeekAI:
             prompt: The prompt to send to DeepSeek
             max_tokens: Maximum tokens in response (default 150 for speed)
             fast_mode: If True, use aggressive timeout (5s) for speed
+            product_context: Optional product/scene context to inject into system prompt
         """
         if not self.api_key:
             logger.error("DeepSeek API key not available")
@@ -72,7 +73,11 @@ class DeepSeekAI:
                     system_content = lang_prompts["with_context"]
                 else:
                     system_content = lang_prompts["default"]
-                
+
+                # Inject product context jika ada
+                if product_context:
+                    system_content += f"\n\n{product_context}"
+
                 data = {
                     "model": "deepseek-chat",
                     "messages": [
@@ -195,6 +200,6 @@ def reinitialize_deepseek():
     deepseek_ai = DeepSeekAI()
     logger.info("[DEEPSEEK_REINIT] ✅ DeepSeek AI reinitialized successfully")
 
-def generate_reply(prompt: str, max_tokens: int = 500) -> Optional[str]:
+def generate_reply(prompt: str, max_tokens: int = 500, fast_mode: bool = False, product_context: str = "") -> Optional[str]:
     """Generate AI reply using DeepSeek"""
-    return deepseek_ai.generate_reply(prompt, max_tokens)
+    return deepseek_ai.generate_reply(prompt, max_tokens, fast_mode, product_context)

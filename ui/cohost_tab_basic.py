@@ -25,7 +25,7 @@ from PyQt6.QtGui import QFont, QTextCursor, QPalette, QColor
 try:
     from modules_client.config_manager import ConfigManager
     from modules_client.logger import Logger
-    from modules_client.api import generate_reply
+    from modules_client.api import generate_reply_with_scene
     from modules_server.tts_engine import speak
 except ImportError as e:
     print(f"Import error: {e}")
@@ -64,7 +64,7 @@ def safe_attr_check(obj, attr_name):
 # SIMPLIFIED REPLY THREAD - Mengurangi kompleksitas
 class SimpleReplyThread(QThread):
     """Simplified reply thread dengan error handling minimal tapi efektif"""
-    finished = pyqtSignal(str, str, str)  # author, message, reply
+    finished = pyqtSignal(str, str, str, int)  # author, message, reply, scene_id
     
     def __init__(self, author, message, is_greeting=False, language="Indonesia", parent=None):
         super().__init__(parent)
@@ -120,6 +120,7 @@ class SimpleReplyThread(QThread):
     
     def run(self):
         """Simplified run method dengan minimal error handling"""
+        scene_id = 0  # default: tidak ada produk relevan
         try:
             # Get user context from config for better AI responses
             from modules_client.config_manager import ConfigManager
@@ -150,7 +151,7 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
             
             # API call dengan context-aware prompt
             # PERFORMANCE: Use fast_mode for chat replies (5s timeout, 80 tokens)
-            reply = generate_reply(prompt, timeout=5, fast_mode=True, max_tokens=80)
+            reply, scene_id = generate_reply_with_scene(prompt, fast_mode=True)
             
             # Clean AI response from emojis, formatting, and special chars
             if reply:
@@ -182,7 +183,7 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
                     reply = reply[:297] + "..."
             
             # Emit signal - simple, no retry logic
-            self.finished.emit(self.author, self.message, reply)
+            self.finished.emit(self.author, self.message, reply, scene_id)
             
         except Exception as e:
             # Simple fallback reply with username - different for greetings and languages
@@ -195,7 +196,7 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
                     fallback_reply = f"Halo {self.author}, selamat datang! Yuk lihat-lihat produk kita!"
             else:
                 fallback_reply = f"Hai {self.author}, terima kasih!"
-            self.finished.emit(self.author, self.message, fallback_reply)
+            self.finished.emit(self.author, self.message, fallback_reply, 0)
             print(f"[SimpleReplyThread] Error: {e}")
 
 # SIMPLIFIED LISTENER - Mengurangi kompleksitas pytchat
@@ -586,6 +587,10 @@ class CohostTabBasicSimplified(QWidget):
     def __init__(self):
         super().__init__()
 
+        # Popup window reference (set from main_window via set_popup_window)
+        self._popup_window = None
+        self._psm_cache = None  # cached ProductSceneManager untuk popup
+
         # Core configuration
         self.cfg = ConfigManager("config/settings.json")
         self.logger = Logger()
@@ -651,6 +656,10 @@ class CohostTabBasicSimplified(QWidget):
         # Setup cleanup on app exit
         QApplication.instance().aboutToQuit.connect(self.cleanup)
     
+    def set_popup_window(self, popup_window):
+        """Wire ProductPopupWindow ke cohost tab (dipanggil dari main_window)."""
+        self._popup_window = popup_window
+
     def closeEvent(self, event):
         """Handle close event to ensure proper cleanup"""
         try:
@@ -1671,7 +1680,7 @@ class CohostTabBasicSimplified(QWidget):
         
         return text
     
-    def handle_reply(self, author, message, reply):
+    def handle_reply(self, author, message, reply, scene_id=0):
         """Handle generated reply - simplified with context and cleaning"""
         # Clean the reply
         clean_reply = self.clean_ai_response(reply)
@@ -1689,7 +1698,22 @@ class CohostTabBasicSimplified(QWidget):
         print(f"[OVERLAY] Emitting replyGenerated signal for: {author}")
         self.replyGenerated.emit(author, message, clean_reply)
         print(f"[OVERLAY] Signal emitted successfully")
-        
+
+        # Trigger product popup jika ada scene_id
+        if scene_id > 0 and self._popup_window is not None:
+            try:
+                from modules_client.product_scene_manager import ProductSceneManager
+                if self._psm_cache is None:
+                    self._psm_cache = ProductSceneManager()
+                else:
+                    self._psm_cache.reload()  # refresh jika user tambah produk saat live
+                scene = self._psm_cache.get_scene_by_id(scene_id)
+                if scene and scene.get('video_path'):
+                    self._popup_window.show_product(scene['video_path'])
+                    self.logger.info(f"[POPUP] Product popup triggered: scene_id={scene_id}, name={scene.get('name')}")
+            except Exception as e:
+                self.logger.warning(f"[POPUP] Product popup error: {e}")
+
         # Track analytics - mark this comment as replied
         if self.analytics:
             try:
