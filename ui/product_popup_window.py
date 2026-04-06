@@ -102,7 +102,7 @@ class ProductPopupWindow(QWidget):
         """Background thread yang deteksi TTS selesai lalu hide window."""
         def watch():
             import time
-            time.sleep(0.5)
+            time.sleep(1.0)  # tunggu 1s agar pygame TTS sempat start sepenuhnya
             try:
                 import pygame
                 while not self._stop_event.is_set():

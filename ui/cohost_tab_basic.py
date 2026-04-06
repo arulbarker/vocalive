@@ -1705,6 +1705,8 @@ class CohostTabBasicSimplified(QWidget):
                 from modules_client.product_scene_manager import ProductSceneManager
                 if self._psm_cache is None:
                     self._psm_cache = ProductSceneManager()
+                else:
+                    self._psm_cache.reload()  # refresh jika user tambah produk saat live
                 scene = self._psm_cache.get_scene_by_id(scene_id)
                 if scene and scene.get('video_path'):
                     self._popup_window.show_product(scene['video_path'])

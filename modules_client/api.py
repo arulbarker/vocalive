@@ -344,7 +344,7 @@ def generate_reply_with_scene(prompt: str, fast_mode: bool = False) -> tuple[str
 
     cfg = ConfigManager()
     ai_provider = cfg.get("ai_provider", "deepseek").lower()
-    max_tokens = 80 if fast_mode else 150
+    max_tokens = 120 if fast_mode else 180  # lebih besar karena AI harus wrap dalam JSON
 
     raw = None
     if ai_provider in ("chatgpt", "openai"):
