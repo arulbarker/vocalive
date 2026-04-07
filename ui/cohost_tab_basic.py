@@ -1058,8 +1058,7 @@ class CohostTabBasicSimplified(QWidget):
                             voices.append(f"{voice['model']} ({voice['gender']})")
 
             elif language == "Malaysia":
-                # Add Malaysia voices from all voice types
-                for voice_type in ["gtts_standard", "gtts_wavenet"]:
+                for voice_type in ["gtts_standard", "chirp3", "gemini_flash"]:
                     if voice_type in voices_data and "ms-MY" in voices_data[voice_type]:
                         for voice in voices_data[voice_type]["ms-MY"]:
                             voices.append(f"{voice['model']} ({voice['gender']})")
@@ -1076,6 +1075,8 @@ class CohostTabBasicSimplified(QWidget):
             if not voices:
                 if language == "Indonesia":
                     voices = ["id-ID-Standard-A (FEMALE)", "id-ID-Standard-B (MALE)"]
+                elif language == "Malaysia":
+                    voices = ["ms-MY-Standard-A (FEMALE)", "ms-MY-Standard-B (MALE)"]
                 else:
                     voices = ["en-US-Standard-A (MALE)", "en-US-Standard-C (FEMALE)"]
             
