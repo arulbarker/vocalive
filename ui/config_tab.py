@@ -136,6 +136,31 @@ class APITestThread(QThread):
     # ChatGPT disabled — uncomment to re-enable
     # def test_chatgpt_api(self): ...
 
+
+class PolishKnowledgeThread(QThread):
+    """Thread untuk menyempurnakan teks pengetahuan produk via AI"""
+    finished = pyqtSignal(str)  # hasil AI, atau "" jika gagal
+
+    def __init__(self, text: str):
+        super().__init__()
+        self.text = text
+
+    def run(self):
+        try:
+            from modules_client.api import generate_reply
+            prompt = (
+                "Perbaiki dan sempurnakan teks pengetahuan produk live selling berikut. "
+                "Buat lebih terstruktur dan jelas supaya AI mudah menjawab pertanyaan penonton. "
+                "Pertahankan semua info produk asli (nama, keranjang, harga, promo). "
+                "Tulis HANYA teks yang sudah diperbaiki, tanpa komentar atau penjelasan tambahan.\n\n"
+                f"Teks asli:\n{self.text}"
+            )
+            result = generate_reply(prompt, max_tokens=500, fast_mode=False)
+            self.finished.emit(result.strip() if result else "")
+        except Exception as e:
+            self.finished.emit("")
+
+
 class ConfigTab(QWidget):
     """Tab Konfigurasi untuk API Keys"""
     
@@ -631,36 +656,21 @@ class ConfigTab(QWidget):
         group_layout = QVBoxLayout(group)
         group_layout.setSpacing(10)
 
-        # Clear description of purpose
         desc = QLabel("Tulis di sini apa yang kamu jual di live — nomor keranjang, nama produk, harga, promo, dll.\nAI akan membaca ini dan menjawab komentar penonton sesuai produkmu.")
         desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; padding: 6px; line-height: 1.5;")
         desc.setWordWrap(True)
         group_layout.addWidget(desc)
-
-        # Example hint
-        example = QLabel(
-            "Contoh format:\n"
-            "Keranjang 1 — Lipstik Merah Rose 45rb\n"
-            "Keranjang 2 — Foundation NC20 Match 89rb\n"
-            "Keranjang 3 — Paket Skincare 3in1 150rb (promo hari ini!)"
-        )
-        example.setStyleSheet(
-            f"color: {ACCENT}; font-size: 11px; font-family: monospace; "
-            f"padding: 8px 12px; background-color: {BG_ELEVATED}; border-left: 3px solid {ACCENT}; border-radius: 4px;"
-        )
-        example.setWordWrap(True)
-        group_layout.addWidget(example)
 
         # Editable knowledge text area
         self.context_input = QTextEdit()
         self.context_input.setMinimumHeight(200)
         self.context_input.setMaximumHeight(240)
         self.context_input.setPlaceholderText(
-            "Tulis produk yang kamu jual di sini...\n\n"
-            "Keranjang 1 — [nama produk] [harga]\n"
-            "Keranjang 2 — [nama produk] [harga]\n"
-            "...\n\n"
-            "Bisa juga tambahkan info lain: promo, stok terbatas, cara order, dll."
+            "Tulis apa yang kamu jual di live ini...\n\n"
+            "Contoh:\n"
+            "Keranjang 1 — Lipstik Merah 45rb\n"
+            "Keranjang 2 — Foundation 89rb\n"
+            "Promo hari ini beli 2 gratis ongkir"
         )
         existing_context = self.cfg.get("user_context", "")
         if existing_context:
@@ -683,42 +693,30 @@ class ConfigTab(QWidget):
         self.context_input.textChanged.connect(self._update_char_count)
         group_layout.addWidget(self.context_input)
 
-        # Char count + quick fill from template
-        bottom_layout = QHBoxLayout()
+        # Char count label
         self.char_count_label = QLabel("")
-        self.char_count_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px;")
-        bottom_layout.addWidget(self.char_count_label)
-        bottom_layout.addStretch()
-
-        # Quick-fill from template (subtle, secondary role)
-        self.template_combo = QComboBox()
-        self.template_combo.addItem("⚡ Isi cepat dari template...", "")
-        for key, name, description in get_template_list():
-            self.template_combo.addItem(f"{name}", key)
-        self.template_combo.setMaximumWidth(220)
-        self.template_combo.setStyleSheet(f"""
-            QComboBox {{
-                background-color: {BG_ELEVATED};
-                border: 1px solid {BORDER};
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-size: 11px;
-                color: {TEXT_MUTED};
-            }}
-        """)
-        self.template_combo.currentIndexChanged.connect(
-            lambda index: self.on_template_changed(self.template_combo.itemData(index))
-        )
-        bottom_layout.addWidget(self.template_combo)
-        group_layout.addLayout(bottom_layout)
+        self.char_count_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px; padding: 2px 4px;")
+        group_layout.addWidget(self.char_count_label)
         self._update_char_count()
 
         # Buttons
         button_layout = QHBoxLayout()
+
         save_context_btn = QPushButton("💾 Simpan")
         save_context_btn.setStyleSheet(btn_success())
         save_context_btn.clicked.connect(self.save_context_setting)
         button_layout.addWidget(save_context_btn)
+
+        self.polish_btn = QPushButton("✨ Sempurnakan dengan AI")
+        self.polish_btn.setStyleSheet(btn_primary())
+        self.polish_btn.clicked.connect(self._polish_knowledge_with_ai)
+        button_layout.addWidget(self.polish_btn)
+
+        self.revert_btn = QPushButton("↩️ Kembali ke Teks Asli")
+        self.revert_btn.setStyleSheet(btn_ghost())
+        self.revert_btn.clicked.connect(self._revert_context)
+        self.revert_btn.setVisible(False)
+        button_layout.addWidget(self.revert_btn)
 
         clear_context_btn = QPushButton("🗑️ Hapus")
         clear_context_btn.setStyleSheet(btn_danger())
@@ -1042,6 +1040,42 @@ class ConfigTab(QWidget):
         """Load selected template directly into the editable context input"""
         if template_key:
             self.context_input.setPlainText(get_template(template_key))
+
+    def _polish_knowledge_with_ai(self):
+        """Use AI to improve the product knowledge text"""
+        text = self.context_input.toPlainText().strip()
+        if not text:
+            QMessageBox.warning(self, "Teks Kosong", "Tulis dulu pengetahuan produkmu sebelum disempurnakan oleh AI.")
+            return
+
+        self._original_context = text
+        self.polish_btn.setEnabled(False)
+        self.polish_btn.setText("⏳ Memproses...")
+        self.char_count_label.setText("AI sedang menyempurnakan teks...")
+        self.revert_btn.setVisible(False)
+
+        self._polish_thread = PolishKnowledgeThread(text)
+        self._polish_thread.finished.connect(self._on_polish_done)
+        self._polish_thread.start()
+
+    def _on_polish_done(self, result: str):
+        """Handle AI polish result"""
+        self.polish_btn.setEnabled(True)
+        self.polish_btn.setText("✨ Sempurnakan dengan AI")
+        if result:
+            self.context_input.setPlainText(result)
+            self.revert_btn.setVisible(True)
+            self.char_count_label.setText(f"{len(result)} karakter  ·  ✅ Disempurnakan AI")
+        else:
+            self._update_char_count()
+            QMessageBox.warning(self, "Gagal", "AI tidak bisa memproses teks saat ini.\nPeriksa API key atau coba lagi.")
+
+    def _revert_context(self):
+        """Revert to original text before AI polishing"""
+        if hasattr(self, '_original_context') and self._original_context:
+            self.context_input.setPlainText(self._original_context)
+            self._original_context = ""
+        self.revert_btn.setVisible(False)
     
     def save_context_setting(self):
         """Save context setting from manual input"""
