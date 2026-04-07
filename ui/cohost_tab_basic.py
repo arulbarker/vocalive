@@ -1155,7 +1155,7 @@ class CohostTabBasicSimplified(QWidget):
             # Play TTS preview with Google TTS only (avoid dual playback)
             success = speak(
                 text=sample_text,
-                voice_name=selected_voice,
+                voice_name=voice_model,
                 language_code=language_code,
                 on_finished=on_preview_finished,
                 force_google_tts=True
@@ -1732,14 +1732,21 @@ class CohostTabBasicSimplified(QWidget):
             from modules_server.tts_engine import speak
             
             # Get selected voice and language
-            selected_voice = self.cfg.get("tts_voice", "id-ID-Standard-A")  # FIX: Use Google TTS voice as default
+            selected_voice = self.cfg.get("tts_voice", "id-ID-Standard-A")
+            # Strip gender suffix saved by on_voice_changed e.g. "id-ID-Standard-A (FEMALE)" -> "id-ID-Standard-A"
+            voice_model = selected_voice.split('(')[0].strip()
             output_language = self.cfg.get("output_language", "Indonesia")
-            
-            # Set language code based on selection
-            if output_language == "Indonesia":
-                language_code = "id-ID"
+
+            # Derive language code from voice model name, fallback to output_language
+            if voice_model.startswith("Gemini-"):
+                # Gemini voices are multilingual — pick language code from output_language
+                lang_map = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}
+                language_code = lang_map.get(output_language, "id-ID")
+            elif '-' in voice_model:
+                parts = voice_model.split('-')
+                language_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "id-ID"
             else:
-                language_code = "en-US"
+                language_code = "id-ID"
             
             # Create callback for TTS completion
             def on_tts_finished():
@@ -1750,8 +1757,8 @@ class CohostTabBasicSimplified(QWidget):
                     self.log_message("ERROR", f"TTS callback error: {callback_error}")
             
             # Speak with selected voice and callback (force Google TTS only)
-            speak(text, voice_name=selected_voice, language_code=language_code, on_finished=on_tts_finished, force_google_tts=True)
-            self.log_message("TTS", f"Speaking with voice: {selected_voice}")
+            speak(text, voice_name=voice_model, language_code=language_code, on_finished=on_tts_finished, force_google_tts=True)
+            self.log_message("TTS", f"Speaking with voice: {voice_model}")
             
         except Exception as e:
             print(f"TTS error: {e}")

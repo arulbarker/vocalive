@@ -197,11 +197,11 @@ class TTSEngine:
             logger.warning("requests library not available for Gemini TTS")
             return False
 
-        # voice_name: "Gemini-Puck" -> "Puck"
-        raw_voice = voice_name.replace("Gemini-", "", 1)
+        # voice_name: "Gemini-Puck" or "Gemini-Puck (MALE)" -> "Puck"
+        raw_voice = voice_name.split('(')[0].strip().replace("Gemini-", "", 1)
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.5-flash-lite-preview-tts:generateContent?key={self.google_api_key}"
+            f"gemini-2.5-flash-preview-tts:generateContent?key={self.google_api_key}"
         )
         payload = {
             "contents": [{"parts": [{"text": text}]}],
@@ -270,7 +270,9 @@ class TTSEngine:
         if not voice_name and not language_code:
             self._load_settings()
 
-        current_voice = voice_name or self.voice_model
+        # Strip gender suffix e.g. "id-ID-Standard-A (FEMALE)" -> "id-ID-Standard-A"
+        raw_voice = voice_name or self.voice_model
+        current_voice = raw_voice.split('(')[0].strip()
         current_lang = language_code or self.language_code
 
         logger.info(f"TTS started: {text[:50]}{'...' if len(text) > 50 else ''} (voice={current_voice}, lang={current_lang})")
