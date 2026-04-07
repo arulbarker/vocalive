@@ -18,5 +18,7 @@
     "GEMINI_API_KEY": "",
     "DEEPSEEK_API_KEY": ""
   },
-  "user_context": ""
+  "user_context": "",
+  "greeting_ai_enabled": false,
+  "greeting_ai_last_updated": null
 }
