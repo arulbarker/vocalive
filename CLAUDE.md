@@ -24,8 +24,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | Versi | Tanggal | Deskripsi |
 |-------|---------|-----------|
 | **v1.0.0** | 2026-04-05 | Versi awal — hapus Avatar Lip-sync & OBS Overlay, fokus Cohost AI + TTS |
+| **v1.0.1** | 2026-04-07 | Tambah suara Malaysia (ms-MY), fix TTS preview, fix Gemini WAV header, Knowledge Produk AI polish |
 
-**Versi saat ini: v1.0.0**
+**Versi saat ini: v1.0.1**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
@@ -114,17 +115,27 @@ Tidak ada fallback antar provider — error ditampilkan langsung ke user. `fast_
 ```
 speak(text, voice_name)
   → modules_server/tts_engine.py
+      → strip gender suffix "(FEMALE)"/"(MALE)" dari voice_name
       → voice starts with "Gemini-" → _speak_with_gemini()
-          → POST generativelanguage.googleapis.com/gemini-2.5-flash-lite-preview-tts
-          → output: WAV
+          → POST generativelanguage.googleapis.com/gemini-2.5-flash-preview-tts
+          → response: raw PCM (audio/L16, 24kHz mono)
+          → wrap dengan WAV header via stdlib `wave` module sebelum disimpan
+          → output: .wav temp file
       → else → _speak_with_api_key()
           → POST texttospeech.googleapis.com (Google Cloud TTS REST)
-          → output: MP3
+          → output: .mp3 temp file
       → fallback jika tidak ada api_key: pyttsx3
-  → pygame playback
+  → pygame playback (unload sebelum & sesudah untuk release file lock)
+  → temp file dihapus setelah playback
 ```
 
-Auth: `google_tts_api_key` di settings — **satu key Google AI Studio** cukup untuk Gemini AI + Gemini TTS sekaligus. Google Cloud TTS (suara standard/chirp non-Gemini) butuh key terpisah dari Google Cloud Console.
+**Nama file temp**: berbasis timestamp millisecond (`tts_1744012345678.mp3`) — bukan hash teks — untuk menghindari Permission Denied saat voice sama di-preview berulang.
+
+**Auth Google API key**: Satu **Google Cloud Console** API key bisa dipakai untuk keduanya jika kedua API di-enable di bagian Restrictions:
+- `Cloud Text-to-Speech API` → untuk suara Standard (`id-ID-Standard-*`) dan Chirp3 HD
+- `Generative Language API` → untuk Gemini AI + Gemini TTS (`Gemini-*` voices)
+
+Google AI Studio key **hanya** berlaku untuk Generative Language API (Gemini), tidak bisa untuk Cloud TTS standard/chirp.
 
 ### Product Scene System
 
@@ -133,6 +144,18 @@ Sistem popup video produk saat AI merespons terkait produk tertentu:
 2. **`product_scene_tab.py`** — UI manajemen daftar produk + video path
 3. **`generate_reply_with_scene()`** di `api.py` — AI membalas + menentukan `scene_id` dalam satu call (JSON response)
 4. **`product_popup_window.py`** — QDialog yang memutar video produk via QMediaPlayer
+
+### Knowledge Produk untuk AI (Config Tab)
+
+Section "🧠 Pengetahuan Produk untuk AI" di Config Tab — user tulis daftar produk yang dijual (keranjang, harga, promo). AI membaca ini untuk menjawab komentar penonton.
+
+Tombol **"✨ Sempurnakan dengan AI"** menjalankan `PolishKnowledgeThread` (QThread):
+1. Cari info produk via DuckDuckGo Instant Answer API (gratis, no key)
+2. Inject hasil riset ke prompt
+3. AI poles teks → output: blok `## PERAN AI HOST` di atas + detail produk terstruktur
+4. Tombol "↩️ Kembali ke Teks Asli" muncul untuk revert — teks asli disimpan di `self._original_context`
+
+Teks disimpan ke `config/settings.json` field `user_context`, dibaca oleh `gemini_ai.py` dan `deepseek_ai.py` sebagai system context.
 
 ### Greeting System
 
@@ -147,7 +170,7 @@ Interval timer diatur di Cohost Tab (bukan Config Tab).
 
 - `config/settings.json` — user config (jangan di-commit)
 - `config/settings_default.json` — template fallback
-- `config/voices.json` — daftar semua suara per bahasa, dikelompokkan: `gtts_standard`, `gtts_wavenet`, `chirp3`, `gemini_flash`
+- `config/voices.json` — daftar semua suara per bahasa, dikelompokkan: `gtts_standard`, `chirp3`, `gemini_flash`. Struktur: `{ "section": { "locale": [ {model, gender} ] } }`. Gemini voices berlaku untuk semua bahasa (multilingual). Chirp3 HD **tidak tersedia** untuk `ms-MY` — hanya `id-ID` dan `en-*`. Jika `tts_voice` tersimpan di settings tidak ada di list terbaru, `cohost_tab_basic.py` auto-reset ke voice pertama yang valid.
 - `modules_client/config_manager.py` — interface `cfg.get(key, default)` / `cfg.set(key, value)`
 
 ### License System
@@ -229,11 +252,12 @@ Gemini API key dari Google AI Studio perlu langkah ekstra sebelum bisa digunakan
 3. Aktifkan **"Generative Language API"** di daftar restrictions
 4. Tanpa langkah ini, semua request ke Gemini akan return **403 Permission Denied** meski API key valid
 
-Satu API key Google AI Studio berlaku untuk:
-- **Otak AI** → `gemini-3.1-flash-lite-preview` (auto-fallback ke `gemini-flash-lite-latest` jika 403)
-- **Suara TTS Gemini** → `gemini-2.5-flash-lite-preview-tts` (voice prefix `Gemini-*`)
+Satu **Google Cloud Console** API key bisa untuk semua jika di-enable di Restrictions:
+- **Otak AI** → `gemini-3.1-flash-lite-preview` via Generative Language API (auto-fallback ke `gemini-flash-lite-latest` jika 403)
+- **Suara TTS Gemini** → `gemini-2.5-flash-preview-tts` via Generative Language API (voice prefix `Gemini-*`)
+- **Suara Standard/Chirp3** → `texttospeech.googleapis.com` via Cloud Text-to-Speech API
 
-Google Cloud TTS (suara `id-ID-Standard-*` atau `Chirp3-*`) butuh key **terpisah** dari Google Cloud Console — bukan AI Studio.
+Google AI Studio key hanya untuk Generative Language API — tidak support Cloud TTS.
 
 ### Auth Format Gemini REST API
 
