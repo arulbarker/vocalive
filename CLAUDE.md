@@ -33,7 +33,7 @@ Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible,
 
 ## What This App Does
 
-**VocaLive** adalah Windows desktop app untuk live streaming automation. Mendengarkan chat YouTube/TikTok Live, menghasilkan balasan AI (ChatGPT/DeepSeek), mengubahnya ke suara (Google Cloud TTS / gTTS), lalu memutarnya selama siaran. Didistribusikan sebagai EXE berlisensi.
+**VocaLive** adalah Windows desktop app untuk live streaming automation. Mendengarkan chat **TikTok Live** (YouTube sementara di-disable), menghasilkan balasan AI (DeepSeek / Gemini 3.1 Flash Lite), mengubahnya ke suara (Google Cloud TTS / Gemini TTS), lalu memutarnya selama siaran. Didistribusikan sebagai EXE berlisensi.
 
 ## Running the App
 
@@ -59,7 +59,7 @@ main.py
   → license validation (Google Sheets via config/sheet.json)
   → QApplication + MainWindow (ui/main_window.py)
       → UnifiedCommentProcessor (filter pipeline)
-      → Tab: CohostTabBasic, ConfigTab, AnalyticsTab, UserManagementTab, DeveloperTab
+      → Tab: CohostTabBasic, ConfigTab, ProductSceneTab, AnalyticsTab, UserManagementTab, DeveloperTab
 ```
 
 `main.py` harus **pertama kali** set UTF-8 encoding untuk stdout/stderr (ada di baris awal) sebelum import apapun — ini kritis di mode EXE.
@@ -69,8 +69,8 @@ main.py
 | Direktori | Tanggung Jawab |
 |-----------|----------------|
 | `modules_client/` | Berjalan di GUI process: config, AI calls, TTS wrapper, listeners, analytics, license |
-| `modules_server/` | Service berat: TTS engine (Google Cloud + pygame), provider logic |
-| `listeners/` | Subprocess terpisah: `pytchat_listener.py` (YouTube), `tiktok_runner.py` (TikTok) |
+| `modules_server/` | TTS engine (Google Cloud REST + Gemini TTS + pygame playback) |
+| `listeners/` | **Dead code** — `yt_listener_process.py` dan `tiktok_runner.py` tidak dipakai; listener aktif ada di `cohost_tab_basic.py` sebagai QThread inline |
 | `ui/` | Semua tab PyQt6, design system di `theme.py` |
 | `thirdparty/pytchat_ng/` | Fork pytchat yang dimodifikasi — **jangan ganti dengan pytchat dari pip** |
 
@@ -79,34 +79,75 @@ main.py
 ### Comment Processing Pipeline
 
 ```
-Chat message
+TikTok chat message
+  → SimpleTikTokListener (QThread di cohost_tab_basic.py)
+      → timestamp filter (skip history lama)
+      → deduplication (hash-based)
   → UnifiedCommentProcessor (main_window.py)
       → blacklist/whitelist check (user_list_manager)
       → toxic keyword filter
       → spam detection (hash-based, 60s window)
       → cooldown check
   → CohostTabBasic.generate_cohost_reply()
-  → AI reply (modules_client/api.py → localhost:8888 atau langsung ke ChatGPT/DeepSeek)
+  → generate_reply_with_scene() → AI reply + scene_id produk
   → TTS speak() → pygame playback
+  → ProductPopupWindow (jika scene_id > 0)
 ```
 
-### AI Call Flow
+### AI Provider Flow
 
-`modules_client/api.py` selalu mengarah ke `http://localhost:8888` (local FastAPI server). `fast_mode=True` menggunakan timeout agresif (80 tokens max) untuk respons cepat. `modules_client/chatgpt_ai.py` dan `modules_client/deepseek_ai.py` adalah direct AI clients alternatif.
+`modules_client/api.py` → routing berdasarkan `ai_provider` di settings:
+
+```
+ai_provider == "gemini"   → modules_client/gemini_ai.py
+                              → POST generativelanguage.googleapis.com
+                              → model: gemini-3.1-flash-lite-preview
+ai_provider == "deepseek" → modules_client/deepseek_ai.py
+                              → POST api.deepseek.com
+                              → model: deepseek-chat
+```
+
+Tidak ada fallback antar provider — error ditampilkan langsung ke user. `fast_mode=True` pakai timeout 5s dan max_tokens lebih kecil untuk respons cepat.
+
+### TTS Flow
+
+```
+speak(text, voice_name)
+  → modules_server/tts_engine.py
+      → voice starts with "Gemini-" → _speak_with_gemini()
+          → POST generativelanguage.googleapis.com/gemini-2.5-flash-lite-preview-tts
+          → output: WAV
+      → else → _speak_with_api_key()
+          → POST texttospeech.googleapis.com (Google Cloud TTS REST)
+          → output: MP3
+      → fallback jika tidak ada api_key: pyttsx3
+  → pygame playback
+```
+
+Auth: `google_tts_api_key` di settings — **satu key Google AI Studio** cukup untuk Gemini AI + Gemini TTS sekaligus. Google Cloud TTS (suara standard/chirp non-Gemini) butuh key terpisah dari Google Cloud Console.
+
+### Product Scene System
+
+Sistem popup video produk saat AI merespons terkait produk tertentu:
+1. **`product_scene_manager.py`** — CRUD scenes, build product context string untuk prompt AI
+2. **`product_scene_tab.py`** — UI manajemen daftar produk + video path
+3. **`generate_reply_with_scene()`** di `api.py` — AI membalas + menentukan `scene_id` dalam satu call (JSON response)
+4. **`product_popup_window.py`** — QDialog yang memutar video produk via QMediaPlayer
 
 ### Greeting System
 
 Sistem sapaan otomatis terdiri dari 3 layer:
 1. **`config_tab.py`** — UI untuk mengisi 10 slot teks sapaan
-2. **`greeting_tts_cache.py`** — Pre-render TTS tiap slot ke file audio (hash-based caching di `greeting_cache/`)
+2. **`greeting_tts_cache.py`** — Pre-render TTS tiap slot ke file audio (hash-based caching di `greeting_cache/`). Gemini voice → `.wav`, lainnya → `.mp3`
 3. **`sequential_greeting_manager.py`** — Timer-based playback, mode random, satu thread
 
-Interval timer diatur di Cohost Tab (bukan Config Tab). File audio cache disimpan agar tidak panggil TTS API berulang.
+Interval timer diatur di Cohost Tab (bukan Config Tab).
 
 ### Config System
 
 - `config/settings.json` — user config (jangan di-commit)
 - `config/settings_default.json` — template fallback
+- `config/voices.json` — daftar semua suara per bahasa, dikelompokkan: `gtts_standard`, `gtts_wavenet`, `chirp3`, `gemini_flash`
 - `modules_client/config_manager.py` — interface `cfg.get(key, default)` / `cfg.set(key, value)`
 
 ### License System
@@ -115,44 +156,11 @@ Interval timer diatur di Cohost Tab (bukan Config Tab). File audio cache disimpa
 - Validasi via Google Sheets (`config/sheet.json` credentials)
 - `modules_client/license_monitor.py` — monitoring kontinu saat runtime
 
-### TTS Flow
-
-```
-speak(text)
-  → modules_server/tts_engine.py
-      → Google Cloud TTS (jika config/gcloud_tts_credentials.json ada)
-      → fallback: gTTS
-  → pygame playback
-```
-
 ---
 
 ## UI Design System
 
 **Semua styling harus menggunakan helper dari `ui/theme.py`.** Jangan hardcode warna di file tab.
-
-### Helper yang Tersedia
-
-| Helper | Kegunaan |
-|--------|---------|
-| `btn_primary()` | Tombol utama — background biru |
-| `btn_success()` | Tombol aksi positif — hijau |
-| `btn_danger()` | Tombol destruktif — merah |
-| `btn_ghost()` | Tombol sekunder — transparan subtle |
-| `btn_accent()` | Tombol emphasis — accent biru muda |
-| `btn_secondary()` | Tombol outline biru |
-| `status_badge(color, size)` | Label status dengan border berwarna |
-| `label_title(size)` | Judul section — biru, bold |
-| `label_subtitle(size)` | Sub-judul — muted |
-| `label_value(size)` | Angka besar metric — bold |
-| `label_muted(size)` | Teks redup |
-| `CARD_STYLE` | QFrame card standar |
-| `CARD_ELEVATED_STYLE` | QFrame card elevated |
-| `HEADER_FRAME_STYLE` | Frame header dengan border bawah |
-| `LOG_TEXTEDIT_STYLE` | QTextEdit log/console style |
-| `GLOBAL_QSS` | Global stylesheet — diapply di MainWindow |
-
-### Cara Pakai
 
 ```python
 from ui.theme import btn_success, btn_danger, status_badge, ERROR, SUCCESS
@@ -162,6 +170,8 @@ self.stop_button.setStyleSheet(btn_danger())
 self.status_indicator.setStyleSheet(status_badge(ERROR, size=13))
 ```
 
+Helper tersedia: `btn_primary()`, `btn_success()`, `btn_danger()`, `btn_ghost()`, `btn_accent()`, `btn_secondary()`, `status_badge(color, size)`, `label_title()`, `label_subtitle()`, `label_value()`, `label_muted()`, `CARD_STYLE`, `CARD_ELEVATED_STYLE`, `HEADER_FRAME_STYLE`, `LOG_TEXTEDIT_STYLE`, `GLOBAL_QSS`.
+
 Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (bukan gold lama).
 
 ---
@@ -170,17 +180,24 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 
 ```json
 {
-  "platform": "YouTube",
+  "platform": "TikTok",
+  "ai_provider": "gemini",
   "paket": "basic",
   "output_language": "Indonesia",
   "trigger_words": ["bro", "bang", "min"],
   "viewer_cooldown_minutes": 3,
   "cohost_cooldown": 2,
   "sequential_greeting_interval": 180,
-  "OPENAI_API_KEY": "...",
-  "DEEPSEEK_API_KEY": "..."
+  "tiktok_nickname": "@username",
+  "google_tts_api_key": "AIzaSy...",
+  "api_keys": {
+    "GEMINI_API_KEY": "AIzaSy...",
+    "DEEPSEEK_API_KEY": "sk-..."
+  }
 }
 ```
+
+`platform` saat ini hanya `"TikTok"` — YouTube di-disable di UI tapi kode `SimpleListener` dan `video_id_input` tetap ada (dormant).
 
 ## Frozen EXE Considerations
 
@@ -188,11 +205,11 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 - UTF-8 encoding fix di `main.py` harus berjalan **sebelum** import apapun
 - Resource paths: `ROOT = os.path.dirname(sys.executable)` di mode EXE
 - Splash screen di-disable (`splash = None`) untuk mencegah QPaintDevice segfault
+- Default platform di `build_production_exe_fixed.py` baris ~492 harus `"TikTok"`
 
 ## Protected Files (Jangan Diubah Tanpa Hati-Hati)
 
-- `modules_server/tts_engine.py` — TTS engine stabil
-- `modules_client/pytchat_listener.py` — YouTube listener berjalan
+- `modules_server/tts_engine.py` — TTS engine dengan multi-path auth
 - `modules_client/license_manager.py` — validasi lisensi
 - `modules_client/config_manager.py` — sistem config pusat
 - `thirdparty/pytchat_ng/` — fork custom, jangan replace dengan versi pip
@@ -200,6 +217,14 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 ## Sensitive Files (Never Commit)
 
 `config/gcloud_tts_credentials.json`, `config/google_token.json`, `config/sheet.json`, `config/license.enc`, `config/device.hash`, `config/settings.json`, `config/user_lists.json`, `.env`
+
+---
+
+## Re-enabling YouTube
+
+YouTube di-disable bukan dihapus. Untuk re-enable:
+1. `ui/cohost_tab_basic.py` — uncomment baris dropdown `addItems(["YouTube", "TikTok"])` dan blok `if platform == "YouTube":` di `start()`
+2. `build_production_exe_fixed.py` — ubah default platform kembali ke `"YouTube"` jika perlu
 
 ---
 
