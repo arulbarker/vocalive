@@ -107,7 +107,7 @@ class APITestThread(QThread):
     
     def test_gemini_api(self):
         """Test Gemini API — coba primary model dulu, fallback jika 403"""
-        models = ["gemini-3.1-flash-lite-preview", "gemini-2.0-flash"]
+        models = ["gemini-3.1-flash-lite-preview", "gemini-flash-lite-latest"]
         data = {
             "contents": [{"parts": [{"text": "Hello, test connection"}]}],
             "generationConfig": {"maxOutputTokens": 10},

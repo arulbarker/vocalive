@@ -11,8 +11,8 @@ from modules_client.config_manager import config_manager
 
 logger = logging.getLogger('VocaLive')
 
-GEMINI_MODEL_PRIMARY = "gemini-3.1-flash-lite-preview"
-GEMINI_MODEL_FALLBACK = "gemini-2.0-flash"
+GEMINI_MODEL_PRIMARY  = "gemini-3.1-flash-lite-preview"   # $0.25/$1.50 per 1M tokens
+GEMINI_MODEL_FALLBACK = "gemini-flash-lite-latest"         # $0.10/$0.40 — alias paling murah
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
@@ -82,14 +82,16 @@ class GeminiAI:
                     reply = data["candidates"][0]["content"]["parts"][0]["text"]
                     logger.debug(f"Gemini reply ({self.model}): {len(reply)} chars")
                     return reply.strip()
-                elif resp.status_code == 403 and self.model == GEMINI_MODEL_PRIMARY:
-                    # Preview model belum tersedia untuk API key ini — turun ke fallback
-                    logger.warning(
-                        f"Gemini 403: model '{self.model}' restricted. "
-                        f"Auto-downgrade ke '{GEMINI_MODEL_FALLBACK}'"
-                    )
-                    self.model = GEMINI_MODEL_FALLBACK
-                    continue  # retry langsung dengan model baru
+                elif resp.status_code == 403:
+                    error_detail = resp.text[:400]
+                    logger.warning(f"Gemini 403 ({self.model}): {error_detail}")
+                    if self.model == GEMINI_MODEL_PRIMARY:
+                        logger.warning(f"Auto-downgrade ke '{GEMINI_MODEL_FALLBACK}'")
+                        self.model = GEMINI_MODEL_FALLBACK
+                        continue  # retry langsung dengan model fallback
+                    else:
+                        logger.error("Gemini 403 bahkan pada fallback model. Periksa API key.")
+                        return None
                 elif resp.status_code == 429:
                     logger.warning(f"Gemini rate limit, attempt {attempt + 1}")
                 else:
