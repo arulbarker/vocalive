@@ -626,8 +626,9 @@ class CohostTabBasicSimplified(QWidget):
         self.conversation_active = False
         self.comment_counter = 0
 
-        # Simple data structures
-        self.reply_queue = deque(maxlen=20)   # Naikkan ke 20 agar komentar tidak hilang
+        # Simple data structures — baca saved setting, fallback ke default
+        _saved_queue_size = self.cfg.get("cohost_max_queue", 10)
+        self.reply_queue = deque(maxlen=max(1, _saved_queue_size))
         self.recent_messages = deque(maxlen=50)  # Limited history
         self.viewer_cooldowns = {}  # Simple cooldown tracking
 
@@ -874,16 +875,25 @@ class CohostTabBasicSimplified(QWidget):
         self.cooldown_spin.setValue(self.cfg.get("cohost_cooldown", 2))
         cooldown_layout.addWidget(self.cooldown_spin)
         
-        cooldown_layout.addWidget(QLabel("Viewer Cooldown (min):"))
+        cooldown_layout.addWidget(QLabel("Cooldown/Penonton (mnt):"))
         self.viewer_cooldown_spin = QSpinBox()
-        self.viewer_cooldown_spin.setRange(1, 10)
+        self.viewer_cooldown_spin.setRange(0, 30)  # 0 = tidak ada cooldown (reply semua komentar)
         self.viewer_cooldown_spin.setValue(self.cfg.get("viewer_cooldown_minutes", 1))
+        self.viewer_cooldown_spin.setSpecialValueText("Semua")  # tampilkan "Semua" saat nilai 0
+        self.viewer_cooldown_spin.setToolTip(
+            "0 = Balas semua komentar (cocok untuk streamer baru)\n"
+            "1-5 = Batasi tiap penonton 1-5 menit sekali (cocok untuk stream ramai)"
+        )
         cooldown_layout.addWidget(self.viewer_cooldown_spin)
-        
-        cooldown_layout.addWidget(QLabel("Max Queue:"))
+
+        cooldown_layout.addWidget(QLabel("Max Antrian:"))
         self.queue_spin = QSpinBox()
-        self.queue_spin.setRange(1, 20)
-        self.queue_spin.setValue(self.cfg.get("cohost_max_queue", 4))
+        self.queue_spin.setRange(1, 50)  # naikkan max ke 50 untuk stream sangat ramai
+        self.queue_spin.setValue(self.cfg.get("cohost_max_queue", 10))
+        self.queue_spin.setToolTip(
+            "Jumlah komentar yang menunggu giliran dibalas.\n"
+            "Stream sepi: 5-10 | Stream ramai: 15-30"
+        )
         cooldown_layout.addWidget(self.queue_spin)
         
         # Sequential Greeting Timer
@@ -1585,15 +1595,14 @@ class CohostTabBasicSimplified(QWidget):
             self.log_message("WARN", f"Spam detected from {author}, ignored")
             return
 
-        # Check cooldown
+        # Check cooldown — jika 0 menit, balas semua komentar tanpa batasan per penonton
         now = time.time()
-        if author in self.viewer_cooldowns:
-            viewer_cooldown_seconds = self.cfg.get("viewer_cooldown_minutes", 1) * 60
-            if now - self.viewer_cooldowns[author] < viewer_cooldown_seconds:
-                return
-
-        # Update cooldown
-        self.viewer_cooldowns[author] = now
+        viewer_cooldown_seconds = self.cfg.get("viewer_cooldown_minutes", 1) * 60
+        if viewer_cooldown_seconds > 0:
+            if author in self.viewer_cooldowns:
+                if now - self.viewer_cooldowns[author] < viewer_cooldown_seconds:
+                    return
+            self.viewer_cooldowns[author] = now
 
         # Add to queue
         self.reply_queue.append((author, message, now))
