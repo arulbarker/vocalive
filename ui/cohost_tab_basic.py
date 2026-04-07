@@ -1956,7 +1956,7 @@ class CohostTabBasicSimplified(QWidget):
     def open_tutorial(self):
         """Open tutorial video in browser"""
         import webbrowser
-        tutorial_url = "https://www.canva.com/design/DAGxDmqIFIk/BHLSjaDOfAwKIrncZ1U_eg/view?utm_content=DAGxDmqIFIk&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=hfdf8975979"
+        tutorial_url = "https://streammate-ai-seller.lovable.app/"
         try:
             webbrowser.open(tutorial_url)
             self.log_message("INFO", "Tutorial video opened in browser")
