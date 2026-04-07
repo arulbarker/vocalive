@@ -801,12 +801,11 @@ class ConfigTab(QWidget):
         api_key_container.addWidget(api_key_label)
 
         self.tts_api_key_input = QLineEdit()
-        self.tts_api_key_input.setPlaceholderText("Masukkan Google Cloud API Key...")
+        self.tts_api_key_input.setPlaceholderText("Masukkan Google Cloud / AI Studio API Key...")
         self.tts_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.tts_api_key_input.textChanged.connect(self.on_tts_api_key_changed)
         api_key_container.addWidget(self.tts_api_key_input)
 
-        # Show/Hide API Key button
         show_api_btn = QPushButton("👁️")
         show_api_btn.setProperty("class", "secondary")
         show_api_btn.setMaximumWidth(50)
@@ -814,41 +813,29 @@ class ConfigTab(QWidget):
         show_api_btn.clicked.connect(lambda: self.toggle_password_visibility(self.tts_api_key_input))
         api_key_container.addWidget(show_api_btn)
 
+        self.tts_detect_btn = QPushButton("🔍 Deteksi")
+        self.tts_detect_btn.setFixedWidth(90)
+        self.tts_detect_btn.setToolTip("Deteksi otomatis tipe API key (AI Studio / Google Cloud)")
+        self.tts_detect_btn.setEnabled(False)
+        self.tts_detect_btn.clicked.connect(self._detect_key_type)
+        api_key_container.addWidget(self.tts_detect_btn)
+
         group_layout.addLayout(api_key_container)
 
-        # API Key info with better formatting
-        api_key_info_frame = QFrame()
-        api_key_info_frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: {BG_ELEVATED};
-                border: 1px solid {ACCENT};
-                border-radius: 6px;
-                padding: 10px;
-                margin: 5px;
-            }}
-        """)
-        api_key_info_layout = QVBoxLayout(api_key_info_frame)
-        api_key_info_layout.setSpacing(5)
+        # Key type detection result label
+        self.tts_key_type_label = QLabel("Tipe key: belum dideteksi — klik 🔍 Deteksi")
+        self.tts_key_type_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 3px 5px;")
+        group_layout.addWidget(self.tts_key_type_label)
 
-        info_title = QLabel("📋 Cara Mendapatkan API Key:")
-        info_title.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 12px;")
-        api_key_info_layout.addWidget(info_title)
-
-        steps = [
-            "1. Buka Google Cloud Console (console.cloud.google.com)",
-            "2. Pilih/Buat Project baru",
-            "3. Enable 'Cloud Text-to-Speech API'",
-            "4. APIs & Services → Credentials → Create Credentials → API Key",
-            "5. Restrict key: Pilih 'Cloud Text-to-Speech API' saja",
-            "6. Copy API Key dan paste di sini"
-        ]
-
-        for step in steps:
-            step_label = QLabel(step)
-            step_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding-left: 10px;")
-            api_key_info_layout.addWidget(step_label)
-
-        group_layout.addWidget(api_key_info_frame)
+        # Info singkat
+        info_label = QLabel(
+            "💡 AI Studio key → suara Gemini  |  Google Cloud key → Standard & Chirp3"
+        )
+        info_label.setStyleSheet(
+            f"color: {ACCENT}; font-size: 11px; padding: 5px 5px; "
+            f"background-color: {BG_ELEVATED}; border-radius: 4px;"
+        )
+        group_layout.addWidget(info_label)
 
         # Voice selector for test
         voice_row = QHBoxLayout()
@@ -859,15 +846,10 @@ class ConfigTab(QWidget):
 
         self.tts_voice_combo = QComboBox()
         self.tts_voice_combo.setMinimumWidth(280)
-        self._populate_tts_voice_combo()
+        self._populate_tts_voice_combo("all")  # default: semua voice
         voice_row.addWidget(self.tts_voice_combo)
         voice_row.addStretch()
         group_layout.addLayout(voice_row)
-
-        voice_hint = QLabel("💡 Pilih suara Gemini (Gemini-*) jika API key dari AI Studio. Suara Standard/Chirp3 butuh Cloud TTS API.")
-        voice_hint.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 2px 5px;")
-        voice_hint.setWordWrap(True)
-        group_layout.addWidget(voice_hint)
 
         # Button container
         tts_button_layout = QHBoxLayout()
@@ -1085,14 +1067,18 @@ class ConfigTab(QWidget):
         """Handle TTS API Key input change"""
         api_key = self.tts_api_key_input.text().strip()
 
-        # Enable test button if API key is provided
         if len(api_key) > 0:
             self.tts_test_btn.setEnabled(True)
+            self.tts_detect_btn.setEnabled(True)
             self.tts_status.setText("Status: API Key siap untuk ditest")
             self.tts_status.setProperty("class", "status-warning")
             self.tts_status.setStyleSheet(status_badge(WARNING))
+            # Reset label deteksi saat key berubah
+            self.tts_key_type_label.setText("Tipe key: belum dideteksi — klik 🔍 Deteksi")
+            self.tts_key_type_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 3px 5px;")
         else:
             self.tts_test_btn.setEnabled(False)
+            self.tts_detect_btn.setEnabled(False)
             self.tts_status.setText("Status: Belum ada API Key")
             self.tts_status.setProperty("class", "status-info")
             self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
@@ -1224,16 +1210,23 @@ class ConfigTab(QWidget):
         self.test_thread.result_ready.connect(self.on_test_result)
         self.test_thread.start()
     
-    def _populate_tts_voice_combo(self):
-        """Isi dropdown suara test dengan semua voice dari voices.json."""
+    def _populate_tts_voice_combo(self, key_type: str = "all"):
+        """Isi dropdown suara test. key_type: 'gemini' | 'cloud' | 'all'."""
         self.tts_voice_combo.clear()
         voices = []
         try:
             voices_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'voices.json')
             with open(voices_file, 'r', encoding='utf-8') as f:
                 voices_data = json.load(f)
-            # Gemini dulu (kompatibel AI Studio key) lalu Standard/Chirp3
-            for section in ["gemini_flash", "gtts_standard", "chirp3"]:
+
+            if key_type == "gemini":
+                sections = ["gemini_flash"]
+            elif key_type == "cloud":
+                sections = ["gtts_standard", "chirp3"]
+            else:
+                sections = ["gemini_flash", "gtts_standard", "chirp3"]
+
+            for section in sections:
                 if section not in voices_data:
                     continue
                 for lang_code, voice_list in voices_data[section].items():
@@ -1241,14 +1234,93 @@ class ConfigTab(QWidget):
                         voices.append(f"{v['model']} ({v['gender']})")
         except Exception:
             pass
+
         if not voices:
             voices = ["Gemini-Puck (MALE)", "Gemini-Aoede (FEMALE)", "id-ID-Standard-A (FEMALE)"]
+
         self.tts_voice_combo.addItems(voices)
-        # Default ke Gemini-Puck supaya AI Studio key langsung work
+
+        # Default: Gemini-Puck untuk gemini/all, Standard pertama untuk cloud
+        default_prefix = "Gemini-Puck" if key_type != "cloud" else "id-ID-Standard"
         for i, v in enumerate(voices):
-            if v.startswith("Gemini-Puck"):
+            if v.startswith(default_prefix):
                 self.tts_voice_combo.setCurrentIndex(i)
                 break
+
+    def _detect_key_type(self):
+        """Probe API key ke Gemini dan Cloud TTS untuk deteksi tipe — jalankan di thread."""
+        api_key = self.tts_api_key_input.text().strip()
+        if not api_key:
+            return
+
+        self.tts_detect_btn.setText("⏳ ...")
+        self.tts_detect_btn.setEnabled(False)
+        self.tts_key_type_label.setText("Mendeteksi tipe key...")
+        self.tts_key_type_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 3px 5px;")
+
+        def probe():
+            import requests as req
+            supports_gemini = False
+            supports_cloud = False
+            try:
+                r = req.get(
+                    "https://generativelanguage.googleapis.com/v1beta/models",
+                    params={"key": api_key, "pageSize": 1},
+                    timeout=8
+                )
+                supports_gemini = r.status_code == 200
+            except Exception:
+                pass
+            try:
+                r = req.get(
+                    "https://texttospeech.googleapis.com/v1/voices",
+                    params={"key": api_key, "languageCode": "id-ID"},
+                    timeout=8
+                )
+                supports_cloud = r.status_code == 200
+            except Exception:
+                pass
+            return supports_gemini, supports_cloud
+
+        class _DetectThread(QThread):
+            done = pyqtSignal(bool, bool)
+            def __init__(self, fn):
+                super().__init__()
+                self._fn = fn
+            def run(self):
+                result = self._fn()
+                self.done.emit(*result)
+
+        self._detect_thread = _DetectThread(probe)
+        self._detect_thread.done.connect(self._on_detection_done)
+        self._detect_thread.start()
+
+    def _on_detection_done(self, supports_gemini: bool, supports_cloud: bool):
+        """Update UI berdasarkan hasil deteksi key type."""
+        self.tts_detect_btn.setText("🔍 Deteksi")
+        self.tts_detect_btn.setEnabled(True)
+
+        if supports_gemini and supports_cloud:
+            key_type = "all"
+            label = "✅ AI Studio + Cloud TTS — semua suara tersedia"
+            color = SUCCESS
+        elif supports_gemini:
+            key_type = "gemini"
+            label = "✅ AI Studio key — hanya suara Gemini yang kompatibel"
+            color = SUCCESS
+        elif supports_cloud:
+            key_type = "cloud"
+            label = "✅ Google Cloud key — hanya suara Standard & Chirp3"
+            color = SUCCESS
+        else:
+            key_type = "all"
+            label = "❌ Key tidak valid atau tidak ada akses ke API manapun"
+            color = ERROR
+
+        self.tts_key_type_label.setText(label)
+        self.tts_key_type_label.setStyleSheet(f"color: {color}; font-size: 11px; padding: 3px 5px; font-weight: bold;")
+        self._populate_tts_voice_combo(key_type)
+        logger.info(f"[TTS_DETECT] gemini={supports_gemini}, cloud={supports_cloud} → key_type={key_type}")
 
     def test_google_tts(self):
         """Test Google TTS API Key"""
@@ -1294,11 +1366,13 @@ class ConfigTab(QWidget):
 
             # Pakai voice yang dipilih user di combo, bukan voice dari Cohost tab
             selected_voice = self.tts_voice_combo.currentText().split(' (')[0].strip()
-            lang_code = "id-ID"
-            if selected_voice.startswith("ms-"):
-                lang_code = "ms-MY"
-            elif selected_voice.startswith("en-"):
-                lang_code = "en-US"
+            # Ekstrak lang code dari nama voice (misal "en-AU-Chirp3-..." → "en-AU")
+            # Gemini voices tidak punya lang prefix → default id-ID
+            if selected_voice.startswith("Gemini-"):
+                lang_code = "id-ID"
+            else:
+                parts = selected_voice.split('-')
+                lang_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "id-ID"
 
             logger.info(f"[CONFIG_TEST] Testing voice: {selected_voice}")
             success = speak(
