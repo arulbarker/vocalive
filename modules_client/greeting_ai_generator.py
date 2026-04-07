@@ -35,7 +35,7 @@ FALLBACK_GREETINGS = [
 
 def clean_greeting_text(text: str) -> str:
     """Strip semua simbol — hanya huruf, angka, dan spasi."""
-    cleaned = re.sub(r'[^\w\s]', '', text)
+    cleaned = re.sub(r'[^a-zA-Z0-9\s]', '', text)
     return ' '.join(cleaned.split())
 
 
@@ -124,8 +124,9 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
 
                 if len(greetings) >= 5:
                     # Pad ke 10 jika kurang
+                    original_len = len(greetings)
                     while len(greetings) < 10:
-                        greetings.append(greetings[len(greetings) % len(greetings)])
+                        greetings.append(greetings[len(greetings) % original_len])
                     logger.info(f"[GREETING_AI] Generated {len(greetings)} greetings via {model}")
                     return greetings[:10]
                 else:
