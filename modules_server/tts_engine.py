@@ -274,6 +274,14 @@ class TTSEngine:
         }
         try:
             resp = _requests.post(url, json=payload, timeout=15)
+            if not resp.ok:
+                err = resp.json() if resp.headers.get("content-type","").startswith("application/json") else resp.text
+                msg = err.get("error", {}).get("message", str(err)) if isinstance(err, dict) else str(err)[:300]
+                logger.error(f"Google TTS {resp.status_code}: {msg}")
+                # Hint if API not enabled on the key
+                if resp.status_code in (400, 403) and ("not been used" in msg or "disabled" in msg or "not enabled" in msg):
+                    logger.error("💡 Fix: buka Google Cloud Console → API key → Restrictions → enable 'Cloud Text-to-Speech API'")
+                return False
             resp.raise_for_status()
             audio_bytes = base64.b64decode(resp.json()["audioContent"])
             temp_file = self.temp_dir / f"tts_{int(time.time()*1000)}.mp3"
