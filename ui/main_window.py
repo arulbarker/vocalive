@@ -59,16 +59,33 @@ from PyQt6.QtWidgets import (
 
 class UpdateCheckThread(QThread):
     """Cek update di background — tidak block UI."""
-    update_available = pyqtSignal(dict)  # emit info dict jika ada update
+    update_available = pyqtSignal(dict)  # emit jika ada versi baru
+    no_update        = pyqtSignal(str)   # emit latest_version jika sudah terbaru
+    check_error      = pyqtSignal(str)   # emit pesan error
 
     def run(self):
         try:
-            from modules_client.updater import check_for_update
+            from modules_client.updater import (
+                check_for_update, APPSCRIPT_URL, APP_SECRET, PRODUCT_ID, CURRENT_VERSION
+            )
+            import requests as _req
             has_update, info = check_for_update()
             if has_update and info:
                 self.update_available.emit(info)
-        except Exception:
-            pass
+            else:
+                try:
+                    resp = _req.get(
+                        APPSCRIPT_URL,
+                        params={"action": "version", "product": PRODUCT_ID,
+                                "app_secret": APP_SECRET},
+                        timeout=15
+                    )
+                    data = resp.json()
+                    self.no_update.emit(data.get("latest", CURRENT_VERSION))
+                except Exception as e:
+                    self.check_error.emit(str(e))
+        except Exception as e:
+            self.check_error.emit(str(e))
 
 # Setup project root
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -514,25 +531,88 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(5000, self._start_update_check)
     
     def _start_update_check(self):
-        """Cek update di background thread — tidak freeze UI."""
+        """Cek update otomatis di background saat startup — tidak freeze UI."""
         try:
             self._update_check_thread = UpdateCheckThread()
             self._update_check_thread.update_available.connect(self._on_update_found)
+            # Startup check: tidak perlu feedback jika sudah terbaru
             self._update_check_thread.start()
-            logger.info("Update check started in background")
+            logger.info("Auto update check started in background")
         except Exception as e:
             logger.warning(f"Failed to start update check: {e}")
 
+    def _manual_check_update(self):
+        """Tombol 'Cek Update' ditekan user — beri feedback hasil."""
+        if hasattr(self, '_update_check_thread') and self._update_check_thread.isRunning():
+            return  # sedang cek, skip
+
+        self.check_update_btn.setEnabled(False)
+        self.check_update_btn.setText("🔄 Mengecek...")
+
+        thread = UpdateCheckThread()
+        thread.update_available.connect(self._on_update_found)
+        thread.no_update.connect(self._on_no_update)
+        thread.check_error.connect(self._on_update_check_error)
+        # Simpan referensi agar tidak di-GC
+        self._manual_update_thread = thread
+        thread.start()
+
+    def _on_no_update(self, latest_version: str):
+        """Callback: sudah versi terbaru."""
+        self.check_update_btn.setEnabled(True)
+        self.check_update_btn.setText("🔄 Cek Update")
+        from modules_client.updater import CURRENT_VERSION
+        self.status_bar.showMessage(
+            f"✅ VocaLive v{CURRENT_VERSION} sudah versi terbaru!", 4000
+        )
+
+    def _on_update_check_error(self, msg: str):
+        """Callback: gagal cek update."""
+        self.check_update_btn.setEnabled(True)
+        self.check_update_btn.setText("🔄 Cek Update")
+        self.status_bar.showMessage(f"⚠️ Gagal cek update: {msg[:60]}", 5000)
+        logger.warning(f"Update check error: {msg}")
+
     def _on_update_found(self, info: dict):
-        """Tampilkan tombol update di status bar."""
+        """Update ditemukan — tampilkan tombol + popup notifikasi prominent."""
         self._update_info = info
         latest = info.get("latest", "?")
+
+        # Reset tombol cek jika manual check
+        self.check_update_btn.setEnabled(True)
+        self.check_update_btn.setText("🔄 Cek Update")
+
+        # Tampilkan tombol kuning di status bar
         self.update_btn.setText(f"⬆️ v{latest} Tersedia!")
         self.update_btn.show()
         logger.info(f"Update tersedia: v{latest}")
 
+        # Popup notifikasi yang tidak bisa diabaikan
+        from modules_client.updater import CURRENT_VERSION
+        notes = info.get("notes", "")
+        notes_preview = "\n".join(notes.split("\n")[:4]) if notes else "-"
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("VocaLive — Update Tersedia!")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(
+            f"<b>Versi baru VocaLive tersedia!</b><br><br>"
+            f"Versi kamu: <b>v{CURRENT_VERSION}</b><br>"
+            f"Versi terbaru: <b>v{latest}</b><br><br>"
+            f"<b>Yang baru:</b><br>{notes_preview.replace(chr(10), '<br>')}"
+        )
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        msg.button(QMessageBox.StandardButton.Yes).setText("Update Sekarang")
+        msg.button(QMessageBox.StandardButton.No).setText("Nanti Saja")
+        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
+
+        if msg.exec() == QMessageBox.StandardButton.Yes:
+            self._on_update_btn_clicked()
+
     def _on_update_btn_clicked(self):
-        """Buka dialog update saat tombol diklik."""
+        """Buka dialog update."""
         if self._update_info:
             try:
                 from ui.update_dialog import show_update_dialog
@@ -621,14 +701,35 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(self.api_status_label)
 
         # Version label
-        version_label = QLabel("VocaLive v1.0.1")
+        from modules_client.updater import CURRENT_VERSION as _VER
+        version_label = QLabel(f"VocaLive v{_VER}")
         version_label.setStyleSheet(
-            f"color: {PRIMARY}; font-size: 11px; font-weight: 700; padding-right: 10px;"
+            f"color: {PRIMARY}; font-size: 11px; font-weight: 700; padding-right: 4px;"
         )
         self.status_bar.addPermanentWidget(version_label)
 
-        # Tombol update — hidden sampai ada versi baru
-        self.update_btn = QPushButton("⬆️ Update Tersedia")
+        # Tombol "Cek Update" manual
+        self.check_update_btn = QPushButton("🔄 Cek Update")
+        self.check_update_btn.setFixedHeight(22)
+        self.check_update_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: #1E3A5F;
+                border: 1px solid #2563EB;
+                border-radius: 4px;
+                color: #60A5FA;
+                font-size: 10px;
+                font-weight: 600;
+                padding: 0 8px;
+                margin-right: 4px;
+            }}
+            QPushButton:hover {{ background: #2563EB; color: white; }}
+            QPushButton:disabled {{ background: #0F1623; color: #4B6A8A; border-color: #1E3A5F; }}
+        """)
+        self.check_update_btn.clicked.connect(self._manual_check_update)
+        self.status_bar.addPermanentWidget(self.check_update_btn)
+
+        # Tombol update tersedia — hidden sampai ada versi baru
+        self.update_btn = QPushButton("⬆️ Update Tersedia!")
         self.update_btn.setFixedHeight(22)
         self.update_btn.setStyleSheet("""
             QPushButton {
