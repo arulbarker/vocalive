@@ -730,11 +730,16 @@ class CohostTabBasicSimplified(QWidget):
         # Create main layout
         main_layout = QVBoxLayout()
         
-        # Add tutorial button at the top
-        tutorial_button = QPushButton("📺 Tutorial Video")
-        tutorial_button.setStyleSheet(btn_accent("font-size: 13px; padding: 10px 20px; margin: 4px;"))
+        # Add tutorial button at the top — compact, tidak full-width
+        tutorial_row = QHBoxLayout()
+        tutorial_button = QPushButton("📺 Panduan Penggunaan")
+        tutorial_button.setFixedHeight(36)
+        tutorial_button.setFixedWidth(200)
+        tutorial_button.setStyleSheet(btn_accent("font-size: 12px; padding: 4px 16px;"))
         tutorial_button.clicked.connect(self.open_tutorial)
-        main_layout.addWidget(tutorial_button)
+        tutorial_row.addStretch()
+        tutorial_row.addWidget(tutorial_button)
+        main_layout.addLayout(tutorial_row)
         
         # Create scroll area for all content
         main_scroll_area = QScrollArea()
