@@ -869,12 +869,6 @@ class CohostTabBasicSimplified(QWidget):
         
         # Cooldown settings
         cooldown_layout = QHBoxLayout()
-        cooldown_layout.addWidget(QLabel("Cohost Cooldown (sec):"))
-        self.cooldown_spin = QSpinBox()
-        self.cooldown_spin.setRange(1, 30)
-        self.cooldown_spin.setValue(self.cfg.get("cohost_cooldown", 2))
-        cooldown_layout.addWidget(self.cooldown_spin)
-        
         cooldown_layout.addWidget(QLabel("Cooldown/Penonton (mnt):"))
         self.viewer_cooldown_spin = QSpinBox()
         self.viewer_cooldown_spin.setRange(0, 30)  # 0 = tidak ada cooldown (reply semua komentar)
@@ -1252,7 +1246,6 @@ class CohostTabBasicSimplified(QWidget):
             self.cfg.save()
             
             # Save cooldown settings
-            self.cfg.set("cohost_cooldown", self.cooldown_spin.value())
             self.cfg.set("viewer_cooldown_minutes", self.viewer_cooldown_spin.value())
             self.cfg.set("cohost_max_queue", self.queue_spin.value())
             
