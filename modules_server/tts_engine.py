@@ -191,6 +191,48 @@ class TTSEngine:
         except Exception as e:
             logger.error(f"Failed to play audio file: {e}")
     
+    def _speak_with_gemini(self, text: str, voice_name: str) -> bool:
+        """Panggil Gemini 2.5 Flash TTS API — voices multilingual, output WAV"""
+        if not _requests:
+            logger.warning("requests library not available for Gemini TTS")
+            return False
+
+        # voice_name: "Gemini-Puck" -> "Puck"
+        raw_voice = voice_name.replace("Gemini-", "", 1)
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-2.5-flash-preview-tts:generateContent?key={self.google_api_key}"
+        )
+        payload = {
+            "contents": [{"parts": [{"text": text}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {"voiceName": raw_voice}
+                    }
+                }
+            }
+        }
+        try:
+            resp = _requests.post(url, json=payload, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+            audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+            audio_bytes = base64.b64decode(audio_b64)
+            temp_file = self.temp_dir / f"tts_{hash(text) & 0xffffffff:08x}.wav"
+            temp_file.write_bytes(audio_bytes)
+            self._play_audio_file(str(temp_file))
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
+            logger.info(f"TTS completed (Gemini Flash / {raw_voice})")
+            return True
+        except Exception as e:
+            logger.error(f"Gemini TTS failed: {e}")
+            return False
+
     def _speak_with_api_key(self, text: str, voice_name: str, language_code: str) -> bool:
         """Call Google Cloud TTS REST API using an API key (no service account needed)"""
         if not _requests:
@@ -233,7 +275,11 @@ class TTSEngine:
 
         logger.info(f"TTS started: {text[:50]}{'...' if len(text) > 50 else ''} (voice={current_voice}, lang={current_lang})")
 
-        # --- API Key path (REST) ---
+        # --- Gemini Flash TTS path ---
+        if self.google_api_key and current_voice.startswith("Gemini-"):
+            return self._speak_with_gemini(text, current_voice)
+
+        # --- Google Cloud TTS REST path (API key) ---
         if self.google_api_key:
             return self._speak_with_api_key(text, current_voice, current_lang)
 
