@@ -1716,7 +1716,7 @@ class CohostTabBasicSimplified(QWidget):
 
         if self.analytics:
             try:
-                self.analytics.track_comment(author, message, replied=True)
+                self.analytics.mark_replied(author)
             except Exception as e:
                 self.logger.error(f"Analytics error: {e}")
 

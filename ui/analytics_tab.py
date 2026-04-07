@@ -684,8 +684,8 @@ class AnalyticsTab(QWidget):
         self.stats_labels["total_follows"].setText(str(stats.get("total_follows", 0)))
 
         # Timeline (show last 10 events)
-        if hasattr(self.analytics.current_session, "timeline"):
-            timeline = self.analytics.current_session.get("timeline", [])
+        timeline = self.analytics.current_session.get("timeline", [])
+        if timeline:
             timeline_text = ""
             for event in timeline[-10:]:
                 timestamp = datetime.fromisoformat(event["timestamp"]).strftime("%H:%M:%S")
