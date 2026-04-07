@@ -1,20 +1,21 @@
 # ui/user_management_tab.py
 """
 User Management Tab - Mengelola blacklist dan whitelist username
+Fitur: tambah/hapus, search/filter real-time, import/export CSV
 """
 
+import csv
+import logging
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QTextEdit, QListWidget, QListWidgetItem, QLineEdit,
-    QMessageBox, QFrame, QSplitter, QAbstractItemView
+    QGroupBox, QListWidget, QListWidgetItem, QLineEdit,
+    QMessageBox, QFrame, QSplitter, QAbstractItemView, QFileDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QColor
-import logging
+from PyQt6.QtGui import QColor
 
 logger = logging.getLogger("VocaLive.UserManagement")
 
-# Try to import user list manager
 try:
     from modules_client.user_list_manager import get_user_list_manager
     USER_LIST_AVAILABLE = True
@@ -36,107 +37,79 @@ except ImportError:
     def btn_success(extra=""): return f"QPushButton {{ background-color: {SUCCESS}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }}"
     def btn_danger(extra=""): return f"QPushButton {{ background-color: {ERROR}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }}"
     def btn_ghost(extra=""): return f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; border-radius: 6px; padding: 7px 18px; {extra} }}"
-    def btn_primary(extra=""): return f"QPushButton {{ background-color: {PRIMARY}; color: {BG_BASE}; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }}"
+    def btn_primary(extra=""): return f"QPushButton {{ background-color: {PRIMARY}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }}"
     def label_title(size=16): return f"font-size: {size}pt; font-weight: 700; color: {PRIMARY}; background: transparent;"
+
+_INPUT_STYLE = lambda border_color: f"""
+    QLineEdit {{
+        background-color: {BG_SURFACE};
+        color: {TEXT_PRIMARY};
+        border: 1px solid {border_color};
+        border-radius: 4px;
+        padding: 7px;
+    }}
+"""
+
+_LIST_STYLE = lambda sel_color: f"""
+    QListWidget {{
+        background-color: {BG_ELEVATED};
+        color: {TEXT_PRIMARY};
+        border: 1px solid {BORDER_GOLD};
+        border-radius: 4px;
+    }}
+    QListWidget::item {{
+        padding: 7px 10px;
+        border-bottom: 1px solid {BORDER};
+    }}
+    QListWidget::item:selected {{
+        background-color: {sel_color};
+        color: white;
+    }}
+"""
 
 
 class UserManagementTab(QWidget):
     """Tab untuk mengelola blacklist dan whitelist users"""
-    
-    # Signal when lists are updated
+
     listsUpdated = pyqtSignal()
-    
+
     def __init__(self):
         super().__init__()
-        
-        # Get user list manager
-        if USER_LIST_AVAILABLE:
-            self.user_manager = get_user_list_manager()
-        else:
-            self.user_manager = None
-        
+        self.user_manager = get_user_list_manager() if USER_LIST_AVAILABLE else None
         self._setup_ui()
         self._load_lists()
-    
+
+    # ──────────────────────────────────────────────────────────────
+    # UI SETUP
+    # ──────────────────────────────────────────────────────────────
+
     def _setup_ui(self):
-        """Setup user interface"""
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(15)
+        main_layout.setSpacing(12)
         main_layout.setContentsMargins(15, 15, 15, 15)
-        
-        # ===== HEADER =====
-        header = self._create_header()
-        main_layout.addWidget(header)
-        
-        # Check if module available
+
+        main_layout.addWidget(self._create_header())
+
         if not USER_LIST_AVAILABLE:
-            error_label = QLabel("⚠️ User List Manager module tidak tersedia")
-            error_label.setStyleSheet(f"color: {ERROR}; font-size: 14px; padding: 20px;")
-            error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            main_layout.addWidget(error_label)
+            err = QLabel("⚠️ User List Manager module tidak tersedia")
+            err.setStyleSheet(f"color: {ERROR}; font-size: 14px; padding: 20px;")
+            err.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            main_layout.addWidget(err)
             self.setLayout(main_layout)
             return
-        
-        # ===== INFO SECTION =====
-        info_frame = QFrame()
-        info_frame.setStyleSheet(f"""
-            QFrame {{
-                background-color: {BG_ELEVATED};
-                border-radius: 8px;
-                padding: 10px;
-                border: 1px solid {BORDER_GOLD};
-            }}
-        """)
-        info_layout = QVBoxLayout()
-        
-        info_title = QLabel("ℹ️ Cara Kerja:")
-        info_title.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 12px;")
-        info_layout.addWidget(info_title)
-        
-        info_text = QLabel(
-            "• 🚫 <b>Blacklist</b>: User di blacklist akan DIABAIKAN sepenuhnya (tidak di-reply)\n"
-            "• ⭐ <b>Whitelist (VIP)</b>: User VIP akan SELALU dijawab (bypass cooldown)"
-        )
-        info_text.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
-        info_text.setWordWrap(True)
-        info_layout.addWidget(info_text)
-        
-        info_frame.setLayout(info_layout)
-        main_layout.addWidget(info_frame)
-        
-        # ===== MAIN CONTENT - SPLITTER =====
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        
-        # LEFT: Blacklist
-        blacklist_widget = self._create_list_section(
-            "🚫 Blacklist (Blokir)",
-            "Pengguna yang diblokir tidak akan mendapat reply",
-            ERROR,
-            is_blacklist=True
-        )
-        splitter.addWidget(blacklist_widget)
 
-        # RIGHT: Whitelist
-        whitelist_widget = self._create_list_section(
-            "⭐ Whitelist (VIP)",
-            "Pengguna VIP selalu dijawab, bypass cooldown",
-            SUCCESS,
-            is_blacklist=False
-        )
-        splitter.addWidget(whitelist_widget)
-        
-        # Equal split
+        main_layout.addWidget(self._create_info_section())
+
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(self._create_list_section(is_blacklist=True))
+        splitter.addWidget(self._create_list_section(is_blacklist=False))
         splitter.setSizes([1, 1])
         main_layout.addWidget(splitter)
-        
-        # ===== STATS =====
-        stats_frame = self._create_stats_section()
-        main_layout.addWidget(stats_frame)
-        
+
+        main_layout.addWidget(self._create_stats_section())
         self.setLayout(main_layout)
-    
+
     def _create_header(self):
-        """Create header section"""
         header = QFrame()
         header.setStyleSheet(f"""
             QFrame {{
@@ -146,27 +119,74 @@ class UserManagementTab(QWidget):
                 border: 1px solid {BORDER_GOLD};
             }}
         """)
-        
         layout = QHBoxLayout()
-        
-        # Title
+
         title = QLabel("👥 User Management")
         title.setStyleSheet(label_title())
         layout.addWidget(title)
-        
         layout.addStretch()
-        
-        # Refresh button
+
+        # Import CSV
+        import_btn = QPushButton("📂 Import CSV")
+        import_btn.setToolTip("Import daftar username dari file CSV (satu username per baris)")
+        import_btn.clicked.connect(self._import_csv)
+        import_btn.setStyleSheet(btn_ghost())
+        layout.addWidget(import_btn)
+
+        # Export CSV
+        export_btn = QPushButton("💾 Export CSV")
+        export_btn.setToolTip("Export blacklist & whitelist ke file CSV")
+        export_btn.clicked.connect(self._export_csv)
+        export_btn.setStyleSheet(btn_ghost())
+        layout.addWidget(export_btn)
+
         refresh_btn = QPushButton("🔄 Refresh")
         refresh_btn.clicked.connect(self._load_lists)
         refresh_btn.setStyleSheet(btn_ghost())
         layout.addWidget(refresh_btn)
-        
+
         header.setLayout(layout)
         return header
-    
-    def _create_list_section(self, title, description, color, is_blacklist=True):
-        """Create a list section (blacklist or whitelist)"""
+
+    def _create_info_section(self):
+        frame = QFrame()
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_ELEVATED};
+                border-radius: 8px;
+                padding: 10px;
+                border: 1px solid {BORDER_GOLD};
+            }}
+        """)
+        layout = QVBoxLayout()
+
+        title = QLabel("ℹ️ Cara Kerja & Cara Set VIP:")
+        title.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 12px;")
+        layout.addWidget(title)
+
+        info = QLabel(
+            "• 🚫 <b>Blacklist</b>: User diblokir sepenuhnya — komentar mereka diabaikan, tidak di-reply\n"
+            "• ⭐ <b>VIP (Whitelist)</b>: User VIP <b>selalu dibalas</b> tanpa cooldown — cocok untuk reseller, admin, atau pelanggan setia\n"
+            "• 📝 <b>Cara set VIP</b>: Ketik username TikTok (tanpa @) di kolom kanan → klik '+ Tambah VIP'\n"
+            "      Tips: Copy nama dari log komentar di tab Cohost, paste langsung ke sini"
+        )
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        frame.setLayout(layout)
+        return frame
+
+    def _create_list_section(self, is_blacklist: bool):
+        if is_blacklist:
+            title = "🚫 Blacklist (Blokir)"
+            desc  = "Komentar dari user ini diabaikan sepenuhnya"
+            color = ERROR
+        else:
+            title = "⭐ Whitelist / VIP"
+            desc  = "User VIP selalu dibalas tanpa cooldown"
+            color = SUCCESS
+
         group = QGroupBox(title)
         group.setStyleSheet(f"""
             QGroupBox {{
@@ -184,117 +204,86 @@ class UserManagementTab(QWidget):
                 padding: 0 5px;
             }}
         """)
-        
         layout = QVBoxLayout()
-        
+
         # Description
-        desc_label = QLabel(description)
-        desc_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-weight: normal;")
-        layout.addWidget(desc_label)
-        
-        # Input area
-        input_layout = QHBoxLayout()
-        
+        desc_lbl = QLabel(desc)
+        desc_lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-weight: normal;")
+        layout.addWidget(desc_lbl)
+
+        # ── Add input ──
+        input_row = QHBoxLayout()
         if is_blacklist:
             self.blacklist_input = QLineEdit()
-            self.blacklist_input.setPlaceholderText("Masukkan username...")
-            self.blacklist_input.setStyleSheet(f"""
-                QLineEdit {{
-                    background-color: {BG_SURFACE};
-                    color: {TEXT_PRIMARY};
-                    border: 1px solid {ERROR};
-                    border-radius: 4px;
-                    padding: 8px;
-                }}
-            """)
+            self.blacklist_input.setPlaceholderText("Username (tanpa @)...")
+            self.blacklist_input.setStyleSheet(_INPUT_STYLE(ERROR))
             self.blacklist_input.returnPressed.connect(self._add_to_blacklist)
-            input_layout.addWidget(self.blacklist_input)
-            
+            input_row.addWidget(self.blacklist_input)
+
             add_btn = QPushButton("+ Tambah")
             add_btn.clicked.connect(self._add_to_blacklist)
             add_btn.setStyleSheet(btn_danger())
-            input_layout.addWidget(add_btn)
+            input_row.addWidget(add_btn)
         else:
             self.whitelist_input = QLineEdit()
-            self.whitelist_input.setPlaceholderText("Masukkan username VIP...")
-            self.whitelist_input.setStyleSheet(f"""
-                QLineEdit {{
-                    background-color: {BG_SURFACE};
-                    color: {TEXT_PRIMARY};
-                    border: 1px solid {SUCCESS};
-                    border-radius: 4px;
-                    padding: 8px;
-                }}
-            """)
+            self.whitelist_input.setPlaceholderText("Username VIP (tanpa @)...")
+            self.whitelist_input.setStyleSheet(_INPUT_STYLE(SUCCESS))
             self.whitelist_input.returnPressed.connect(self._add_to_whitelist)
-            input_layout.addWidget(self.whitelist_input)
-            
+            input_row.addWidget(self.whitelist_input)
+
             add_btn = QPushButton("+ Tambah VIP")
             add_btn.clicked.connect(self._add_to_whitelist)
             add_btn.setStyleSheet(btn_success())
-            input_layout.addWidget(add_btn)
-        
-        layout.addLayout(input_layout)
-        
-        # List widget
+            input_row.addWidget(add_btn)
+
+        layout.addLayout(input_row)
+
+        # ── Search / filter ──
+        search_row = QHBoxLayout()
+        search_icon = QLabel("🔍")
+        search_row.addWidget(search_icon)
+
+        if is_blacklist:
+            self.blacklist_search = QLineEdit()
+            self.blacklist_search.setPlaceholderText("Cari di blacklist...")
+            self.blacklist_search.setStyleSheet(_INPUT_STYLE(BORDER))
+            self.blacklist_search.textChanged.connect(self._filter_blacklist)
+            search_row.addWidget(self.blacklist_search)
+        else:
+            self.whitelist_search = QLineEdit()
+            self.whitelist_search.setPlaceholderText("Cari di whitelist...")
+            self.whitelist_search.setStyleSheet(_INPUT_STYLE(BORDER))
+            self.whitelist_search.textChanged.connect(self._filter_whitelist)
+            search_row.addWidget(self.whitelist_search)
+
+        layout.addLayout(search_row)
+
+        # ── List widget ──
         if is_blacklist:
             self.blacklist_widget = QListWidget()
-            self.blacklist_widget.setStyleSheet(f"""
-                QListWidget {{
-                    background-color: {BG_ELEVATED};
-                    color: {TEXT_PRIMARY};
-                    border: 1px solid {BORDER_GOLD};
-                    border-radius: 4px;
-                }}
-                QListWidget::item {{
-                    padding: 8px;
-                    border-bottom: 1px solid {BORDER};
-                }}
-                QListWidget::item:selected {{
-                    background-color: {ERROR};
-                    color: white;
-                }}
-            """)
+            self.blacklist_widget.setStyleSheet(_LIST_STYLE(ERROR))
             self.blacklist_widget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             layout.addWidget(self.blacklist_widget)
-            
-            # Remove button
-            remove_btn = QPushButton("🗑️ Hapus")
+
+            remove_btn = QPushButton("🗑️ Hapus Terpilih")
             remove_btn.clicked.connect(self._remove_from_blacklist)
             remove_btn.setStyleSheet(btn_danger())
             layout.addWidget(remove_btn)
         else:
             self.whitelist_widget = QListWidget()
-            self.whitelist_widget.setStyleSheet(f"""
-                QListWidget {{
-                    background-color: {BG_ELEVATED};
-                    color: {TEXT_PRIMARY};
-                    border: 1px solid {BORDER_GOLD};
-                    border-radius: 4px;
-                }}
-                QListWidget::item {{
-                    padding: 8px;
-                    border-bottom: 1px solid {BORDER};
-                }}
-                QListWidget::item:selected {{
-                    background-color: {SUCCESS};
-                    color: white;
-                }}
-            """)
+            self.whitelist_widget.setStyleSheet(_LIST_STYLE(SUCCESS))
             self.whitelist_widget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             layout.addWidget(self.whitelist_widget)
-            
-            # Remove button
-            remove_btn = QPushButton("🗑️ Hapus VIP")
+
+            remove_btn = QPushButton("🗑️ Hapus VIP Terpilih")
             remove_btn.clicked.connect(self._remove_from_whitelist)
             remove_btn.setStyleSheet(btn_ghost())
             layout.addWidget(remove_btn)
-        
+
         group.setLayout(layout)
         return group
-    
+
     def _create_stats_section(self):
-        """Create statistics section"""
         frame = QFrame()
         frame.setStyleSheet(f"""
             QFrame {{
@@ -304,101 +293,192 @@ class UserManagementTab(QWidget):
                 border: 1px solid {BORDER_GOLD};
             }}
         """)
-        
         layout = QHBoxLayout()
-        
-        # Blacklist count
+
         self.blacklist_count_label = QLabel("🚫 Blacklist: 0 users")
         self.blacklist_count_label.setStyleSheet(f"color: {ERROR}; font-weight: bold;")
         layout.addWidget(self.blacklist_count_label)
-        
+
         layout.addStretch()
-        
-        # Whitelist count
-        self.whitelist_count_label = QLabel("⭐ Whitelist: 0 users")
+
+        self.whitelist_count_label = QLabel("⭐ VIP: 0 users")
         self.whitelist_count_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold;")
         layout.addWidget(self.whitelist_count_label)
-        
+
         frame.setLayout(layout)
         return frame
-    
+
+    # ──────────────────────────────────────────────────────────────
+    # DATA OPERATIONS
+    # ──────────────────────────────────────────────────────────────
+
     def _load_lists(self):
-        """Load lists from manager"""
         if not self.user_manager:
             return
-        
-        # Load blacklist
+
         self.blacklist_widget.clear()
-        for username in self.user_manager.get_blacklist():
+        for username in sorted(self.user_manager.get_blacklist()):
             item = QListWidgetItem(f"🚫 {username}")
             item.setData(Qt.ItemDataRole.UserRole, username)
             self.blacklist_widget.addItem(item)
-        
-        # Load whitelist
+
         self.whitelist_widget.clear()
-        for username in self.user_manager.get_whitelist():
+        for username in sorted(self.user_manager.get_whitelist()):
             item = QListWidgetItem(f"⭐ {username}")
             item.setData(Qt.ItemDataRole.UserRole, username)
             self.whitelist_widget.addItem(item)
-        
-        # Update stats
+
         self._update_stats()
-    
+        # Re-apply active search filters after reload
+        self._filter_blacklist(self.blacklist_search.text())
+        self._filter_whitelist(self.whitelist_search.text())
+
     def _update_stats(self):
-        """Update statistics labels"""
         if not self.user_manager:
             return
-        
         stats = self.user_manager.get_stats()
         self.blacklist_count_label.setText(f"🚫 Blacklist: {stats['blacklist_count']} users")
-        self.whitelist_count_label.setText(f"⭐ Whitelist: {stats['whitelist_count']} users")
-    
+        self.whitelist_count_label.setText(f"⭐ VIP: {stats['whitelist_count']} users")
+
     def _add_to_blacklist(self):
-        """Add user to blacklist"""
-        username = self.blacklist_input.text().strip()
+        username = self.blacklist_input.text().strip().lstrip("@")
         if not username:
             return
-        
         if self.user_manager.add_to_blacklist(username):
             self.blacklist_input.clear()
             self._load_lists()
             self.listsUpdated.emit()
             logger.info(f"Added to blacklist: {username}")
-    
-    def _remove_from_blacklist(self):
-        """Remove selected users from blacklist"""
-        selected_items = self.blacklist_widget.selectedItems()
-        if not selected_items:
-            return
-        
-        for item in selected_items:
-            username = item.data(Qt.ItemDataRole.UserRole)
-            self.user_manager.remove_from_blacklist(username)
-        
-        self._load_lists()
-        self.listsUpdated.emit()
-    
+
     def _add_to_whitelist(self):
-        """Add user to whitelist (VIP)"""
-        username = self.whitelist_input.text().strip()
+        username = self.whitelist_input.text().strip().lstrip("@")
         if not username:
             return
-        
         if self.user_manager.add_to_whitelist(username):
             self.whitelist_input.clear()
             self._load_lists()
             self.listsUpdated.emit()
-            logger.info(f"Added to whitelist (VIP): {username}")
-    
-    def _remove_from_whitelist(self):
-        """Remove selected users from whitelist"""
-        selected_items = self.whitelist_widget.selectedItems()
-        if not selected_items:
+            logger.info(f"Added to VIP: {username}")
+
+    def _remove_from_blacklist(self):
+        selected = self.blacklist_widget.selectedItems()
+        if not selected:
             return
-        
-        for item in selected_items:
-            username = item.data(Qt.ItemDataRole.UserRole)
-            self.user_manager.remove_from_whitelist(username)
-        
+        for item in selected:
+            self.user_manager.remove_from_blacklist(item.data(Qt.ItemDataRole.UserRole))
         self._load_lists()
         self.listsUpdated.emit()
+
+    def _remove_from_whitelist(self):
+        selected = self.whitelist_widget.selectedItems()
+        if not selected:
+            return
+        for item in selected:
+            self.user_manager.remove_from_whitelist(item.data(Qt.ItemDataRole.UserRole))
+        self._load_lists()
+        self.listsUpdated.emit()
+
+    # ──────────────────────────────────────────────────────────────
+    # SEARCH / FILTER
+    # ──────────────────────────────────────────────────────────────
+
+    def _filter_blacklist(self, text: str):
+        """Sembunyikan item yang tidak cocok dengan kata kunci pencarian"""
+        keyword = text.strip().lower()
+        for i in range(self.blacklist_widget.count()):
+            item = self.blacklist_widget.item(i)
+            username = item.data(Qt.ItemDataRole.UserRole) or ""
+            item.setHidden(keyword != "" and keyword not in username.lower())
+
+    def _filter_whitelist(self, text: str):
+        keyword = text.strip().lower()
+        for i in range(self.whitelist_widget.count()):
+            item = self.whitelist_widget.item(i)
+            username = item.data(Qt.ItemDataRole.UserRole) or ""
+            item.setHidden(keyword != "" and keyword not in username.lower())
+
+    # ──────────────────────────────────────────────────────────────
+    # IMPORT / EXPORT CSV
+    # ──────────────────────────────────────────────────────────────
+
+    def _export_csv(self):
+        """Export blacklist dan whitelist ke CSV — dua kolom: username,list_type"""
+        if not self.user_manager:
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export User List", "user_lists.csv", "CSV Files (*.csv)"
+        )
+        if not file_path:
+            return
+
+        try:
+            rows = (
+                [(u, "blacklist") for u in sorted(self.user_manager.get_blacklist())] +
+                [(u, "whitelist") for u in sorted(self.user_manager.get_whitelist())]
+            )
+            with open(file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["username", "list_type"])
+                writer.writerows(rows)
+
+            QMessageBox.information(
+                self, "Export Berhasil",
+                f"✅ {len(rows)} username diekspor ke:\n{file_path}"
+            )
+            logger.info(f"Exported {len(rows)} users to {file_path}")
+
+        except Exception as e:
+            QMessageBox.warning(self, "Export Gagal", f"Error: {e}")
+
+    def _import_csv(self):
+        """Import username dari CSV — support format: username saja, atau username,list_type"""
+        if not self.user_manager:
+            return
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Import User List", "", "CSV Files (*.csv);;Text Files (*.txt)"
+        )
+        if not file_path:
+            return
+
+        try:
+            added_black = added_white = skipped = 0
+
+            with open(file_path, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    if not row:
+                        continue
+                    username = row[0].strip().lstrip("@").lower()
+                    if not username or username == "username":  # skip header
+                        continue
+
+                    # Kolom kedua: "blacklist" atau "whitelist" (opsional, default blacklist)
+                    list_type = row[1].strip().lower() if len(row) > 1 else "blacklist"
+
+                    if list_type in ("whitelist", "vip", "white"):
+                        if self.user_manager.add_to_whitelist(username):
+                            added_white += 1
+                        else:
+                            skipped += 1
+                    else:
+                        if self.user_manager.add_to_blacklist(username):
+                            added_black += 1
+                        else:
+                            skipped += 1
+
+            self._load_lists()
+            self.listsUpdated.emit()
+
+            QMessageBox.information(
+                self, "Import Berhasil",
+                f"✅ Import selesai:\n"
+                f"• {added_black} ditambah ke Blacklist\n"
+                f"• {added_white} ditambah ke VIP\n"
+                f"• {skipped} dilewati (sudah ada / duplikat)"
+            )
+            logger.info(f"Imported: {added_black} blacklist, {added_white} whitelist, {skipped} skipped")
+
+        except Exception as e:
+            QMessageBox.warning(self, "Import Gagal", f"Error membaca file:\n{e}")
