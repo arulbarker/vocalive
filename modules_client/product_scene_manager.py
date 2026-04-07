@@ -69,9 +69,14 @@ class ProductSceneManager:
                 return scene
         return None
 
+    MAX_SCENES = 100
+
     def add_scene(self, name: str, video_path: str) -> Dict:
-        """Tambah produk baru. Return scene dict yang dibuat."""
+        """Tambah produk baru. Return scene dict yang dibuat, atau None jika sudah penuh."""
         scenes = self.get_scenes()
+        if len(scenes) >= self.MAX_SCENES:
+            logger.warning(f"ProductSceneManager: batas maksimal {self.MAX_SCENES} produk tercapai")
+            return None
         new_id = max((s["id"] for s in scenes), default=0) + 1
         scene = {"id": new_id, "name": name.strip(), "video_path": video_path}
         scenes.append(scene)
