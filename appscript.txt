@@ -244,7 +244,7 @@ function doGet(e) {
         "vocalive": {
           "latest": "1.0.3",
           "notes": "- Sistem login email via Lynk.id/Whop\n- TTS Google Cloud + Gemini\n- Cohost AI TikTok Live\n- Auto-update system\n- Product popup video",
-          "url": "https://github.com/arulbarker/vocalive-releases/releases/download/v1.0.3/VocaLive-v1.0.3.zip"
+          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.3/VocaLive-v1.0.3.zip"
         },
         "tikdance": {
           "latest": "1.1.3",

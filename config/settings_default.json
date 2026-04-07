@@ -1,15 +1,22 @@
 {
-  "server_url": "http://69.62.79.238:8000",
-  "app_version": "1.0.9",
-  "platform": "YouTube",
+  "platform": "TikTok",
   "paket": "basic",
+  "ai_provider": "gemini",
+  "output_language": "Indonesia",
   "debug_mode": false,
-  "reply_language": "Indonesia",
-  "translate_hotkey": "Ctrl+Alt+X",
-  "cohost_hotkey": "Ctrl+Alt+C",
+  "tiktok_nickname": "",
   "trigger_words": ["bro", "bang", "min"],
-  "voice_lang": "id-ID",
-  "selected_mic_index": 0,
-  "daily_message_limit": 5,
-  "viewer_cooldown_minutes": 3
+  "cohost_cooldown": 2,
+  "viewer_cooldown_minutes": 3,
+  "cohost_max_queue": 4,
+  "sequential_greeting_interval": 180,
+  "greeting_play_mode": "random",
+  "tts_voice": "Gemini-Puck (MALE)",
+  "tts_key_type": "",
+  "google_tts_api_key": "",
+  "api_keys": {
+    "GEMINI_API_KEY": "",
+    "DEEPSEEK_API_KEY": ""
+  },
+  "user_context": ""
 }
