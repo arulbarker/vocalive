@@ -13,6 +13,13 @@ import json
 import zipfile
 from datetime import datetime
 
+# Import versi dari satu sumber kebenaran
+try:
+    from version import VERSION as APP_VERSION, VERSION_WIN
+except Exception:
+    APP_VERSION = "1.0.3"
+    VERSION_WIN = "1.0.3.0"
+
 def security_check():
     """
     SECURITY CHECK: Verify no sensitive files will be bundled
@@ -265,15 +272,16 @@ exe = EXE(
     spec_path.write_text(spec_content, encoding='utf-8')
     print("  [CREATE] Created custom spec file")
     
-    # Create version info file for signing
-    version_info_content = '''# UTF-8
+    # Create version info file for signing — versi dari version.py
+    _vt = tuple(int(x) for x in APP_VERSION.split('.')) + (0,)
+    version_info_content = f'''# UTF-8
 #
 # For more details about fixed file info 'ffi' see:
 # http://msdn.microsoft.com/en-us/library/ms646997.aspx
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 11, 0),
-    prodvers=(1, 0, 11, 0),
+    filevers={_vt},
+    prodvers={_vt},
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -288,12 +296,12 @@ VSVersionInfo(
           u'040904B0',
           [StringStruct(u'CompanyName', u'VocaLive'),
            StringStruct(u'FileDescription', u'VocaLive - Live Stream Assistant'),
-           StringStruct(u'FileVersion', u'1.0.11.0'),
+           StringStruct(u'FileVersion', u'{VERSION_WIN}'),
            StringStruct(u'InternalName', u'VocaLive'),
            StringStruct(u'LegalCopyright', u'Copyright (C) 2024-2025 VocaLive'),
            StringStruct(u'OriginalFilename', u'VocaLive.exe'),
            StringStruct(u'ProductName', u'VocaLive'),
-           StringStruct(u'ProductVersion', u'1.0.11.0')])
+           StringStruct(u'ProductVersion', u'{VERSION_WIN}')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]
@@ -357,7 +365,8 @@ VSVersionInfo(
         print(f"[ERROR] Build failed: {result.stderr}")
         return False
 
-def create_production_package(version="1.0.11"):
+def create_production_package(version=None):
+    version = version or APP_VERSION
     """
     Buat paket produksi lengkap - UPDATED: No Whisper, Super Direct STT only
     SECURITY: Exclude sensitive files and credentials

@@ -25,7 +25,16 @@ from PyQt6.QtCore import QThread, pyqtSignal
 logger = logging.getLogger('VocaLive.Updater')
 
 # ============================================================
-CURRENT_VERSION = "1.0.3"
+# Versi di-import dari version.py (satu sumber kebenaran)
+try:
+    import sys as _sys, os as _os
+    _root = (_os.path.dirname(_sys.executable) if getattr(_sys, 'frozen', False)
+             else _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    _sys.path.insert(0, _root)
+    from version import VERSION as CURRENT_VERSION
+except Exception:
+    CURRENT_VERSION = "1.0.3"  # fallback
+
 APPSCRIPT_URL   = "https://script.google.com/macros/s/AKfycbzPixa15u3SyndcKTcusIpxChqepUsgGfxTm1_nIaD1RHo-3TpLRbkHmesm-p2QkgWjEA/exec"
 APP_SECRET      = "TKD-2025-s3cr3t-k3y-9xKm2pQr7nVw4L"
 PRODUCT_ID      = "vocalive"

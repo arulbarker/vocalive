@@ -149,8 +149,13 @@ if LICENSE_SYSTEM_AVAILABLE:
     logger_license = logger
 
 # ========== LOG STARTUP INFO ==========
+try:
+    from version import VERSION as _APP_VERSION
+except Exception:
+    _APP_VERSION = "1.0.3"
+
 logger.info("=" * 60)
-logger.info("VocaLive Starting - Version 1.0.9")
+logger.info(f"VocaLive Starting - Version {_APP_VERSION}")
 logger.info(f"Python {sys.version}")
 logger.info(f"Root directory: {ROOT}")
 logger.info(f"Platform: {sys.platform}")
@@ -498,7 +503,7 @@ def main():
             app = QApplication(sys.argv)
         # Set application properties
         app.setApplicationName("VocaLive")
-        app.setApplicationVersion("1.0.9")
+        app.setApplicationVersion(_APP_VERSION)
         app.setOrganizationName("VocaLive")
         app.setOrganizationDomain("vocalive.com")
         
