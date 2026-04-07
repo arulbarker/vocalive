@@ -218,16 +218,37 @@ class TTSEngine:
             resp = _requests.post(url, json=payload, timeout=20)
             resp.raise_for_status()
             data = resp.json()
-            audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+            inline = data["candidates"][0]["content"]["parts"][0]["inlineData"]
+            audio_b64 = inline["data"]
+            mime_type = inline.get("mimeType", "audio/L16;rate=24000")
             audio_bytes = base64.b64decode(audio_b64)
+
             temp_file = self.temp_dir / f"tts_{hash(text) & 0xffffffff:08x}.wav"
-            temp_file.write_bytes(audio_bytes)
+
+            # Gemini TTS returns raw PCM (Linear16) — must wrap with WAV headers
+            # otherwise pygame raises "Unknown WAVE format"
+            sample_rate = 24000
+            for part in mime_type.split(';'):
+                part = part.strip()
+                if part.startswith("rate="):
+                    try:
+                        sample_rate = int(part.split("=")[1])
+                    except Exception:
+                        pass
+
+            import wave as _wave
+            with _wave.open(str(temp_file), 'wb') as wf:
+                wf.setnchannels(1)    # mono
+                wf.setsampwidth(2)    # 16-bit PCM = 2 bytes
+                wf.setframerate(sample_rate)
+                wf.writeframes(audio_bytes)
+
             self._play_audio_file(str(temp_file))
             try:
                 temp_file.unlink()
             except Exception:
                 pass
-            logger.info(f"TTS completed (Gemini Flash / {raw_voice})")
+            logger.info(f"TTS completed (Gemini Flash / {raw_voice}, {sample_rate}Hz)")
             return True
         except Exception as e:
             logger.error(f"Gemini TTS failed: {e}")
