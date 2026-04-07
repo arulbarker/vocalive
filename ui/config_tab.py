@@ -214,6 +214,7 @@ class ConfigTab(QWidget):
     """Tab Konfigurasi untuk API Keys"""
 
     tts_key_type_changed = pyqtSignal(str)  # "gemini" | "cloud" | "all"
+    greeting_status_changed = pyqtSignal(str, str)  # state, message
 
     def __init__(self):
         super().__init__()
@@ -221,6 +222,7 @@ class ConfigTab(QWidget):
         self.test_thread = None
         self.init_ui()
         self.load_saved_keys()
+        self.greeting_status_changed.connect(self._apply_greeting_status)
     
     def closeEvent(self, event):
         """Cleanup when tab is closed"""
@@ -627,10 +629,7 @@ class ConfigTab(QWidget):
         # Tombol regenerasi manual
         regen_btn_layout = QHBoxLayout()
         self.greeting_ai_regen_btn = QPushButton("Generate Ulang Sekarang")
-        try:
-            self.greeting_ai_regen_btn.setStyleSheet(btn_success())
-        except Exception:
-            self.greeting_ai_regen_btn.setStyleSheet("background-color:#10B981;color:white;border:none;border-radius:6px;padding:6px 14px;")
+        self.greeting_ai_regen_btn.setStyleSheet(btn_success())
         self.greeting_ai_regen_btn.setEnabled(greeting_ai_enabled)
         self.greeting_ai_regen_btn.clicked.connect(self.on_greeting_ai_regen_clicked)
         regen_btn_layout.addWidget(self.greeting_ai_regen_btn)
@@ -1857,27 +1856,21 @@ class ConfigTab(QWidget):
             print(f"[CONFIG] Error on_greeting_ai_regen_clicked: {e}")
 
     def update_greeting_ai_status(self, state: str, message: str):
-        """Update status label di UI (dipanggil dari greeting manager via callback)."""
+        """Entry point callable from any thread — emits signal for GUI-thread update."""
+        try:
+            self.greeting_status_changed.emit(state, message)
+        except Exception as e:
+            print(f"[CONFIG] Error emitting greeting status: {e}")
+
+    def _apply_greeting_status(self, state: str, message: str):
+        """Apply greeting status update on GUI thread (called via signal)."""
         try:
             if not hasattr(self, 'greeting_ai_status_label'):
                 return
-
-            state_icons = {
-                "idle":         "Tidak aktif",
-                "preparing":    "Menyiapkan...",
-                "active":       "Aktif",
-                "paused":       "Dijeda",
-                "regenerating": "Memperbarui...",
-                "error":        "Error",
-            }
-            prefix = state_icons.get(state, "")
-            display = f"{prefix} — {message}" if prefix and message != prefix else message
-            self.greeting_ai_status_label.setText(display)
-
+            self.greeting_ai_status_label.setText(message)
             if state == "active":
                 last_updated = self.cfg.get("greeting_ai_last_updated", "—")
                 if hasattr(self, 'greeting_ai_updated_label'):
                     self.greeting_ai_updated_label.setText(f"Terakhir diperbarui: {last_updated}")
-
         except Exception as e:
-            print(f"[CONFIG] Error update_greeting_ai_status: {e}")
+            print(f"[CONFIG] Error _apply_greeting_status: {e}")
