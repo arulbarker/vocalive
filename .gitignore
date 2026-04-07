@@ -132,6 +132,12 @@ dmypy.json
 config/google_token.json
 config/gcloud_tts_credentials.json
 config/subscription_status.json
+config/license_config.json
+config/license.enc
+config/device.hash
+config/sheet.json
+config/settings.json
+config/user_lists.json
 logs/
 temp/
 backups/

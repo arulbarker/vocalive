@@ -1,589 +1,374 @@
 #!/usr/bin/env python3
 """
-VocaLive - Professional License Dialog
-Modern license activation interface dengan real-time validation
+VocaLive - Login Dialog (AppScript Edition)
+User login dengan email pembelian (Lynk.id / Whop).
 """
 
 import sys
 import os
-import threading
 import time
-from pathlib import Path
 from typing import Optional, Tuple
 
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QProgressBar, QTextEdit, QFrame, QSpacerItem, QSizePolicy, QApplication,
-    QWidget, QGraphicsDropShadowEffect, QMessageBox
+    QProgressBar, QTextEdit, QFrame, QApplication, QGraphicsDropShadowEffect
 )
-from PyQt6.QtGui import (
-    QFont, QPalette, QColor, QPainter, QBrush, QLinearGradient, 
-    QPixmap, QPen, QIcon, QMovie
-)
+from PyQt6.QtGui import QFont, QColor
 
-# Import license manager
 try:
     from modules_client.license_manager import LicenseManager
 except ImportError:
-    # Fallback for development/local import
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'modules_client'))
     from license_manager import LicenseManager
 
+# Ocean Blue palette (dari CLAUDE.md)
+C_BG       = "#0F1623"
+C_SURFACE  = "#162032"
+C_ELEVATED = "#1E2A3B"
+C_PRIMARY  = "#2563EB"
+C_ACCENT   = "#60A5FA"
+C_SECONDARY= "#1E3A5F"
+C_TEXT     = "#F0F6FF"
+C_MUTED    = "#8BAED0"
+C_SUCCESS  = "#22C55E"
+C_DANGER   = "#EF4444"
+RADIUS     = "10px"
 
-class LicenseValidationWorker(QThread):
-    """Worker thread for license validation"""
-    
-    validation_complete = pyqtSignal(bool, str, dict)  # success, message, data
-    progress_update = pyqtSignal(str)  # status message
-    
-    def __init__(self, license_key: str, license_manager: LicenseManager):
+
+class LoginWorker(QThread):
+    """Worker thread — login via AppScript di background agar UI tidak freeze."""
+
+    done = pyqtSignal(bool, str, dict)   # success, message, data
+    progress = pyqtSignal(str)
+
+    def __init__(self, email: str, license_manager: LicenseManager):
         super().__init__()
-        self.license_key = license_key
+        self.email = email
         self.license_manager = license_manager
-    
+
     def run(self):
-        """Run license validation in background"""
         try:
-            self.progress_update.emit("Validating license format...")
-            time.sleep(0.5)
-            
-            if not self.license_key.strip():
-                self.validation_complete.emit(False, "License key cannot be empty", {})
-                return
-            
-            self.progress_update.emit("Connecting to license server...")
-            time.sleep(1.0)
-            
-            self.progress_update.emit("Checking license status...")
-            time.sleep(0.5)
-            
-            # Actual validation
-            is_valid, message, data = self.license_manager.validate_license_online(self.license_key)
-            
+            self.progress.emit("Menghubungi server lisensi...")
+            time.sleep(0.4)
+
+            is_valid, message, data = self.license_manager.validate_license_online(self.email)
+
             if is_valid:
-                self.progress_update.emit("License validated successfully!")
-                time.sleep(0.5)
-                
-                self.progress_update.emit("Saving license data...")
-                time.sleep(0.5)
-                
-                # Save license data
-                if self.license_manager.save_license_data(self.license_key, data):
-                    self.validation_complete.emit(True, "License activated successfully!", data)
+                self.progress.emit("Menyimpan sesi...")
+                time.sleep(0.3)
+                if self.license_manager.save_license_data(self.email, data):
+                    self.done.emit(True, message, data)
                 else:
-                    self.validation_complete.emit(False, "Failed to save license data", {})
+                    self.done.emit(False, "Gagal menyimpan data sesi.", {})
             else:
-                self.validation_complete.emit(False, message, data)
-                
+                self.done.emit(False, message, {})
+
         except Exception as e:
-            self.validation_complete.emit(False, f"Validation error: {str(e)}", {})
-
-
-class AnimatedButton(QPushButton):
-    """Custom animated button with hover effects"""
-    
-    def __init__(self, text: str, parent=None):
-        super().__init__(text, parent)
-        self.setMinimumHeight(45)
-        self.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        
-        # Animation setup
-        self.animation = QPropertyAnimation(self, b"geometry")
-        self.animation.setDuration(150)
-        self.animation.setEasingCurve(QEasingCurve.Type.OutQuad)
-        
-        self.original_geometry = None
-        
-        # Style
-        self.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #4CAF50, stop:1 #45a049);
-                border: none;
-                border-radius: 8px;
-                color: white;
-                padding: 12px 20px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #5CBF60, stop:1 #52b055);
-                transform: scale(1.02);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #3e8e41, stop:1 #367c39);
-            }
-            QPushButton:disabled {
-                background: #cccccc;
-                color: #666666;
-            }
-        """)
-    
-    def enterEvent(self, event):
-        """Mouse enter animation"""
-        if self.original_geometry is None:
-            self.original_geometry = self.geometry()
-        
-        # Scale up slightly
-        new_geo = QRect(
-            self.original_geometry.x() - 2,
-            self.original_geometry.y() - 2,
-            self.original_geometry.width() + 4,
-            self.original_geometry.height() + 4
-        )
-        
-        self.animation.setStartValue(self.geometry())
-        self.animation.setEndValue(new_geo)
-        self.animation.start()
-        
-        super().enterEvent(event)
-    
-    def leaveEvent(self, event):
-        """Mouse leave animation"""
-        if self.original_geometry:
-            self.animation.setStartValue(self.geometry())
-            self.animation.setEndValue(self.original_geometry)
-            self.animation.start()
-        
-        super().leaveEvent(event)
-
-
-class ModernProgressBar(QProgressBar):
-    """Custom modern progress bar"""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setMinimumHeight(8)
-        self.setMaximumHeight(8)
-        self.setTextVisible(False)
-        
-        self.setStyleSheet("""
-            QProgressBar {
-                border: none;
-                border-radius: 4px;
-                background-color: #E0E0E0;
-            }
-            QProgressBar::chunk {
-                border-radius: 4px;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #4CAF50, stop:0.5 #8BC34A, stop:1 #4CAF50);
-            }
-        """)
+            self.done.emit(False, f"Error: {str(e)}", {})
 
 
 class LicenseDialog(QDialog):
-    """Professional License Activation Dialog"""
-    
+    """Dialog login email VocaLive — Ocean Blue theme."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.license_manager = LicenseManager()
-        self.validation_worker = None
-        
-        self.setWindowTitle("VocaLive - License Activation")
-        self.setFixedSize(500, 650)
+        self.worker = None
+        self._entered_email = ""
+
+        self.setWindowTitle("VocaLive — Aktivasi Lisensi")
+        self.setFixedSize(480, 560)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         self.setModal(True)
-        
-        # Apply modern styling
-        self.setStyleSheet("""
-            QDialog {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #f8f9fa, stop:1 #e9ecef);
-                border-radius: 15px;
-            }
+
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {C_BG};
+            }}
+            QLabel {{
+                color: {C_TEXT};
+            }}
         """)
-        
-        self.init_ui()
-        self.center_on_screen()
-        
-        # Add drop shadow
+
+        self._build_ui()
+        self._center()
+
+    # ------------------------------------------------------------------
+    # UI Build
+    # ------------------------------------------------------------------
+
+    def _build_ui(self):
+        root = QVBoxLayout()
+        root.setContentsMargins(36, 32, 36, 28)
+        root.setSpacing(20)
+
+        root.addWidget(self._header())
+        root.addWidget(self._input_card())
+        root.addWidget(self._progress_section())
+        root.addWidget(self._status_section())
+        root.addWidget(self._buttons())
+
+        self.setLayout(root)
+
+    def _header(self) -> QFrame:
+        f = QFrame()
+        lay = QVBoxLayout(f)
+        lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.setSpacing(8)
+
+        icon = QLabel("🎙️")
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon.setStyleSheet("font-size: 44px;")
+        lay.addWidget(icon)
+
+        title = QLabel("VocaLive")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {C_ACCENT}; letter-spacing: 1px;")
+        lay.addWidget(title)
+
+        sub = QLabel("Masukkan email yang digunakan saat pembelian")
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub.setFont(QFont("Segoe UI", 9))
+        sub.setStyleSheet(f"color: {C_MUTED};")
+        sub.setWordWrap(True)
+        lay.addWidget(sub)
+
+        return f
+
+    def _input_card(self) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(f"""
+            QFrame {{
+                background-color: {C_SURFACE};
+                border-radius: {RADIUS};
+                padding: 4px;
+            }}
+        """)
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
-        shadow.setOffset(0, 5)
-        shadow.setColor(QColor(0, 0, 0, 80))
-        self.setGraphicsEffect(shadow)
-    
-    def init_ui(self):
-        """Initialize the user interface"""
-        layout = QVBoxLayout()
-        layout.setContentsMargins(40, 30, 40, 30)
-        layout.setSpacing(25)
-        
-        # Header section
-        header_frame = self.create_header_section()
-        layout.addWidget(header_frame)
-        
-        # License input section
-        input_frame = self.create_input_section()
-        layout.addWidget(input_frame)
-        
-        # Progress section
-        progress_frame = self.create_progress_section()
-        layout.addWidget(progress_frame)
-        
-        # Status section
-        status_frame = self.create_status_section()
-        layout.addWidget(status_frame)
-        
-        # Button section
-        button_frame = self.create_button_section()
-        layout.addWidget(button_frame)
-        
-        # Add stretch
-        layout.addStretch()
-        
-        self.setLayout(layout)
-    
-    def create_header_section(self) -> QFrame:
-        """Create header section with logo and title"""
-        frame = QFrame()
-        frame.setMaximumHeight(120)
-        
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(10)
-        
-        # Logo/Icon (using text for now)
-        logo_label = QLabel("🚀")
-        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_label.setStyleSheet("""
-            QLabel {
-                font-size: 48px;
-                color: #4CAF50;
-                margin: 10px;
-            }
-        """)
-        layout.addWidget(logo_label)
-        
-        # Title
-        title_label = QLabel("VocaLive License Activation")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
-        title_label.setStyleSheet("""
-            QLabel {
-                color: #2c3e50;
-                margin: 5px;
-            }
-        """)
-        layout.addWidget(title_label)
-        
-        # Subtitle
-        subtitle_label = QLabel("Enter your license key to activate VocaLive")
-        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_label.setFont(QFont("Segoe UI", 10))
-        subtitle_label.setStyleSheet("""
-            QLabel {
-                color: #6c757d;
-                margin-bottom: 10px;
-            }
-        """)
-        layout.addWidget(subtitle_label)
-        
-        frame.setLayout(layout)
-        return frame
-    
-    def create_input_section(self) -> QFrame:
-        """Create license input section"""
-        frame = QFrame()
-        frame.setStyleSheet("""
-            QFrame {
-                background: white;
-                border-radius: 12px;
-                padding: 20px;
-                margin: 5px;
-            }
-        """)
-        
-        # Add subtle shadow to frame
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(10)
-        shadow.setOffset(0, 2)
-        shadow.setColor(QColor(0, 0, 0, 20))
-        frame.setGraphicsEffect(shadow)
-        
-        layout = QVBoxLayout()
-        layout.setSpacing(15)
-        
-        # Input label
-        label = QLabel("License Key:")
-        label.setFont(QFont("Segoe UI", 11, QFont.Weight.Medium))
-        label.setStyleSheet("color: #495057; margin-bottom: 5px;")
-        layout.addWidget(label)
-        
-        # License input field
-        self.license_input = QLineEdit()
-        self.license_input.setPlaceholderText("Enter your license key...")
-        self.license_input.setMinimumHeight(45)
-        self.license_input.setFont(QFont("Segoe UI", 11))
-        self.license_input.setStyleSheet("""
-            QLineEdit {
-                border: 2px solid #e9ecef;
+        shadow.setBlurRadius(16)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 100))
+        card.setGraphicsEffect(shadow)
+
+        lay = QVBoxLayout(card)
+        lay.setSpacing(10)
+        lay.setContentsMargins(20, 18, 20, 18)
+
+        lbl = QLabel("Email Pembelian")
+        lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Medium))
+        lbl.setStyleSheet(f"color: {C_ACCENT};")
+        lay.addWidget(lbl)
+
+        self.email_input = QLineEdit()
+        self.email_input.setPlaceholderText("contoh@email.com")
+        self.email_input.setMinimumHeight(44)
+        self.email_input.setFont(QFont("Segoe UI", 11))
+        self.email_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: {C_ELEVATED};
+                border: 2px solid {C_SECONDARY};
                 border-radius: 8px;
-                padding: 12px 15px;
-                font-size: 11pt;
-                background: #f8f9fa;
-                color: #000000;
-            }
-            QLineEdit:focus {
-                border: 2px solid #4CAF50;
-                background: white;
-                color: #000000;
-            }
-            QLineEdit:hover {
-                border: 2px solid #ced4da;
-            }
+                padding: 10px 14px;
+                color: {C_TEXT};
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {C_PRIMARY};
+            }}
         """)
-        
-        # Connect enter key to validation
-        self.license_input.returnPressed.connect(self.start_validation)
-        layout.addWidget(self.license_input)
-        
-        # Help text
-        help_label = QLabel("💡 Contact support if you don't have a license key")
-        help_label.setFont(QFont("Segoe UI", 9))
-        help_label.setStyleSheet("color: #6c757d; margin-top: 5px;")
-        layout.addWidget(help_label)
-        
-        frame.setLayout(layout)
-        return frame
-    
-    def create_progress_section(self) -> QFrame:
-        """Create progress section"""
+        self.email_input.returnPressed.connect(self._start_login)
+        lay.addWidget(self.email_input)
+
+        hint = QLabel("💡 Email harus sama dengan yang dipakai di Lynk.id / Whop saat pembelian")
+        hint.setFont(QFont("Segoe UI", 8))
+        hint.setStyleSheet(f"color: {C_MUTED};")
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
+
+        return card
+
+    def _progress_section(self) -> QFrame:
         self.progress_frame = QFrame()
-        self.progress_frame.hide()  # Initially hidden
-        
-        layout = QVBoxLayout()
-        layout.setSpacing(15)
-        
-        # Progress bar
-        self.progress_bar = ModernProgressBar()
-        self.progress_bar.setRange(0, 0)  # Indeterminate
-        layout.addWidget(self.progress_bar)
-        
-        # Progress label
-        self.progress_label = QLabel("Initializing...")
-        self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.progress_label.setFont(QFont("Segoe UI", 10))
-        self.progress_label.setStyleSheet("""
-            QLabel {
-                color: #495057;
-                padding: 5px;
-            }
+        self.progress_frame.hide()
+        lay = QVBoxLayout(self.progress_frame)
+        lay.setSpacing(8)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setMaximumHeight(6)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: none;
+                border-radius: 3px;
+                background: {C_ELEVATED};
+            }}
+            QProgressBar::chunk {{
+                border-radius: 3px;
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 {C_PRIMARY}, stop:1 {C_ACCENT});
+            }}
         """)
-        layout.addWidget(self.progress_label)
-        
-        self.progress_frame.setLayout(layout)
+        lay.addWidget(self.progress_bar)
+
+        self.progress_label = QLabel("Menghubungi server...")
+        self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.progress_label.setFont(QFont("Segoe UI", 9))
+        self.progress_label.setStyleSheet(f"color: {C_MUTED};")
+        lay.addWidget(self.progress_label)
+
         return self.progress_frame
-    
-    def create_status_section(self) -> QFrame:
-        """Create status display section"""
+
+    def _status_section(self) -> QFrame:
         self.status_frame = QFrame()
-        self.status_frame.hide()  # Initially hidden
-        
-        layout = QVBoxLayout()
-        
-        # Status text area
+        self.status_frame.hide()
+        lay = QVBoxLayout(self.status_frame)
+
         self.status_text = QTextEdit()
-        self.status_text.setMaximumHeight(120)
+        self.status_text.setMaximumHeight(90)
         self.status_text.setReadOnly(True)
         self.status_text.setFont(QFont("Consolas", 9))
-        self.status_text.setStyleSheet("""
-            QTextEdit {
-                background: #f8f9fa;
-                border: 1px solid #dee2e6;
+        self.status_text.setStyleSheet(f"""
+            QTextEdit {{
+                background: {C_ELEVATED};
+                border: 1px solid {C_SECONDARY};
                 border-radius: 6px;
-                padding: 10px;
-                color: #495057;
-            }
+                padding: 8px;
+                color: {C_TEXT};
+            }}
         """)
-        layout.addWidget(self.status_text)
-        
-        self.status_frame.setLayout(layout)
+        lay.addWidget(self.status_text)
         return self.status_frame
-    
-    def create_button_section(self) -> QFrame:
-        """Create button section"""
-        frame = QFrame()
-        
-        layout = QHBoxLayout()
-        layout.setSpacing(15)
-        
-        # Cancel button
-        self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.setMinimumHeight(45)
-        self.cancel_button.setFont(QFont("Segoe UI", 11))
-        self.cancel_button.setStyleSheet("""
-            QPushButton {
-                background: #6c757d;
+
+    def _buttons(self) -> QFrame:
+        f = QFrame()
+        lay = QHBoxLayout(f)
+        lay.setSpacing(12)
+
+        self.btn_cancel = QPushButton("Batal")
+        self.btn_cancel.setMinimumHeight(42)
+        self.btn_cancel.setFont(QFont("Segoe UI", 10))
+        self.btn_cancel.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_ELEVATED};
+                border: 1px solid {C_SECONDARY};
+                border-radius: 8px;
+                color: {C_MUTED};
+                padding: 10px 18px;
+            }}
+            QPushButton:hover {{ background: {C_SECONDARY}; color: {C_TEXT}; }}
+        """)
+        self.btn_cancel.clicked.connect(self.reject)
+        lay.addWidget(self.btn_cancel)
+
+        self.btn_login = QPushButton("Login")
+        self.btn_login.setMinimumHeight(42)
+        self.btn_login.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self.btn_login.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_PRIMARY};
                 border: none;
                 border-radius: 8px;
                 color: white;
-                padding: 12px 20px;
-            }
-            QPushButton:hover {
-                background: #5a6268;
-            }
-            QPushButton:pressed {
-                background: #545b62;
-            }
+                padding: 10px 24px;
+            }}
+            QPushButton:hover {{ background: #1D4FD8; }}
+            QPushButton:pressed {{ background: #1A44C0; }}
+            QPushButton:disabled {{ background: {C_SECONDARY}; color: {C_MUTED}; }}
         """)
-        self.cancel_button.clicked.connect(self.reject)
-        layout.addWidget(self.cancel_button)
-        
-        # Validate button
-        self.validate_button = AnimatedButton("Activate License")
-        self.validate_button.clicked.connect(self.start_validation)
-        layout.addWidget(self.validate_button)
-        
-        frame.setLayout(layout)
-        return frame
-    
-    def center_on_screen(self):
-        """Center dialog on screen"""
+        self.btn_login.clicked.connect(self._start_login)
+        lay.addWidget(self.btn_login)
+
+        return f
+
+    # ------------------------------------------------------------------
+    # Logic
+    # ------------------------------------------------------------------
+
+    def _center(self):
         if self.parent():
-            # Center on parent
-            parent_geo = self.parent().geometry()
-            x = parent_geo.x() + (parent_geo.width() - self.width()) // 2
-            y = parent_geo.y() + (parent_geo.height() - self.height()) // 2
-            self.move(x, y)
+            pg = self.parent().geometry()
+            self.move(pg.x() + (pg.width() - self.width()) // 2,
+                      pg.y() + (pg.height() - self.height()) // 2)
         else:
-            # Center on screen
             screen = QApplication.primaryScreen().geometry()
-            x = (screen.width() - self.width()) // 2
-            y = (screen.height() - self.height()) // 2
-            self.move(x, y)
-    
-    def start_validation(self):
-        """Start license validation process"""
-        license_key = self.license_input.text().strip()
-        
-        if not license_key:
-            self.show_error("Please enter a license key")
+            self.move((screen.width() - self.width()) // 2,
+                      (screen.height() - self.height()) // 2)
+
+    def _start_login(self):
+        email = self.email_input.text().strip()
+        if not email or "@" not in email:
+            self._show_error("Masukkan email yang valid.")
             return
-        
-        # Disable input during validation
-        self.license_input.setEnabled(False)
-        self.validate_button.setEnabled(False)
-        
-        # Show progress
+
+        self._entered_email = email
+        self.email_input.setEnabled(False)
+        self.btn_login.setEnabled(False)
         self.progress_frame.show()
         self.status_frame.show()
         self.status_text.clear()
-        
-        # Start validation worker
-        self.validation_worker = LicenseValidationWorker(license_key, self.license_manager)
-        self.validation_worker.validation_complete.connect(self.on_validation_complete)
-        self.validation_worker.progress_update.connect(self.on_progress_update)
-        self.validation_worker.start()
-    
-    def on_progress_update(self, message: str):
-        """Handle progress updates"""
-        self.progress_label.setText(message)
-        self.status_text.append(f"• {message}")
-        
-        # Auto-scroll to bottom
-        cursor = self.status_text.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        self.status_text.setTextCursor(cursor)
-    
-    def on_validation_complete(self, success: bool, message: str, data: dict):
-        """Handle validation completion"""
-        # Hide progress bar
+
+        self.worker = LoginWorker(email, self.license_manager)
+        self.worker.done.connect(self._on_done)
+        self.worker.progress.connect(self._on_progress)
+        self.worker.start()
+
+    def _on_progress(self, msg: str):
+        self.progress_label.setText(msg)
+        self.status_text.append(f"• {msg}")
+        self._scroll_status()
+
+    def _on_done(self, success: bool, message: str, data: dict):
         self.progress_frame.hide()
-        
-        # Re-enable input
-        self.license_input.setEnabled(True)
-        self.validate_button.setEnabled(True)
-        
+        self.email_input.setEnabled(True)
+        self.btn_login.setEnabled(True)
+
         if success:
-            self.show_success(message, data)
-            QTimer.singleShot(1500, self.accept)  # Close after 1.5 seconds
+            nama = data.get("nama", "")
+            exp = data.get("expired_date", "")
+            self.status_text.append(f"\n✅ Login berhasil! Selamat datang{', ' + nama if nama else ''}.")
+            if exp:
+                self.status_text.append(f"   Aktif hingga: {exp}")
+            self._scroll_status()
+            QTimer.singleShot(1400, self.accept)
         else:
-            self.show_error(message)
-    
-    def show_success(self, message: str, data: dict):
-        """Show success message"""
-        self.status_text.append(f"\n✅ SUCCESS: {message}")
-        
-        # Show license info
-        if data:
-            self.status_text.append("\n📋 License Information:")
-            if data.get('EXPIRY_DATE'):
-                self.status_text.append(f"   Expires: {data.get('EXPIRY_DATE')}")
-            if data.get('NOTES'):
-                self.status_text.append(f"   Notes: {data.get('NOTES')}")
-        
-        # Auto-scroll to bottom
-        cursor = self.status_text.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        self.status_text.setTextCursor(cursor)
-    
-    def show_error(self, message: str):
-        """Show error message"""
-        self.status_text.append(f"\n❌ ERROR: {message}")
-        
-        # Auto-scroll to bottom
-        cursor = self.status_text.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        self.status_text.setTextCursor(cursor)
-        
-        # Flash the input field
-        self.flash_input_error()
-    
-    def flash_input_error(self):
-        """Flash input field red to indicate error"""
-        original_style = self.license_input.styleSheet()
-        error_style = original_style.replace(
-            "border: 2px solid #e9ecef;",
-            "border: 2px solid #dc3545;"
-        )
-        
-        self.license_input.setStyleSheet(error_style)
-        
-        # Reset after 1 second
-        QTimer.singleShot(1000, lambda: self.license_input.setStyleSheet(original_style))
-    
+            self._show_error(message)
+
+    def _show_error(self, msg: str):
+        self.status_frame.show()
+        self.status_text.append(f"\n❌ {msg}")
+        self._scroll_status()
+        # Flash border merah
+        orig = self.email_input.styleSheet()
+        err = orig.replace(f"border: 2px solid {C_SECONDARY};", "border: 2px solid #EF4444;")
+        self.email_input.setStyleSheet(err)
+        QTimer.singleShot(1000, lambda: self.email_input.setStyleSheet(orig))
+
+    def _scroll_status(self):
+        cur = self.status_text.textCursor()
+        cur.movePosition(cur.MoveOperation.End)
+        self.status_text.setTextCursor(cur)
+
     def closeEvent(self, event):
-        """Handle dialog close event"""
-        if self.validation_worker and self.validation_worker.isRunning():
-            self.validation_worker.terminate()
-            self.validation_worker.wait()
+        if self.worker and self.worker.isRunning():
+            self.worker.terminate()
+            self.worker.wait()
         event.accept()
 
 
 def show_license_dialog(parent=None) -> Tuple[bool, Optional[str]]:
-    """
-    Show license dialog and return result
-    Returns: (success, license_key)
-    """
+    """Entry point dari main.py. Return (success, email)."""
     dialog = LicenseDialog(parent)
     result = dialog.exec()
-    
     if result == QDialog.DialogCode.Accepted:
-        return True, dialog.license_input.text().strip()
-    else:
-        return False, None
+        return True, dialog._entered_email
+    return False, None
 
 
-# Test function
-def test_license_dialog():
-    """Test the license dialog"""
-    app = QApplication(sys.argv)
-    
-    # Set application style
-    app.setStyle('Fusion')
-    
-    success, license_key = show_license_dialog()
-    
-    if success:
-        print(f"License activated: {license_key}")
-    else:
-        print("License activation cancelled")
-    
-    return success
-
-
+# Quick test
 if __name__ == "__main__":
-    test_license_dialog()
+    app = QApplication(sys.argv)
+    app.setStyle('Fusion')
+    ok, email = show_license_dialog()
+    print(f"Result: {ok}, email: {email}")
