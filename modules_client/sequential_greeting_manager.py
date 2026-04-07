@@ -142,6 +142,9 @@ class SequentialGreetingManager:
 
     def force_regenerate(self):
         """Manual trigger regenerasi dari tombol UI."""
+        if self.state == GreetingState.IDLE:
+            print("[GREETING_AI] Cannot regenerate — system not running")
+            return
         print("[GREETING_AI] Manual regenerate triggered")
         regen_thread = threading.Thread(target=self._regenerate, daemon=True)
         regen_thread.start()
@@ -168,13 +171,6 @@ class SequentialGreetingManager:
             if self.should_stop:
                 return
 
-            # Prerender di startup — audio plays sebagai side effect (acceptable sebelum/awal live)
-            batch_id = datetime.now().strftime("%Y%m%d%H%M%S")
-            from modules_client.greeting_tts_cache import get_greeting_cache
-            cache = get_greeting_cache()
-            voice_name, language_code = self._get_voice_params()
-            rendered_files = cache.prerender_batch(texts, voice_name, language_code, batch_id)
-
             with self.texts_lock:
                 self.active_texts = texts
 
@@ -184,12 +180,11 @@ class SequentialGreetingManager:
                 if not self.should_stop:
                     self.state = GreetingState.ACTIVE
 
-            count = len(rendered_files)
             self._notify_status("active", f"Aktif — {len(texts)} sapaan tersedia")
             self._schedule_next_playback()
             self._schedule_next_regen()
 
-            print(f"[GREETING_AI] Started with {len(texts)} texts, {count} pre-rendered")
+            print(f"[GREETING_AI] Started with {len(texts)} texts")
 
         except Exception as e:
             print(f"[GREETING_AI] Prepare failed: {e}")
@@ -239,12 +234,15 @@ class SequentialGreetingManager:
 
     def _play_random_greeting(self):
         """Pilih teks acak dan putar via cache (lazy render jika belum ada)."""
+        chosen_text = None
         with self.texts_lock:
-            if not self.active_texts:
-                print("[GREETING_AI] No active texts to play")
-                self._schedule_next_playback()
-                return
-            chosen_text = random.choice(self.active_texts)
+            if self.active_texts:
+                chosen_text = random.choice(self.active_texts)
+
+        if not chosen_text:
+            print("[GREETING_AI] No active texts to play")
+            self._schedule_next_playback()
+            return
 
         try:
             from modules_client.greeting_tts_cache import get_greeting_cache
