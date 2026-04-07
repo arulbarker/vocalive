@@ -50,11 +50,25 @@ sys.excepthook = global_exception_handler
 
 # Import PyQt6 components
 from PyQt6.QtGui import QGuiApplication, QIcon
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QMessageBox,
-    QLabel, QStatusBar, QWidget, QVBoxLayout, QSizePolicy
+    QLabel, QStatusBar, QWidget, QVBoxLayout, QSizePolicy, QPushButton
 )
+
+
+class UpdateCheckThread(QThread):
+    """Cek update di background — tidak block UI."""
+    update_available = pyqtSignal(dict)  # emit info dict jika ada update
+
+    def run(self):
+        try:
+            from modules_client.updater import check_for_update
+            has_update, info = check_for_update()
+            if has_update and info:
+                self.update_available.emit(info)
+        except Exception:
+            pass
 
 # Setup project root
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -201,6 +215,16 @@ try:
 except ImportError as e:
     PRODUCT_SCENE_TAB_AVAILABLE = False
     logger.warning(f"ProductSceneTab not available: {e}")
+
+# Import Auto Updater
+try:
+    from modules_client.updater import check_for_update
+    from ui.update_dialog import show_update_dialog
+    UPDATER_AVAILABLE = True
+    logger.info("Auto updater imported successfully")
+except ImportError as e:
+    UPDATER_AVAILABLE = False
+    logger.warning(f"Auto updater not available: {e}")
 
 # Virtual Audio Tab removed - user requested removal
 
@@ -484,7 +508,38 @@ class MainWindow(QMainWindow):
                 logger.warning("Database scheduler not available")
         except Exception as scheduler_error:
             logger.error(f"Failed to start database scheduler: {scheduler_error}")
+
+        # Cek update otomatis setelah 5 detik (non-blocking)
+        if UPDATER_AVAILABLE:
+            QTimer.singleShot(5000, self._start_update_check)
     
+    def _start_update_check(self):
+        """Cek update di background thread — tidak freeze UI."""
+        try:
+            self._update_check_thread = UpdateCheckThread()
+            self._update_check_thread.update_available.connect(self._on_update_found)
+            self._update_check_thread.start()
+            logger.info("Update check started in background")
+        except Exception as e:
+            logger.warning(f"Failed to start update check: {e}")
+
+    def _on_update_found(self, info: dict):
+        """Tampilkan tombol update di status bar."""
+        self._update_info = info
+        latest = info.get("latest", "?")
+        self.update_btn.setText(f"⬆️ v{latest} Tersedia!")
+        self.update_btn.show()
+        logger.info(f"Update tersedia: v{latest}")
+
+    def _on_update_btn_clicked(self):
+        """Buka dialog update saat tombol diklik."""
+        if self._update_info:
+            try:
+                from ui.update_dialog import show_update_dialog
+                show_update_dialog(self._update_info, parent=self)
+            except Exception as e:
+                logger.error(f"Gagal buka update dialog: {e}")
+
     def closeEvent(self, event):
         """Handle application close event with comprehensive cleanup"""
         try:
@@ -566,11 +621,32 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(self.api_status_label)
 
         # Version label
-        version_label = QLabel("VocaLive v1.0.0")
+        version_label = QLabel("VocaLive v1.0.1")
         version_label.setStyleSheet(
             f"color: {PRIMARY}; font-size: 11px; font-weight: 700; padding-right: 10px;"
         )
         self.status_bar.addPermanentWidget(version_label)
+
+        # Tombol update — hidden sampai ada versi baru
+        self.update_btn = QPushButton("⬆️ Update Tersedia")
+        self.update_btn.setFixedHeight(22)
+        self.update_btn.setStyleSheet("""
+            QPushButton {
+                background: #D97706;
+                border: none;
+                border-radius: 4px;
+                color: white;
+                font-size: 11px;
+                font-weight: 700;
+                padding: 0 10px;
+                margin-right: 6px;
+            }
+            QPushButton:hover { background: #B45309; }
+        """)
+        self.update_btn.hide()
+        self.update_btn.clicked.connect(self._on_update_btn_clicked)
+        self.status_bar.addPermanentWidget(self.update_btn)
+        self._update_info = None
     
     def _setup_icon(self):
         """Setup aplikasi icon jika tersedia."""

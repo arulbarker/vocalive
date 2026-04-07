@@ -1,379 +1,253 @@
-# ui/update_dialog.py
-from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QTextEdit, 
-    QWidget, QProgressBar, QCheckBox, QPushButton, QMessageBox
-)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, pyqtSlot
-from PyQt6.QtGui import QFont, QPixmap
+#!/usr/bin/env python3
+"""
+VocaLive - Update Dialog
+Dialog download & install update dengan progress bar.
+"""
 
-def safe_attr_check(obj, attr_name):
-    """Safely check if an object has an attribute."""
-    try:
-        return hasattr(obj, attr_name)
-    except Exception:
-        return False
+import os
+import sys
+import tempfile
+from typing import Optional
+
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QProgressBar, QTextEdit, QFrame, QApplication
+)
+from PyQt6.QtGui import QFont
+
+try:
+    from modules_client.updater import DownloadThread, install_update, CURRENT_VERSION
+except ImportError:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    from modules_client.updater import DownloadThread, install_update, CURRENT_VERSION
+
+# Ocean Blue palette
+C_BG       = "#0F1623"
+C_SURFACE  = "#162032"
+C_ELEVATED = "#1E2A3B"
+C_PRIMARY  = "#2563EB"
+C_ACCENT   = "#60A5FA"
+C_SECONDARY= "#1E3A5F"
+C_TEXT     = "#F0F6FF"
+C_MUTED    = "#8BAED0"
+C_SUCCESS  = "#22C55E"
+RADIUS     = "10px"
+
 
 class UpdateDialog(QDialog):
-    """Dialog untuk menampilkan update yang tersedia."""
-    
-    def __init__(self, update_manager, parent=None):
-        super().__init__(parent)
-        self.update_manager = update_manager
-        self.update_info = None
-        self.setWindowTitle("VocaLive - Update Available")
-        self.setMinimumSize(500, 400)
-        self.setMaximumSize(600, 500)
-        self.init_ui()
-        self.setup_connections()
-    
-    def init_ui(self):
-        """Setup UI dialog."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        
-        # Header dengan icon
-        header_layout = QHBoxLayout()
-        
-        # Icon update
-        icon_label = QLabel("🔄")
-        icon_label.setStyleSheet("font-size: 32px;")
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_label.setFixedSize(50, 50)
-        header_layout.addWidget(icon_label)
-        
-        # Title dan versi
-        title_layout = QVBoxLayout()
-        self.title_label = QLabel("Update Available!")
-        self.title_label.setStyleSheet("""
-            font-size: 18px; 
-            font-weight: bold; 
-            color: #1877F2;
-            margin-bottom: 5px;
-        """)
-        
-        self.version_label = QLabel("New version available")
-        self.version_label.setStyleSheet("font-size: 14px; color: #666;")
-        
-        title_layout.addWidget(self.title_label)
-        title_layout.addWidget(self.version_label)
-        title_layout.addStretch()
-        
-        header_layout.addLayout(title_layout, 1)
-        layout.addLayout(header_layout)
-        
-        # Separator
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(separator)
-        
-        # Changelog
-        changelog_label = QLabel("What's New:")
-        changelog_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 10px;")
-        layout.addWidget(changelog_label)
-        
-        self.changelog_text = QTextEdit()
-        self.changelog_text.setPlainText("Loading update information...")
-        self.changelog_text.setMaximumHeight(150)
-        self.changelog_text.setReadOnly(True)
-        self.changelog_text.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                padding: 8px;
-                background-color: #f8f9fa;
-                color: #000000;
-            }
-        """)
-        layout.addWidget(self.changelog_text)
-        
-        # File info
-        self.info_label = QLabel("Size: Checking...")
-        self.info_label.setStyleSheet("color: #666; font-size: 12px; margin-top: 5px;")
-        layout.addWidget(self.info_label)
-        
-        # Progress bar (hidden by default)
-        self.progress_widget = QWidget()
-        progress_layout = QVBoxLayout(self.progress_widget)
-        progress_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.progress_label = QLabel("Downloading...")
-        self.progress_label.setStyleSheet("font-size: 12px; color: #1877F2; margin-bottom: 5px;")
-        progress_layout.addWidget(self.progress_label)
-        
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #1877F2;
-                border-radius: 8px;
-                background-color: rgba(255, 255, 255, 0.1);
-                height: 20px;
-                text-align: center;
-            }
-            QProgressBar::chunk {
-                background-color: #1877F2;
-                border-radius: 6px;
-            }
-        """)
-        progress_layout.addWidget(self.progress_bar)
-        
-        self.progress_widget.setVisible(False)
-        layout.addWidget(self.progress_widget)
-        
-        # Spacer
-        layout.addStretch()
-        
-        # Options
-        options_layout = QHBoxLayout()
-        
-        self.auto_install_check = QCheckBox("Auto install after download")
-        self.auto_install_check.setChecked(True)
-        self.auto_install_check.setStyleSheet("font-size: 12px;")
-        options_layout.addWidget(self.auto_install_check)
-        
-        options_layout.addStretch()
-        layout.addLayout(options_layout)
-        
-        # Buttons
-        button_layout = QHBoxLayout()
-        
-        # Skip button
-        self.skip_btn = QPushButton("Skip This Version")
-        self.skip_btn.setStyleSheet("""
-            QPushButton {
-                padding: 8px 16px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                background-color: #f8f9fa;
-                color: #666;
-            }
-            QPushButton:hover {
-                background-color: #e9ecef;
-            }
-        """)
-        self.skip_btn.clicked.connect(self.skip_version)
-        button_layout.addWidget(self.skip_btn)
-        
-        # Later button  
-        self.later_btn = QPushButton("Remind Me Later")
-        self.later_btn.setStyleSheet("""
-            QPushButton {
-                padding: 8px 16px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                background-color: #f8f9fa;
-                color: #333;
-            }
-            QPushButton:hover {
-                background-color: #e9ecef;
-            }
-        """)
-        self.later_btn.clicked.connect(self.remind_later)
-        button_layout.addWidget(self.later_btn)
-        
-        # Download button (primary)
-        self.download_btn = QPushButton("Download & Install")
-        self.download_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1877F2;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-                border-radius: 4px;
-                border: none;
-                min-width: 120px;
-            }
-            QPushButton:hover {
-                background-color: #166FE5;
-            }
-            QPushButton:disabled {
-                background-color: #ccc;
-                color: #666;
-            }
-        """)
-        self.download_btn.clicked.connect(self.start_download)
-        button_layout.addWidget(self.download_btn)
-        
-        layout.addLayout(button_layout)
-    
-    def setup_connections(self):
-        """Setup signal connections."""
-        if self.update_manager:
-            self.update_manager.download_progress.connect(self.update_progress)
-            self.update_manager.update_ready.connect(self.download_finished)
-            self.update_manager.update_error.connect(self.download_error)
-    
-    def set_update_info(self, update_info):
-        """Set informasi update."""
-        self.update_info = update_info
-        
-        if update_info:
-            # Update title dan versi
-            version = update_info.get("tag_name", "Unknown")
-            self.title_label.setText(f"VocaLive {version} available!")
-            self.version_label.setText(f"Current version: {self.update_manager.current_version} → {version}")
-            
-            # Update changelog
-            changelog = update_info.get("changelog", update_info.get("body", "No changelog available"))
-            if changelog:
-                # Format changelog yang lebih baik
-                formatted_changelog = self._format_changelog(changelog)
-                self.changelog_text.setPlainText(formatted_changelog)
-            else:
-                self.changelog_text.setPlainText("• Performance improvements and fixes\n• Bug fixes and optimizations")
-            
-            # Update file info
-            file_size = update_info.get("file_size", 0)
-            if file_size > 0:
-                size_mb = file_size / (1024 * 1024)
-                self.info_label.setText(f"Size: {size_mb:.1f} MB")
-            else:
-                self.info_label.setText("Size: Unknown")
-    
-    def _format_changelog(self, changelog):
-        """Format changelog untuk tampilan yang lebih baik."""
-        if not changelog:
-            return "• Performance improvements and fixes\n• Bug fixes and optimizations"
-        
-        # Jika sudah dalam format yang baik, return as is
-        if changelog.startswith("•") or changelog.startswith("-") or changelog.startswith("*"):
-            return changelog
-        
-        # Coba parse format markdown
-        lines = changelog.split('\n')
-        formatted_lines = []
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            # Skip header lines
-            if line.startswith('#'):
-                continue
-            
-            # Convert markdown list to bullet
-            if line.startswith('- ') or line.startswith('* '):
-                formatted_lines.append(f"• {line[2:]}")
-            elif line:
-                formatted_lines.append(f"• {line}")
-        
-        if formatted_lines:
-            return '\n'.join(formatted_lines)
-        else:
-            return "• Performance improvements and fixes\n• Bug fixes and optimizations"
-    
-    def start_download(self):
-        """Mulai download update."""
-        if not self.update_manager or not self.update_info:
-            return
-        
-        # Disable buttons
-        self.download_btn.setEnabled(False)
-        self.skip_btn.setEnabled(False)
-        self.later_btn.setEnabled(False)
-        
-        # Show progress
-        self.progress_widget.setVisible(True)
-        self.progress_bar.setValue(0)
-        self.progress_label.setText("Starting download...")
-        
-        # Start download
-        success = self.update_manager.download_update()
-        if not success:
-            self.download_error("Failed to start download")
-    
-    def update_progress(self, progress):
-        """Update progress bar."""
-        self.progress_bar.setValue(progress)
-        self.progress_label.setText(f"Downloading... {progress}%")
-    
-    def download_finished(self, file_path):
-        """Handle download selesai."""
-        self.progress_label.setText("Download complete!")
-        self.progress_bar.setValue(100)
-        
-        if self.auto_install_check.isChecked():
-            # Install otomatis
-            reply = QMessageBox.question(
-                self, "Install Update",
-                "Download complete. StreamMate will be closed and updated.\n\n"
-                "Continue with installation?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            
-            if reply == QMessageBox.StandardButton.Yes:
-                self.install_update(file_path)
-            else:
-                self.manual_install_info(file_path)
-        else:
-            self.manual_install_info(file_path)
-    
-    def download_error(self, error_msg):
-        """Handle download error."""
-        self.progress_widget.setVisible(False)
-        
-        # Re-enable buttons
-        self.download_btn.setEnabled(True)
-        self.skip_btn.setEnabled(True)
-        self.later_btn.setEnabled(True)
-        
-        QMessageBox.warning(
-            self, "Download Error",
-            f"Failed to download update:\n\n{error_msg}\n\nPlease try again later."
-        )
-    
-    def install_update(self, file_path):
-        """Install update."""
-        if self.update_manager:
-            success = self.update_manager.install_update()
-            if success:
-                self.accept()  # Close dialog
-            else:
-                QMessageBox.warning(
-                    self, "Install Error",
-                    "Failed to install update. Please install manually."
-                )
-    
-    def manual_install_info(self, file_path):
-        """Tampilkan info untuk install manual."""
-        QMessageBox.information(
-            self, "Download Complete",
-            f"Update successfully downloaded to:\n{file_path}\n\n"
-            "Run that file to install the update."
-        )
-        self.accept()
-    
-    def skip_version(self):
-        """Skip versi ini."""
-        if self.update_info and self.update_manager.config:
-            version = self.update_info.get("tag_name", "")
-            self.update_manager.config.set("skipped_update_version", version)
-            
-        QMessageBox.information(
-            self, "Update Skipped",
-            f"Version {self.update_info.get('tag_name', 'this')} will be skipped.\n\n"
-            "You will still receive notifications for newer versions."
-        )
-        self.reject()
-    
-    def remind_later(self):
-        """Ingatkan nanti (24 jam)."""
-        if self.update_manager.config:
-            from datetime import datetime, timedelta
-            reminder_time = datetime.now() + timedelta(hours=24)
-            self.update_manager.config.set("update_reminder_time", reminder_time.timestamp())
+    """Dialog update VocaLive — download + install."""
 
-        QMessageBox.information(
-            self, "Reminder Set",
-            "You will be reminded about this update in 24 hours."
+    def __init__(self, update_info: dict, parent=None):
+        super().__init__(parent)
+        self.update_info = update_info
+        self.download_thread: Optional[DownloadThread] = None
+        self.zip_path: Optional[str] = None
+
+        self.setWindowTitle("VocaLive — Update Tersedia")
+        self.setFixedSize(480, 420)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
+        self.setModal(True)
+        self.setStyleSheet(f"QDialog {{ background-color: {C_BG}; }} QLabel {{ color: {C_TEXT}; }}")
+
+        self._build_ui()
+        self._center()
+
+    def _build_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(28, 24, 28, 24)
+        root.setSpacing(16)
+
+        # Header card
+        header = QFrame()
+        header.setStyleSheet(f"QFrame {{ background: {C_SURFACE}; border-radius: {RADIUS}; }}")
+        hl = QVBoxLayout(header)
+        hl.setContentsMargins(16, 14, 16, 14)
+        hl.setSpacing(6)
+
+        top_row = QHBoxLayout()
+        icon = QLabel("⬆️")
+        icon.setStyleSheet("font-size: 28px;")
+        top_row.addWidget(icon)
+
+        ver_col = QVBoxLayout()
+        ver_col.setSpacing(2)
+        ver_title = QLabel("Update Tersedia!")
+        ver_title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        ver_title.setStyleSheet(f"color: {C_ACCENT};")
+        ver_col.addWidget(ver_title)
+
+        latest = self.update_info.get("latest", "?")
+        ver_sub = QLabel(f"v{CURRENT_VERSION}  →  v{latest}")
+        ver_sub.setFont(QFont("Segoe UI", 10))
+        ver_sub.setStyleSheet(f"color: {C_MUTED};")
+        ver_col.addWidget(ver_sub)
+
+        top_row.addLayout(ver_col)
+        top_row.addStretch()
+        hl.addLayout(top_row)
+
+        notes_lbl = QLabel("Apa yang baru:")
+        notes_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Medium))
+        notes_lbl.setStyleSheet(f"color: {C_MUTED}; margin-top: 4px;")
+        hl.addWidget(notes_lbl)
+
+        notes = QTextEdit()
+        notes.setReadOnly(True)
+        notes.setMaximumHeight(90)
+        notes.setFont(QFont("Segoe UI", 9))
+        notes.setPlainText(self.update_info.get("notes", "-"))
+        notes.setStyleSheet(f"""
+            QTextEdit {{
+                background: {C_ELEVATED};
+                border: 1px solid {C_SECONDARY};
+                border-radius: 6px;
+                padding: 6px;
+                color: {C_TEXT};
+            }}
+        """)
+        hl.addWidget(notes)
+        root.addWidget(header)
+
+        # Progress (hidden awalnya)
+        self.progress_frame = QFrame()
+        self.progress_frame.setStyleSheet(
+            f"QFrame {{ background: {C_SURFACE}; border-radius: {RADIUS}; }}"
         )
-        self.reject()
+        pl = QVBoxLayout(self.progress_frame)
+        pl.setContentsMargins(16, 12, 16, 12)
+        pl.setSpacing(6)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setMaximumHeight(8)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: none; border-radius: 4px; background: {C_ELEVATED};
+            }}
+            QProgressBar::chunk {{
+                border-radius: 4px;
+                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                    stop:0 {C_PRIMARY}, stop:1 {C_ACCENT});
+            }}
+        """)
+        pl.addWidget(self.progress_bar)
+
+        self.progress_label = QLabel("Mengunduh update...")
+        self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.progress_label.setFont(QFont("Segoe UI", 9))
+        self.progress_label.setStyleSheet(f"color: {C_MUTED};")
+        pl.addWidget(self.progress_label)
+
+        self.progress_frame.hide()
+        root.addWidget(self.progress_frame)
+
+        root.addStretch()
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+
+        self.btn_later = QPushButton("Nanti Saja")
+        self.btn_later.setMinimumHeight(40)
+        self.btn_later.setFont(QFont("Segoe UI", 10))
+        self.btn_later.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_ELEVATED}; border: 1px solid {C_SECONDARY};
+                border-radius: 8px; color: {C_MUTED}; padding: 8px 16px;
+            }}
+            QPushButton:hover {{ background: {C_SECONDARY}; color: {C_TEXT}; }}
+        """)
+        self.btn_later.clicked.connect(self.reject)
+        btn_row.addWidget(self.btn_later)
+
+        self.btn_update = QPushButton("⬇️  Update Sekarang")
+        self.btn_update.setMinimumHeight(40)
+        self.btn_update.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self.btn_update.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_PRIMARY}; border: none;
+                border-radius: 8px; color: white; padding: 8px 20px;
+            }}
+            QPushButton:hover {{ background: #1D4FD8; }}
+            QPushButton:pressed {{ background: #1A44C0; }}
+            QPushButton:disabled {{ background: {C_SECONDARY}; color: {C_MUTED}; }}
+        """)
+        self.btn_update.clicked.connect(self._start_download)
+        btn_row.addWidget(self.btn_update)
+
+        root.addLayout(btn_row)
+
+    def _center(self):
+        if self.parent():
+            pg = self.parent().geometry()
+            self.move(pg.x() + (pg.width() - self.width()) // 2,
+                      pg.y() + (pg.height() - self.height()) // 2)
+        else:
+            screen = QApplication.primaryScreen().geometry()
+            self.move((screen.width() - self.width()) // 2,
+                      (screen.height() - self.height()) // 2)
+
+    def _start_download(self):
+        url = self.update_info.get("url", "")
+        if not url:
+            self._set_status("URL download tidak tersedia.", error=True)
+            return
+
+        self.btn_update.setEnabled(False)
+        self.btn_later.setEnabled(False)
+        self.progress_frame.show()
+        self.setFixedSize(480, 460)
+
+        fd, self.zip_path = tempfile.mkstemp(suffix=".zip", prefix="vocalive_update_")
+        os.close(fd)
+
+        self.download_thread = DownloadThread(url, self.zip_path)
+        self.download_thread.progress.connect(self._on_progress)
+        self.download_thread.finished.connect(self._on_download_done)
+        self.download_thread.error.connect(self._on_error)
+        self.download_thread.start()
+
+    def _on_progress(self, pct: int):
+        self.progress_bar.setValue(pct)
+        self.progress_label.setText(f"Mengunduh... {pct}%")
+
+    def _on_download_done(self, zip_path: str):
+        self.progress_label.setText("Download selesai. Menginstall...")
+        self.progress_bar.setValue(100)
+        ok = install_update(zip_path)
+        if ok:
+            self.progress_label.setText("Update siap! Aplikasi akan restart otomatis.")
+            self.progress_label.setStyleSheet(f"color: {C_SUCCESS}; font-weight: bold;")
+            QTimer.singleShot(1500, self._quit_for_update)
+        else:
+            self._set_status("Gagal install. Coba jalankan sebagai Administrator.", error=True)
+            self.btn_later.setEnabled(True)
+
+    def _on_error(self, msg: str):
+        self._set_status(f"Error: {msg}", error=True)
+        self.btn_update.setEnabled(True)
+        self.btn_later.setEnabled(True)
+
+    def _set_status(self, msg: str, error: bool = False):
+        self.progress_label.setText(msg)
+        color = "#EF4444" if error else C_SUCCESS
+        self.progress_label.setStyleSheet(f"color: {color};")
+        self.progress_frame.show()
+
+    def _quit_for_update(self):
+        self.accept()
+        QApplication.instance().quit()
 
     def closeEvent(self, event):
-        """Handle dialog close."""
-        # Cancel download jika sedang berjalan
-        if self.update_manager and safe_attr_check(self.update_manager, 'cancel_download'):
-            self.update_manager.cancel_download()
+        if self.download_thread and self.download_thread.isRunning():
+            self.download_thread.terminate()
+            self.download_thread.wait()
+        event.accept()
 
-        super().closeEvent(event)
+
+def show_update_dialog(update_info: dict, parent=None) -> None:
+    dialog = UpdateDialog(update_info, parent)
+    dialog.exec()
