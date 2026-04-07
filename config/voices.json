@@ -176,5 +176,39 @@
       { "model": "id-ID-Chirp3-HD-Puck",   "gender": "MALE" },
       { "model": "id-ID-Chirp3-HD-Zephyr", "gender": "FEMALE" }
     ]
+  },
+  "gemini_flash": {
+    "id-ID": [
+      { "model": "Gemini-Zephyr",          "gender": "FEMALE" },
+      { "model": "Gemini-Puck",            "gender": "MALE" },
+      { "model": "Gemini-Charon",          "gender": "MALE" },
+      { "model": "Gemini-Kore",            "gender": "FEMALE" },
+      { "model": "Gemini-Fenrir",          "gender": "MALE" },
+      { "model": "Gemini-Leda",            "gender": "FEMALE" },
+      { "model": "Gemini-Orus",            "gender": "MALE" },
+      { "model": "Gemini-Aoede",           "gender": "FEMALE" },
+      { "model": "Gemini-Callirrhoe",      "gender": "FEMALE" },
+      { "model": "Gemini-Autonoe",         "gender": "FEMALE" },
+      { "model": "Gemini-Enceladus",       "gender": "MALE" },
+      { "model": "Gemini-Iapetus",         "gender": "MALE" },
+      { "model": "Gemini-Umbriel",         "gender": "MALE" },
+      { "model": "Gemini-Algieba",         "gender": "MALE" },
+      { "model": "Gemini-Despina",         "gender": "FEMALE" },
+      { "model": "Gemini-Erinome",         "gender": "FEMALE" },
+      { "model": "Gemini-Algenib",         "gender": "MALE" },
+      { "model": "Gemini-Rasalgethi",      "gender": "MALE" },
+      { "model": "Gemini-Laomedeia",       "gender": "FEMALE" },
+      { "model": "Gemini-Achernar",        "gender": "FEMALE" },
+      { "model": "Gemini-Alnilam",         "gender": "MALE" },
+      { "model": "Gemini-Schedar",         "gender": "MALE" },
+      { "model": "Gemini-Gacrux",          "gender": "MALE" },
+      { "model": "Gemini-Pulcherrima",     "gender": "FEMALE" },
+      { "model": "Gemini-Achird",          "gender": "MALE" },
+      { "model": "Gemini-Zubenelgenubi",   "gender": "MALE" },
+      { "model": "Gemini-Vindemiatrix",    "gender": "FEMALE" },
+      { "model": "Gemini-Sadachbia",       "gender": "MALE" },
+      { "model": "Gemini-Sadaltager",      "gender": "MALE" },
+      { "model": "Gemini-Sulafat",         "gender": "FEMALE" }
+    ]
   }
 }

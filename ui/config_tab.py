@@ -33,6 +33,24 @@ from PyQt6.QtGui import QFont, QIcon
 from modules_client.config_manager import ConfigManager
 from sales_templates import get_template_list, get_template
 
+try:
+    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
+        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
+        btn_success, btn_danger, btn_ghost, btn_primary, status_badge, label_subtitle)
+except ImportError:
+    PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"; BG_ELEVATED = "#1E2A3B"
+    TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#93C5FD"; TEXT_DIM = "#4B7BBA"
+    ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
+    BORDER_GOLD = "#1E4585"; BORDER = "#1A2E4A"; ACCENT = "#60A5FA"
+    SECONDARY = "#1E3A5F"; RADIUS = "10px"; RADIUS_SM = "6px"
+    def btn_success(extra=""): return f"QPushButton {{ background-color: {SUCCESS}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #16A34A; }}"
+    def btn_danger(extra=""): return f"QPushButton {{ background-color: {ERROR}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #DC2626; }}"
+    def btn_ghost(extra=""): return f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; border-radius: 6px; padding: 7px 18px; font-weight: 600; {extra} }}"
+    def btn_primary(extra=""): return f"QPushButton {{ background-color: {PRIMARY}; color: {BG_BASE}; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #F59E0B; }}"
+    def status_badge(color=None, size=11): c = color or PRIMARY; return f"color: {c}; font-weight: 600; font-size: {size}px; padding: 4px 10px; background-color: {BG_ELEVATED}; border: 1px solid {c}; border-radius: 6px;"
+    def label_subtitle(size=11): return f"font-size: {size}px; color: {TEXT_MUTED}; background: transparent;"
+
 class APITestThread(QThread):
     """Thread untuk test API connection"""
     result_ready = pyqtSignal(str, bool, str)  # api_type, success, message
@@ -47,8 +65,8 @@ class APITestThread(QThread):
         try:
             if self.api_type == "deepseek":
                 success, message = self.test_deepseek_api()
-            elif self.api_type == "chatgpt":
-                success, message = self.test_chatgpt_api()
+            elif self.api_type == "gemini":
+                success, message = self.test_gemini_api()
             else:
                 success, message = False, "Unknown API type"
             
@@ -87,36 +105,110 @@ class APITestThread(QThread):
         except Exception as e:
             return False, f"❌ DeepSeek API gagal: {str(e)}"
     
-    def test_chatgpt_api(self):
-        """Test ChatGPT API"""
+    def test_gemini_api(self):
+        """Test Gemini API — coba primary model dulu, fallback jika 403"""
+        models = ["gemini-3.1-flash-lite-preview", "gemini-flash-lite-latest"]
+        data = {
+            "contents": [{"role": "user", "parts": [{"text": "Hello, test connection"}]}],
+            "generationConfig": {"maxOutputTokens": 10},
+        }
+        headers = {
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json",
+        }
+        for model in models:
+            try:
+                url = (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model}:generateContent"
+                )
+                response = _session.post(url, headers=headers, json=data, timeout=10)
+                if response.status_code == 200:
+                    return True, f"✅ Gemini API berhasil terhubung! (model: {model})"
+                elif response.status_code == 403:
+                    continue  # coba model berikutnya
+                else:
+                    return False, f"❌ Gemini API error: {response.status_code} — {response.text[:100]}"
+            except Exception as e:
+                return False, f"❌ Gemini API gagal: {str(e)}"
+        return False, "❌ Semua model Gemini return 403. Pastikan API key dari Google AI Studio (aistudio.google.com)"
+
+    # ChatGPT disabled — uncomment to re-enable
+    # def test_chatgpt_api(self): ...
+
+
+class PolishKnowledgeThread(QThread):
+    """Thread untuk menyempurnakan teks pengetahuan produk via AI + riset web"""
+    finished = pyqtSignal(str)      # hasil AI, atau "" jika gagal
+    status_update = pyqtSignal(str) # progress text untuk label
+
+    def __init__(self, text: str):
+        super().__init__()
+        self.text = text
+
+    def run(self):
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": "gpt-3.5-turbo",
-                "messages": [
-                    {"role": "user", "content": "Hello, test connection"}
-                ],
-                "max_tokens": 10
-            }
-            
-            response = _session.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=10
+            self.status_update.emit("🔍 Mencari info produk di internet...")
+            research = self._research_products()
+
+            self.status_update.emit("✍️ AI sedang menyempurnakan teks...")
+            from modules_client.api import generate_reply
+
+            research_section = f"\n\nHasil riset produk dari internet:\n{research}" if research else ""
+
+            prompt = (
+                "Kamu adalah AI host live selling profesional yang sangat berpengalaman dan antusias. "
+                "Tugasmu: ubah teks pengetahuan produk berikut menjadi knowledge base lengkap "
+                "yang siap dipakai AI untuk menjawab pertanyaan penonton di TikTok Live.\n\n"
+                "INSTRUKSI OUTPUT — ikuti urutan ini PERSIS:\n\n"
+                "BAGIAN 1 — PERAN (wajib ada di paling atas):\n"
+                "Tulis blok definisi peran AI host, contoh format:\n"
+                "```\n"
+                "## PERAN AI HOST\n"
+                "Kamu adalah host live selling profesional yang menjual [sebutkan produk] di TikTok Live.\n"
+                "Selalu jawab komentar penonton sebagai penjual yang antusias, berpengetahuan, dan persuasif.\n"
+                "Bantu pembeli mengambil keputusan beli dengan cepat. Gunakan bahasa yang hangat dan energik.\n"
+                "Jangan pernah menyebutkan bahwa kamu adalah AI.\n"
+                "```\n\n"
+                "BAGIAN 2 — KNOWLEDGE PRODUK:\n"
+                "1. Pertahankan SEMUA info asli penjual (nomor keranjang, harga, promo)\n"
+                "2. Tambahkan spesifikasi teknis & keunggulan dari pengetahuanmu\n"
+                "3. Tambahkan benefit nyata buat pembeli\n"
+                "4. Sertakan contoh script balasan untuk pertanyaan umum penonton\n"
+                "5. Format rapi per produk, mudah dibaca AI\n\n"
+                f"Teks asli penjual:\n{self.text}"
+                f"{research_section}\n\n"
+                "Tulis HANYA output-nya langsung (mulai dari ## PERAN AI HOST). Tanpa intro atau penutup."
             )
-            
-            if response.status_code == 200:
-                return True, "✅ ChatGPT API berhasil terhubung!"
-            else:
-                return False, f"❌ ChatGPT API error: {response.status_code}"
-                
-        except Exception as e:
-            return False, f"❌ ChatGPT API gagal: {str(e)}"
+
+            result = generate_reply(prompt, max_tokens=800, fast_mode=False)
+            self.finished.emit(result.strip() if result else "")
+        except Exception:
+            self.finished.emit("")
+
+    def _research_products(self) -> str:
+        """Cari info produk via DuckDuckGo Instant Answer API (gratis, no key)"""
+        try:
+            import requests
+            # Buat query dari teks user — ambil 80 char pertama sebagai konteks produk
+            query = f"{self.text[:120]} spesifikasi keunggulan harga"
+            resp = requests.get(
+                "https://api.duckduckgo.com/",
+                params={"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"},
+                timeout=8,
+                headers={"User-Agent": "VocaLive/1.0"}
+            )
+            data = resp.json()
+            parts = []
+            if data.get("Abstract"):
+                parts.append(data["Abstract"])
+            for topic in data.get("RelatedTopics", [])[:3]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    parts.append(topic["Text"])
+            return "\n".join(parts) if parts else ""
+        except Exception:
+            return ""  # riset gagal → AI tetap jalan dengan pengetahuan sendiri
+
 
 class ConfigTab(QWidget):
     """Tab Konfigurasi untuk API Keys"""
@@ -159,19 +251,19 @@ class ConfigTab(QWidget):
         title = QLabel("🔧 Konfigurasi API Keys")
         title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #1877F2; margin-bottom: 20px;")
+        title.setStyleSheet(f"color: {PRIMARY}; margin-bottom: 20px;")
         layout.addWidget(title)
-        
+
         # Description
         desc = QLabel("Konfigurasi API untuk AI Chat Response dan Google TTS")
         desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        desc.setStyleSheet("color: #666; font-size: 14px; margin-bottom: 10px;")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 14px; margin-bottom: 10px;")
         layout.addWidget(desc)
-        
+
         # Language setting note
         lang_note = QLabel("💡 Setting bahasa output AI ada di tab Cohost → Pilihan Bahasa")
         lang_note.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lang_note.setStyleSheet("color: #1877F2; font-size: 12px; margin-bottom: 20px; font-style: italic; background-color: #1a1a2e; padding: 8px; border-radius: 5px;")
+        lang_note.setStyleSheet(f"color: {PRIMARY}; font-size: 12px; margin-bottom: 20px; font-style: italic; background-color: {BG_ELEVATED}; padding: 8px; border-radius: 5px;")
         layout.addWidget(lang_note)
         
         # AI Provider Section
@@ -201,84 +293,81 @@ class ConfigTab(QWidget):
         # Add scroll area to main layout
         main_layout.addWidget(scroll_area)
         
-        # Apply modern dark theme
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #1a1a1a;
-                color: #ffffff;
+        # Apply Gold Seller theme
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {BG_BASE};
+                color: {TEXT_PRIMARY};
                 font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            QScrollArea {
+            }}
+            QScrollArea {{
                 border: none;
-                background-color: #1a1a1a;
-            }
-            QScrollArea > QWidget > QWidget {
-                background-color: #1a1a1a;
-            }
-            QScrollBar:vertical {
-                background-color: #2d2d2d;
+                background-color: {BG_BASE};
+            }}
+            QScrollArea > QWidget > QWidget {{
+                background-color: {BG_BASE};
+            }}
+            QScrollBar:vertical {{
+                background-color: {BG_SURFACE};
                 width: 12px;
                 border-radius: 6px;
                 margin: 0;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #555555;
+            }}
+            QScrollBar::handle:vertical {{
+                background-color: {BORDER_GOLD};
                 border-radius: 6px;
                 min-height: 20px;
                 margin: 2px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #666666;
-            }
-            QScrollBar::handle:vertical:pressed {
-                background-color: #777777;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background-color: {PRIMARY};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 border: none;
                 background: none;
                 height: 0px;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
                 background: none;
-            }
-            QGroupBox {
+            }}
+            QGroupBox {{
                 font-weight: bold;
                 font-size: 14px;
-                border: 2px solid #404040;
-                border-radius: 12px;
+                border: 2px solid {BORDER_GOLD};
+                border-radius: {RADIUS};
                 margin-top: 15px;
                 padding-top: 15px;
-                background-color: #2a2a2a;
-            }
-            QGroupBox::title {
+                background-color: {BG_ELEVATED};
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 15px;
                 padding: 0 8px 0 8px;
-                color: #ffffff;
-                background-color: #2a2a2a;
-            }
-            QLineEdit {
-                background-color: #404040;
-                border: 2px solid #555555;
+                color: {ACCENT};
+                background-color: {BG_ELEVATED};
+            }}
+            QLineEdit {{
+                background-color: {BG_SURFACE};
+                border: 2px solid {BORDER};
                 border-radius: 8px;
                 padding: 12px 15px;
                 font-size: 13px;
-                color: #ffffff;
-                selection-background-color: #1877F2;
-            }
-            QLineEdit:focus {
-                border: 2px solid #1877F2;
-                background-color: #4a4a4a;
-            }
-            QLineEdit:hover {
-                border: 2px solid #666666;
-            }
-            QLineEdit[readOnly="true"] {
-                background-color: #353535;
-                color: #cccccc;
-            }
-            QPushButton {
-                background-color: #1877F2;
+                color: {TEXT_PRIMARY};
+                selection-background-color: {PRIMARY};
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {PRIMARY};
+                background-color: {BG_ELEVATED};
+            }}
+            QLineEdit:hover {{
+                border: 2px solid {BORDER_GOLD};
+            }}
+            QLineEdit[readOnly="true"] {{
+                background-color: {BG_BASE};
+                color: {TEXT_MUTED};
+            }}
+            QPushButton {{
+                background-color: {PRIMARY};
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -286,97 +375,99 @@ class ConfigTab(QWidget):
                 font-weight: bold;
                 font-size: 13px;
                 min-height: 20px;
-            }
-            QPushButton:hover {
-                background-color: #166FE5;
-                transform: translateY(-1px);
-            }
-            QPushButton:pressed {
-                background-color: #125FCA;
-                transform: translateY(0px);
-            }
-            QPushButton:disabled {
-                background-color: #404040;
-                color: #888888;
-            }
-            QPushButton[class="secondary"] {
-                background-color: #404040;
-                color: #ffffff;
-            }
-            QPushButton[class="secondary"]:hover {
-                background-color: #505050;
-            }
-            QPushButton[class="success"] {
-                background-color: #28a745;
-            }
-            QPushButton[class="success"]:hover {
-                background-color: #218838;
-            }
-            QPushButton[class="danger"] {
-                background-color: #dc3545;
-            }
-            QPushButton[class="danger"]:hover {
-                background-color: #c82333;
-            }
-            QTextEdit {
-                background-color: #2a2a2a;
-                border: 2px solid #404040;
+            }}
+            QPushButton:hover {{
+                background-color: {ACCENT};
+                color: {BG_BASE};
+            }}
+            QPushButton:pressed {{
+                background-color: {SECONDARY};
+            }}
+            QPushButton:disabled {{
+                background-color: {BORDER};
+                color: {TEXT_DIM};
+            }}
+            QPushButton[class="secondary"] {{
+                background-color: {BG_SURFACE};
+                color: {TEXT_PRIMARY};
+                border: 1px solid {BORDER_GOLD};
+            }}
+            QPushButton[class="secondary"]:hover {{
+                background-color: {BG_ELEVATED};
+            }}
+            QPushButton[class="success"] {{
+                background-color: {SUCCESS};
+            }}
+            QPushButton[class="success"]:hover {{
+                background-color: {SUCCESS};
+                opacity: 0.85;
+            }}
+            QPushButton[class="danger"] {{
+                background-color: {ERROR};
+            }}
+            QPushButton[class="danger"]:hover {{
+                background-color: {ERROR};
+                opacity: 0.85;
+            }}
+            QTextEdit {{
+                background-color: {BG_ELEVATED};
+                border: 2px solid {BORDER_GOLD};
                 border-radius: 8px;
                 padding: 12px;
                 font-size: 12px;
-                color: #ffffff;
-            }
-            QComboBox {
-                background-color: #404040;
-                border: 2px solid #555555;
+                color: {TEXT_PRIMARY};
+            }}
+            QComboBox {{
+                background-color: {BG_SURFACE};
+                border: 2px solid {BORDER};
                 border-radius: 8px;
                 padding: 8px 12px;
                 font-size: 13px;
-                color: #ffffff;
+                color: {TEXT_PRIMARY};
                 min-width: 150px;
-            }
-            QComboBox:hover {
-                border: 2px solid #666666;
-            }
-            QComboBox:focus {
-                border: 2px solid #1877F2;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox:hover {{
+                border: 2px solid {BORDER_GOLD};
+            }}
+            QComboBox:focus {{
+                border: 2px solid {PRIMARY};
+            }}
+            QComboBox::drop-down {{
                 border: none;
                 width: 30px;
-            }
-            QComboBox::down-arrow {
+            }}
+            QComboBox::down-arrow {{
                 image: none;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
-                border-top: 5px solid #ffffff;
+                border-top: 5px solid {TEXT_PRIMARY};
                 margin-right: 10px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #404040;
-                border: 1px solid #555555;
-                selection-background-color: #1877F2;
-                color: #ffffff;
-            }
-            QLabel {
-                color: #ffffff;
-            }
-            QLabel[class="status-success"] {
-                color: #28a745;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {BG_SURFACE};
+                border: 1px solid {BORDER_GOLD};
+                selection-background-color: {PRIMARY};
+                color: {TEXT_PRIMARY};
+            }}
+            QLabel {{
+                color: {TEXT_PRIMARY};
+            }}
+            QLabel[class="status-success"] {{
+                color: {SUCCESS};
                 font-weight: bold;
-            }
-            QLabel[class="status-error"] {
-                color: #dc3545;
+            }}
+            QLabel[class="status-error"] {{
+                color: {ERROR};
                 font-weight: bold;
-            }
-            QLabel[class="status-warning"] {
-                color: #ffc107;
+            }}
+            QLabel[class="status-warning"] {{
+                color: {WARNING};
                 font-weight: bold;
-            }
-            QLabel[class="status-info"] {
-                color: #17a2b8;
+            }}
+            QLabel[class="status-info"] {{
+                color: {INFO};
                 font-weight: bold;
-            }
+            }}
         """)
     
     def create_ai_provider_section(self, layout):
@@ -392,7 +483,8 @@ class ConfigTab(QWidget):
         provider_layout.addWidget(provider_label)
         
         self.provider_combo = QComboBox()
-        self.provider_combo.addItems(["DeepSeek", "OpenAI (ChatGPT)"])
+        # ChatGPT disabled — uncomment to re-enable: ["DeepSeek", "Gemini Flash Lite", "OpenAI (ChatGPT)"]
+        self.provider_combo.addItems(["DeepSeek", "Gemini Flash Lite"])
         self.provider_combo.currentTextChanged.connect(self.on_provider_changed)
         provider_layout.addWidget(self.provider_combo)
         provider_layout.addStretch()
@@ -437,7 +529,7 @@ class ConfigTab(QWidget):
         # Status with better styling
         self.ai_status = QLabel("Status: Belum ada API key")
         self.ai_status.setProperty("class", "status-info")
-        self.ai_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+        self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
         group_layout.addWidget(self.ai_status)
         
         layout.addWidget(group)
@@ -451,37 +543,37 @@ class ConfigTab(QWidget):
 
         # Description
         desc = QLabel("Sistem sapaan otomatis dengan 10 slot custom. Timer diatur di Cohost Tab. TTS disimpan untuk hemat API.")
-        desc.setStyleSheet("color: #cccccc; font-size: 12px; font-style: italic; padding: 5px;")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
         group_layout.addWidget(desc)
 
         # Timer info
         timer_info = QLabel("⏱️ Timer Interval: Diatur di Cohost Tab → Greeting Timer (berlaku untuk semua slot)")
-        timer_info.setStyleSheet("color: #ffc107; font-size: 12px; font-weight: bold; padding: 8px; background-color: #2a2416; border-radius: 4px; margin-bottom: 10px;")
+        timer_info.setStyleSheet(f"color: {WARNING}; font-size: 12px; font-weight: bold; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; margin-bottom: 10px;")
         group_layout.addWidget(timer_info)
 
         # Enable/Disable greeting system
         self.greeting_enabled_cb = QCheckBox("🔊 Aktifkan Sistem Sapaan Otomatis")
-        self.greeting_enabled_cb.setStyleSheet("""
-            QCheckBox {
-                color: #ffffff;
+        self.greeting_enabled_cb.setStyleSheet(f"""
+            QCheckBox {{
+                color: {TEXT_PRIMARY};
                 font-size: 13px;
                 font-weight: bold;
                 padding: 5px;
-            }
-            QCheckBox::indicator {
+            }}
+            QCheckBox::indicator {{
                 width: 18px;
                 height: 18px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #1877F2;
-                border: 2px solid #1877F2;
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {PRIMARY};
+                border: 2px solid {PRIMARY};
                 border-radius: 3px;
-            }
-            QCheckBox::indicator:unchecked {
-                background-color: #404040;
-                border: 2px solid #666666;
+            }}
+            QCheckBox::indicator:unchecked {{
+                background-color: {BG_SURFACE};
+                border: 2px solid {BORDER};
                 border-radius: 3px;
-            }
+            }}
         """)
         # Check from sequential_greeting_enabled first (primary key), fallback to custom_greeting_enabled
         greeting_enabled = self.cfg.get("sequential_greeting_enabled", self.cfg.get("custom_greeting_enabled", False))
@@ -491,21 +583,21 @@ class ConfigTab(QWidget):
 
         # 10 Greeting Slots Section
         slots_frame = QFrame()
-        slots_frame.setStyleSheet("""
-            QFrame {
-                background-color: #333333;
-                border: 1px solid #555555;
+        slots_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_SURFACE};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 8px;
                 padding: 15px;
                 margin: 5px;
-            }
+            }}
         """)
         slots_layout = QVBoxLayout(slots_frame)
         slots_layout.setSpacing(10)
 
         # Slots title
         slots_title = QLabel("📝 10 Slot Sapaan Custom (Timer mengikuti Cohost Tab):")
-        slots_title.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 14px; margin-bottom: 10px;")
+        slots_title.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 14px; margin-bottom: 10px;")
         slots_layout.addWidget(slots_title)
 
         # Create 10 greeting slots (without individual timers)
@@ -513,38 +605,38 @@ class ConfigTab(QWidget):
 
         for i in range(10):
             slot_container = QFrame()
-            slot_container.setStyleSheet("""
-                QFrame {
-                    background-color: #2a2a2a;
-                    border: 1px solid #444444;
+            slot_container.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {BG_ELEVATED};
+                    border: 1px solid {BORDER};
                     border-radius: 6px;
                     padding: 8px;
                     margin: 2px;
-                }
+                }}
             """)
             slot_layout = QHBoxLayout(slot_container)
             slot_layout.setSpacing(10)
 
             # Slot number label
             slot_label = QLabel(f"#{i+1}:")
-            slot_label.setStyleSheet("color: #1877F2; font-weight: bold; font-size: 12px; min-width: 25px;")
+            slot_label.setStyleSheet(f"color: {PRIMARY}; font-weight: bold; font-size: 12px; min-width: 25px;")
             slot_layout.addWidget(slot_label)
 
             # Text input for greeting
             text_input = QLineEdit()
             text_input.setPlaceholderText(f"Masukkan teks sapaan slot {i+1}... (kosong = skip)")
-            text_input.setStyleSheet("""
-                QLineEdit {
-                    background-color: #404040;
-                    border: 1px solid #555555;
+            text_input.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {BG_SURFACE};
+                    border: 1px solid {BORDER};
                     border-radius: 4px;
                     padding: 6px;
                     font-size: 12px;
-                    color: #ffffff;
-                }
-                QLineEdit:focus {
-                    border: 2px solid #1877F2;
-                }
+                    color: {TEXT_PRIMARY};
+                }}
+                QLineEdit:focus {{
+                    border: 2px solid {PRIMARY};
+                }}
             """)
             # Load existing text from config
             existing_text = self.cfg.get(f"custom_greeting_slot_{i+1}", "")
@@ -558,21 +650,19 @@ class ConfigTab(QWidget):
             test_btn.setMaximumWidth(30)
             test_btn.setMaximumHeight(25)
             test_btn.setToolTip(f"Test sapaan slot {i+1}")
-            test_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #28a745;
+            test_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {SUCCESS};
                     border: none;
                     border-radius: 4px;
                     color: white;
                     font-size: 12px;
                     padding: 2px;
-                }
-                QPushButton:hover {
-                    background-color: #218838;
-                }
-                QPushButton:pressed {
-                    background-color: #1e7e34;
-                }
+                }}
+                QPushButton:hover {{
+                    background-color: {ACCENT};
+                    color: {BG_BASE};
+                }}
             """)
             test_btn.clicked.connect(lambda checked, slot=i+1: self.test_greeting_slot(slot))
             slot_layout.addWidget(test_btn)
@@ -589,39 +679,13 @@ class ConfigTab(QWidget):
 
         # Save all slots button
         save_btn = QPushButton("💾 Simpan Semua Slot")
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-        """)
+        save_btn.setStyleSheet(btn_success())
         save_btn.clicked.connect(self.save_all_greeting_slots)
         control_layout.addWidget(save_btn)
 
         # Clear all slots button
         clear_btn = QPushButton("🗑️ Kosongkan Semua")
-        clear_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-        """)
+        clear_btn.setStyleSheet(btn_danger())
         clear_btn.clicked.connect(self.clear_all_greeting_slots)
         control_layout.addWidget(clear_btn)
 
@@ -630,131 +694,87 @@ class ConfigTab(QWidget):
 
         # Status info
         status_label = QLabel("💡 Slot kosong akan dilewat. Timer interval diatur di Cohost Tab. File TTS disimpan otomatis untuk hemat API.")
-        status_label.setStyleSheet("color: #ffc107; font-size: 11px; font-style: italic; padding: 8px; background-color: #2a2416; border-radius: 4px; margin-top: 10px;")
+        status_label.setStyleSheet(f"color: {WARNING}; font-size: 11px; font-style: italic; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; margin-top: 10px;")
         group_layout.addWidget(status_label)
 
         layout.addWidget(group)
     
     def create_sales_template_section(self, layout):
-        """Create Sales Template section for live selling context"""
-        group = QGroupBox("🛍️ Template Prompt Live Selling")
+        """Create product knowledge section — AI uses this to understand what's being sold"""
+        group = QGroupBox("🧠 Pengetahuan Produk untuk AI")
         group_layout = QVBoxLayout(group)
-        group_layout.setSpacing(15)
-        
-        # Description
-        desc = QLabel("Pilih template prompt untuk berbagai jenis live selling dengan produk keranjang 1-5")
-        desc.setStyleSheet("color: #cccccc; font-size: 12px; font-style: italic; padding: 5px;")
+        group_layout.setSpacing(10)
+
+        desc = QLabel("Tulis di sini apa yang kamu jual di live — nomor keranjang, nama produk, harga, promo, dll.\nAI akan membaca ini dan menjawab komentar penonton sesuai produkmu.")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; padding: 6px; line-height: 1.5;")
+        desc.setWordWrap(True)
         group_layout.addWidget(desc)
-        
-        # Template selection
-        template_layout = QHBoxLayout()
-        template_label = QLabel("Template:")
-        template_label.setMinimumWidth(100)
-        template_layout.addWidget(template_label)
-        
-        self.template_combo = QComboBox()
-        self.template_combo.addItem("Pilih Template Selling", "")
-        
-        # Add templates from sales_templates.py
-        for key, name, description in get_template_list():
-            self.template_combo.addItem(f"{name} - {description}", key)
-        
-        self.template_combo.currentIndexChanged.connect(lambda index: self.on_template_changed(self.template_combo.itemData(index)))
-        template_layout.addWidget(self.template_combo)
-        template_layout.addStretch()
-        group_layout.addLayout(template_layout)
-        
-        # Context Setting Area (Manual + Template)
-        context_label = QLabel("Context Setting (Manual atau dari Template):")
-        context_label.setStyleSheet("font-weight: bold; color: #ffffff; margin-top: 10px;")
-        group_layout.addWidget(context_label)
-        
-        # Manual context input (editable)
+
+        # Editable knowledge text area
         self.context_input = QTextEdit()
-        self.context_input.setMaximumHeight(200)
         self.context_input.setMinimumHeight(200)
-        self.context_input.setPlaceholderText("Tulis context setting manual di sini, atau pilih template di bawah untuk mengisi otomatis...")
-        
-        # Load existing context from config
+        self.context_input.setMaximumHeight(240)
+        self.context_input.setPlaceholderText(
+            "Tulis apa yang kamu jual di live ini...\n\n"
+            "Contoh:\n"
+            "Keranjang 1 — Lipstik Merah 45rb\n"
+            "Keranjang 2 — Foundation 89rb\n"
+            "Promo hari ini beli 2 gratis ongkir"
+        )
         existing_context = self.cfg.get("user_context", "")
         if existing_context:
             self.context_input.setPlainText(existing_context)
-        
-        self.context_input.setStyleSheet("""
-            QTextEdit {
-                background-color: #2a2a2a;
-                border: 2px solid #404040;
+        self.context_input.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {BG_ELEVATED};
+                border: 2px solid {BORDER_GOLD};
                 border-radius: 8px;
                 padding: 12px;
                 font-size: 12px;
-                color: #ffffff;
-                line-height: 1.4;
-            }
-            QTextEdit:focus {
-                border: 2px solid #1877F2;
-                background-color: #333333;
-            }
+                color: {TEXT_PRIMARY};
+                line-height: 1.5;
+            }}
+            QTextEdit:focus {{
+                border: 2px solid {PRIMARY};
+                background-color: {BG_SURFACE};
+            }}
         """)
+        self.context_input.textChanged.connect(self._update_char_count)
         group_layout.addWidget(self.context_input)
-        
-        # Template preview area (now editable as example/guide)
-        template_label = QLabel("Template Contoh (Bisa Diedit sebagai Panduan):")
-        template_label.setStyleSheet("font-weight: bold; color: #ffc107; margin-top: 15px;")
-        group_layout.addWidget(template_label)
-        
-        self.template_preview = QTextEdit()
-        self.template_preview.setMaximumHeight(150)
-        self.template_preview.setMinimumHeight(150)
-        self.template_preview.setPlaceholderText("Pilih template untuk melihat contoh prompt yang baik, lalu edit sesuai kebutuhan...")
-        self.template_preview.setReadOnly(False)  # Now editable!
-        self.template_preview.setStyleSheet("""
-            QTextEdit {
-                background-color: #2a2a2a;
-                border: 2px solid #ffc107;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 12px;
-                color: #ffffff;
-                line-height: 1.3;
-            }
-            QTextEdit:focus {
-                border: 2px solid #ffc107;
-                background-color: #333333;
-            }
-        """)
-        group_layout.addWidget(self.template_preview)
-        
-        # Button controls
+
+        # Char count label
+        self.char_count_label = QLabel("")
+        self.char_count_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px; padding: 2px 4px;")
+        group_layout.addWidget(self.char_count_label)
+        self._update_char_count()
+
+        # Buttons
         button_layout = QHBoxLayout()
-        
-        # Copy template to context button
-        copy_template_btn = QPushButton("⬆️ Copy Template ke Context")
-        copy_template_btn.setProperty("class", "secondary")
-        copy_template_btn.clicked.connect(self.copy_template_to_context)
-        copy_template_btn.setEnabled(False)
-        button_layout.addWidget(copy_template_btn)
-        self.copy_template_btn = copy_template_btn
-        
-        # Save context button
-        save_context_btn = QPushButton("💾 Save Context Setting")
-        save_context_btn.setProperty("class", "success")
+
+        save_context_btn = QPushButton("💾 Simpan")
+        save_context_btn.setStyleSheet(btn_success())
         save_context_btn.clicked.connect(self.save_context_setting)
         button_layout.addWidget(save_context_btn)
-        
-        # Clear context button  
-        clear_context_btn = QPushButton("🗑️ Clear")
-        clear_context_btn.setProperty("class", "danger")
+
+        self.polish_btn = QPushButton("✨ Sempurnakan dengan AI")
+        self.polish_btn.setStyleSheet(btn_primary())
+        self.polish_btn.clicked.connect(self._polish_knowledge_with_ai)
+        button_layout.addWidget(self.polish_btn)
+
+        self.revert_btn = QPushButton("↩️ Kembali ke Teks Asli")
+        self.revert_btn.setStyleSheet(btn_ghost())
+        self.revert_btn.clicked.connect(self._revert_context)
+        self.revert_btn.setVisible(False)
+        button_layout.addWidget(self.revert_btn)
+
+        clear_context_btn = QPushButton("🗑️ Hapus")
+        clear_context_btn.setStyleSheet(btn_danger())
         clear_context_btn.clicked.connect(self.clear_context_setting)
         button_layout.addWidget(clear_context_btn)
-        
+
         button_layout.addStretch()
         group_layout.addLayout(button_layout)
-        
-        # Status
-        self.template_status = QLabel("Status: Belum ada template dipilih")
-        self.template_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
-        group_layout.addWidget(self.template_status)
-        
+
         layout.addWidget(group)
     
     def create_google_tts_section(self, layout):
@@ -765,12 +785,12 @@ class ConfigTab(QWidget):
 
         # Description with better styling
         desc = QLabel("Masukkan Google Cloud / Gemini API Key untuk TTS (bisa pakai 1 API Key untuk kedua layanan)")
-        desc.setStyleSheet("color: #cccccc; font-size: 12px; font-style: italic; padding: 5px;")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
         group_layout.addWidget(desc)
 
         # Info about Gemini Flash TTS
         gemini_info = QLabel("💡 Gemini Flash TTS: 19 suara ekspresif baru tersedia di pilihan suara (Gemini-Puck, Gemini-Kore, dll)")
-        gemini_info.setStyleSheet("color: #1877F2; font-size: 11px; font-style: italic; padding: 5px; background-color: #1a1a2e; border-radius: 4px;")
+        gemini_info.setStyleSheet(f"color: {INFO}; font-size: 11px; font-style: italic; padding: 5px; background-color: {BG_ELEVATED}; border-radius: 4px;")
         group_layout.addWidget(gemini_info)
 
         # API Key input container
@@ -798,20 +818,20 @@ class ConfigTab(QWidget):
 
         # API Key info with better formatting
         api_key_info_frame = QFrame()
-        api_key_info_frame.setStyleSheet("""
-            QFrame {
-                background-color: #2a2416;
-                border: 1px solid #ffc107;
+        api_key_info_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_ELEVATED};
+                border: 1px solid {ACCENT};
                 border-radius: 6px;
                 padding: 10px;
                 margin: 5px;
-            }
+            }}
         """)
         api_key_info_layout = QVBoxLayout(api_key_info_frame)
         api_key_info_layout.setSpacing(5)
 
         info_title = QLabel("📋 Cara Mendapatkan API Key:")
-        info_title.setStyleSheet("color: #ffc107; font-weight: bold; font-size: 12px;")
+        info_title.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 12px;")
         api_key_info_layout.addWidget(info_title)
 
         steps = [
@@ -825,7 +845,7 @@ class ConfigTab(QWidget):
 
         for step in steps:
             step_label = QLabel(step)
-            step_label.setStyleSheet("color: #ffffff; font-size: 11px; padding-left: 10px;")
+            step_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding-left: 10px;")
             api_key_info_layout.addWidget(step_label)
 
         group_layout.addWidget(api_key_info_frame)
@@ -846,7 +866,7 @@ class ConfigTab(QWidget):
         # Status with better styling
         self.tts_status = QLabel("Status: Belum ada API Key")
         self.tts_status.setProperty("class", "status-info")
-        self.tts_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+        self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
         group_layout.addWidget(self.tts_status)
 
         layout.addWidget(group)
@@ -863,17 +883,17 @@ class ConfigTab(QWidget):
         self.status_text.setMinimumHeight(120)
         self.status_text.setPlainText("Belum ada konfigurasi yang diatur")
         self.status_text.setReadOnly(True)
-        self.status_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #2a2a2a;
-                border: 2px solid #404040;
+        self.status_text.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {BG_ELEVATED};
+                border: 2px solid {BORDER_GOLD};
                 border-radius: 8px;
                 padding: 15px;
                 font-size: 13px;
-                color: #ffffff;
+                color: {TEXT_PRIMARY};
                 font-family: 'Consolas', 'Monaco', monospace;
                 line-height: 1.4;
-            }
+            }}
         """)
         group_layout.addWidget(self.status_text)
         
@@ -882,29 +902,31 @@ class ConfigTab(QWidget):
         
         # AI Status Indicator
         self.ai_indicator = QLabel("🔴 AI: Tidak terhubung")
-        self.ai_indicator.setStyleSheet("""
-            QLabel {
-                background-color: #404040;
-                border: 1px solid #555555;
+        self.ai_indicator.setStyleSheet(f"""
+            QLabel {{
+                background-color: {BG_SURFACE};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 6px;
                 padding: 8px 12px;
                 font-size: 12px;
                 font-weight: bold;
-            }
+                color: {ERROR};
+            }}
         """)
         indicators_layout.addWidget(self.ai_indicator)
         
         # TTS Status Indicator
         self.tts_indicator = QLabel("🔴 TTS: Tidak terhubung")
-        self.tts_indicator.setStyleSheet("""
-            QLabel {
-                background-color: #404040;
-                border: 1px solid #555555;
+        self.tts_indicator.setStyleSheet(f"""
+            QLabel {{
+                background-color: {BG_SURFACE};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 6px;
                 padding: 8px 12px;
                 font-size: 12px;
                 font-weight: bold;
-            }
+                color: {ERROR};
+            }}
         """)
         indicators_layout.addWidget(self.tts_indicator)
         
@@ -923,9 +945,9 @@ class ConfigTab(QWidget):
         save_btn.setProperty("class", "success")
         save_btn.clicked.connect(self.save_config)
         save_btn.setMinimumHeight(45)
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {SUCCESS};
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -933,15 +955,11 @@ class ConfigTab(QWidget):
                 font-weight: bold;
                 font-size: 14px;
                 min-height: 20px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-                transform: translateY(-2px);
-            }
-            QPushButton:pressed {
-                background-color: #1e7e34;
-                transform: translateY(0px);
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {ACCENT};
+                color: {BG_BASE};
+            }}
         """)
         button_layout.addWidget(save_btn)
         
@@ -950,9 +968,9 @@ class ConfigTab(QWidget):
         reset_btn.setProperty("class", "danger")
         reset_btn.clicked.connect(self.reset_config)
         reset_btn.setMinimumHeight(45)
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {ERROR};
                 color: white;
                 border: none;
                 border-radius: 8px;
@@ -960,15 +978,11 @@ class ConfigTab(QWidget):
                 font-weight: bold;
                 font-size: 14px;
                 min-height: 20px;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-                transform: translateY(-2px);
-            }
-            QPushButton:pressed {
-                background-color: #bd2130;
-                transform: translateY(0px);
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {WARNING};
+                color: {BG_BASE};
+            }}
         """)
         button_layout.addWidget(reset_btn)
         
@@ -976,25 +990,21 @@ class ConfigTab(QWidget):
         test_all_btn = QPushButton("🔍 Test Semua Koneksi")
         test_all_btn.clicked.connect(self.test_all_connections)
         test_all_btn.setMinimumHeight(45)
-        test_all_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1877F2;
-                color: white;
-                border: none;
+        test_all_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {SECONDARY};
+                color: {TEXT_PRIMARY};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 8px;
                 padding: 12px 24px;
                 font-weight: bold;
                 font-size: 14px;
                 min-height: 20px;
-            }
-            QPushButton:hover {
-                background-color: #166FE5;
-                transform: translateY(-2px);
-            }
-            QPushButton:pressed {
-                background-color: #125FCA;
-                transform: translateY(0px);
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {PRIMARY};
+                color: white;
+            }}
         """)
         button_layout.addWidget(test_all_btn)
         
@@ -1004,8 +1014,8 @@ class ConfigTab(QWidget):
         """Handle provider selection change"""
         if provider == "DeepSeek":
             self.api_key_input.setPlaceholderText("Masukkan DeepSeek API Key (sk-...)")
-        elif provider == "OpenAI (ChatGPT)":
-            self.api_key_input.setPlaceholderText("Masukkan OpenAI API Key (sk-...)")
+        elif provider == "Gemini Flash Lite":
+            self.api_key_input.setPlaceholderText("Masukkan Gemini API Key (AIzaSy...)")
         self.update_status_overview()
     
     def on_api_key_changed(self):
@@ -1016,11 +1026,11 @@ class ConfigTab(QWidget):
         if len(api_key) > 0:
             self.ai_status.setText("Status: API key siap untuk ditest")
             self.ai_status.setProperty("class", "status-warning")
-            self.ai_status.setStyleSheet("color: #ffc107; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
+            self.ai_status.setStyleSheet(status_badge(WARNING))
         else:
             self.ai_status.setText("Status: Belum ada API key")
             self.ai_status.setProperty("class", "status-info")
-            self.ai_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+            self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
         
         self.update_status_overview()
     
@@ -1061,41 +1071,61 @@ class ConfigTab(QWidget):
             self.tts_test_btn.setEnabled(True)
             self.tts_status.setText("Status: API Key siap untuk ditest")
             self.tts_status.setProperty("class", "status-warning")
-            self.tts_status.setStyleSheet("color: #ffc107; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
+            self.tts_status.setStyleSheet(status_badge(WARNING))
         else:
             self.tts_test_btn.setEnabled(False)
             self.tts_status.setText("Status: Belum ada API Key")
             self.tts_status.setProperty("class", "status-info")
-            self.tts_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+            self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
 
         self.update_status_overview()
     
+    def _update_char_count(self):
+        """Update character count label"""
+        count = len(self.context_input.toPlainText())
+        self.char_count_label.setText(f"{count} karakter")
+
     def on_template_changed(self, template_key):
-        """Handle template selection change"""
+        """Load selected template directly into the editable context input"""
         if template_key:
-            template_content = get_template(template_key)
-            self.template_preview.setPlainText(template_content)
-            self.copy_template_btn.setEnabled(True)
-            self.template_status.setText("Status: Template siap di-copy ke Context Setting")
-            self.template_status.setStyleSheet("color: #ffc107; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
-        else:
-            self.template_preview.setPlaceholderText("Pilih template untuk melihat contoh prompt yang baik...")
-            self.template_preview.clear()
-            self.copy_template_btn.setEnabled(False)
-            self.template_status.setText("Status: Belum ada template dipilih")
-            self.template_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
-    
-    def copy_template_to_context(self):
-        """Copy template content to context input for editing"""
-        template_content = self.template_preview.toPlainText().strip()
-        if not template_content:
-            QMessageBox.warning(self, "Peringatan", "Template kosong atau belum dipilih.")
+            self.context_input.setPlainText(get_template(template_key))
+
+    def _polish_knowledge_with_ai(self):
+        """Use AI to improve the product knowledge text"""
+        text = self.context_input.toPlainText().strip()
+        if not text:
+            QMessageBox.warning(self, "Teks Kosong", "Tulis dulu pengetahuan produkmu sebelum disempurnakan oleh AI.")
             return
-        
-        # Copy template content to context input
-        self.context_input.setPlainText(template_content)
-        self.template_status.setText("Status: ✅ Template berhasil di-copy ke Context Setting")
-        self.template_status.setStyleSheet("color: #28a745; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
+
+        self._original_context = text
+        self.polish_btn.setEnabled(False)
+        self.polish_btn.setText("⏳ Memproses...")
+        self.char_count_label.setText("AI sedang menyempurnakan teks...")
+        self.revert_btn.setVisible(False)
+
+        self._polish_thread = PolishKnowledgeThread(text)
+        self._polish_thread.finished.connect(self._on_polish_done)
+        self._polish_thread.status_update.connect(self.char_count_label.setText)
+        self._polish_thread.start()
+
+    def _on_polish_done(self, result: str):
+        """Handle AI polish result"""
+        self.polish_btn.setEnabled(True)
+        self.polish_btn.setText("✨ Sempurnakan dengan AI")
+        if result:
+            self.context_input.setPlainText(result)
+            self.revert_btn.setVisible(True)
+            self.char_count_label.setText(f"{len(result)} karakter  ·  ✅ Disempurnakan AI")
+        else:
+            self._update_char_count()
+            QMessageBox.warning(self, "Gagal", "AI tidak bisa memproses teks saat ini.\nPeriksa API key atau coba lagi.")
+
+    def _revert_context(self):
+        """Revert to original text before AI polishing"""
+        if hasattr(self, '_original_context') and self._original_context:
+            self.context_input.setPlainText(self._original_context)
+            self._original_context = ""
+        self.revert_btn.setVisible(False)
     
     def save_context_setting(self):
         """Save context setting from manual input"""
@@ -1115,8 +1145,7 @@ class ConfigTab(QWidget):
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             
-            self.template_status.setText("Status: ✅ Context Setting berhasil disimpan")
-            self.template_status.setStyleSheet("color: #28a745; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
+            self.char_count_label.setText(f"{len(context_content)} karakter  ·  ✅ Tersimpan")
             
             QMessageBox.information(
                 self, 
@@ -1140,8 +1169,7 @@ class ConfigTab(QWidget):
         
         if reply == QMessageBox.StandardButton.Yes:
             self.context_input.clear()
-            self.template_status.setText("Status: Context Setting dikosongkan")
-            self.template_status.setStyleSheet("color: #17a2b8; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+            self.template_combo.setCurrentIndex(0)
     
     def toggle_password_visibility(self, line_edit):
         """Toggle password visibility for line edit"""
@@ -1157,14 +1185,15 @@ class ConfigTab(QWidget):
         
         if not api_key:
             self.ai_status.setText("Status: ❌ API key kosong")
-            self.ai_status.setStyleSheet("color: #FF6B6B; font-size: 12px;")
+            self.ai_status.setStyleSheet(status_badge(ERROR))
             return
         
         self.ai_test_btn.setText("⏳ Testing...")
         self.ai_test_btn.setEnabled(False)
         
         # Determine API type for testing
-        api_type = "deepseek" if provider == "DeepSeek" else "chatgpt"
+        api_type_map = {"DeepSeek": "deepseek", "Gemini Flash Lite": "gemini"}
+        api_type = api_type_map.get(provider, "deepseek")
         
         # Stop existing thread if running
         if self.test_thread and self.test_thread.isRunning():
@@ -1182,7 +1211,7 @@ class ConfigTab(QWidget):
 
         if not api_key:
             self.tts_status.setText("Status: ❌ Belum ada API Key")
-            self.tts_status.setStyleSheet("color: #FF6B6B; font-size: 12px;")
+            self.tts_status.setStyleSheet(status_badge(ERROR))
             return
 
         self.tts_test_btn.setText("⏳ Testing...")
@@ -1228,7 +1257,7 @@ class ConfigTab(QWidget):
             if success:
                 self.tts_status.setText("Status: ✅ API Key valid dan TTS berfungsi!")
                 self.tts_status.setProperty("class", "status-success")
-                self.tts_status.setStyleSheet("color: #28a745; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
+                self.tts_status.setStyleSheet(status_badge(SUCCESS))
                 logger.info("[CONFIG_TEST] ✅ Google TTS test successful")
             else:
                 raise Exception("TTS gagal dijalankan. Periksa API Key dan quota Anda.")
@@ -1236,7 +1265,7 @@ class ConfigTab(QWidget):
         except Exception as e:
             self.tts_status.setText(f"Status: ❌ Error: {str(e)}")
             self.tts_status.setProperty("class", "status-error")
-            self.tts_status.setStyleSheet("color: #dc3545; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
+            self.tts_status.setStyleSheet(status_badge(ERROR))
             logger.error(f"[CONFIG_TEST] ❌ Google TTS test failed: {e}")
 
             # Restore backup settings on failure
@@ -1265,11 +1294,11 @@ class ConfigTab(QWidget):
         if success:
             self.ai_status.setText(f"Status: {message}")
             self.ai_status.setProperty("class", "status-success")
-            self.ai_status.setStyleSheet("color: #28a745; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
+            self.ai_status.setStyleSheet(status_badge(SUCCESS))
         else:
             self.ai_status.setText(f"Status: {message}")
             self.ai_status.setProperty("class", "status-error")
-            self.ai_status.setStyleSheet("color: #dc3545; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px; font-weight: bold;")
+            self.ai_status.setStyleSheet(status_badge(ERROR))
         
         self.update_status_overview()
     
@@ -1287,30 +1316,30 @@ class ConfigTab(QWidget):
         if api_key:
             status_lines.append(f"✅ {provider} API: Terkonfigurasi ({len(api_key)} karakter)")
             self.ai_indicator.setText(f"🟢 AI: {provider} Terhubung")
-            self.ai_indicator.setStyleSheet("""
-                QLabel {
-                    background-color: #28a745;
-                    border: 1px solid #1e7e34;
+            self.ai_indicator.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {SUCCESS};
+                    border: 1px solid {SUCCESS};
                     border-radius: 6px;
                     padding: 8px 12px;
                     font-size: 12px;
                     font-weight: bold;
                     color: white;
-                }
+                }}
             """)
         else:
             status_lines.append(f"❌ {provider} API: Belum dikonfigurasi")
             self.ai_indicator.setText("🔴 AI: Tidak terhubung")
-            self.ai_indicator.setStyleSheet("""
-                QLabel {
-                    background-color: #dc3545;
-                    border: 1px solid #bd2130;
+            self.ai_indicator.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {ERROR};
+                    border: 1px solid {ERROR};
                     border-radius: 6px;
                     padding: 8px 12px;
                     font-size: 12px;
                     font-weight: bold;
                     color: white;
-                }
+                }}
             """)
 
         # Google TTS Status (API Key only)
@@ -1318,30 +1347,30 @@ class ConfigTab(QWidget):
             status_lines.append(f"✅ Google TTS: Terkonfigurasi")
             status_lines.append(f"   🔑 API Key: {'*' * (len(tts_api_key) - 4)}{tts_api_key[-4:] if len(tts_api_key) > 4 else '****'}")
             self.tts_indicator.setText("🟢 TTS: Google Cloud")
-            self.tts_indicator.setStyleSheet("""
-                QLabel {
-                    background-color: #28a745;
-                    border: 1px solid #1e7e34;
+            self.tts_indicator.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {SUCCESS};
+                    border: 1px solid {SUCCESS};
                     border-radius: 6px;
                     padding: 8px 12px;
                     font-size: 12px;
                     font-weight: bold;
                     color: white;
-                }
+                }}
             """)
         else:
             status_lines.append("❌ Google TTS: Belum dikonfigurasi")
             self.tts_indicator.setText("🔴 TTS: Tidak terhubung")
-            self.tts_indicator.setStyleSheet("""
-                QLabel {
-                    background-color: #dc3545;
-                    border: 1px solid #bd2130;
+            self.tts_indicator.setStyleSheet(f"""
+                QLabel {{
+                    background-color: {ERROR};
+                    border: 1px solid {ERROR};
                     border-radius: 6px;
                     padding: 8px 12px;
                     font-size: 12px;
                     font-weight: bold;
                     color: white;
-                }
+                }}
             """)
 
         status_lines.append("")
@@ -1373,18 +1402,16 @@ class ConfigTab(QWidget):
             provider = self.provider_combo.currentText()
             tts_api_key = self.tts_api_key_input.text().strip()
 
-            # Save AI provider selection (CRITICAL FIX!)
-            if provider == "DeepSeek":
-                config["ai_provider"] = "deepseek"
-            elif provider == "OpenAI (ChatGPT)":
-                config["ai_provider"] = "chatgpt"
+            # Save AI provider selection
+            provider_map = {"DeepSeek": "deepseek", "Gemini Flash Lite": "gemini"}
+            config["ai_provider"] = provider_map.get(provider, "deepseek")
 
             # Save AI API keys
             if api_key:
                 if provider == "DeepSeek":
                     config["api_keys"]["DEEPSEEK_API_KEY"] = api_key
-                elif provider == "OpenAI (ChatGPT)":
-                    config["api_keys"]["OPENAI_API_KEY"] = api_key
+                elif provider == "Gemini Flash Lite":
+                    config["api_keys"]["GEMINI_API_KEY"] = api_key
 
             # Save Google TTS API Key only
             if tts_api_key:
@@ -1419,11 +1446,11 @@ class ConfigTab(QWidget):
                         logger.info("[CONFIG] Reinitializing DeepSeek AI with new API key...")
                         reinitialize_deepseek()
                         logger.info("[CONFIG] ✅ DeepSeek AI reinitialized successfully")
-                    elif provider == "OpenAI (ChatGPT)":
-                        from modules_client.chatgpt_ai import reinitialize_chatgpt
-                        logger.info("[CONFIG] Reinitializing ChatGPT AI with new API key...")
-                        reinitialize_chatgpt()
-                        logger.info("[CONFIG] ✅ ChatGPT AI reinitialized successfully")
+                    elif provider == "Gemini Flash Lite":
+                        from modules_client.gemini_ai import reinitialize_gemini
+                        logger.info("[CONFIG] Reinitializing Gemini AI with new API key...")
+                        reinitialize_gemini()
+                        logger.info("[CONFIG] ✅ Gemini AI reinitialized successfully")
                 except Exception as ai_reinit_error:
                     logger.error(f"[CONFIG] Failed to reinitialize AI: {ai_reinit_error}")
 
@@ -1446,13 +1473,14 @@ class ConfigTab(QWidget):
             tts_api_key = self.cfg.get("google_tts_api_key", "")
             user_context = self.cfg.get("user_context", "")
 
-            # Load AI API key based on available keys
-            if "DEEPSEEK_API_KEY" in api_keys:
+            # Load AI API key berdasarkan ai_provider yang tersimpan
+            ai_provider = self.cfg.get("ai_provider", "deepseek")
+            if ai_provider == "gemini" and "GEMINI_API_KEY" in api_keys:
+                self.provider_combo.setCurrentText("Gemini Flash Lite")
+                self.api_key_input.setText(api_keys["GEMINI_API_KEY"])
+            elif "DEEPSEEK_API_KEY" in api_keys:
                 self.provider_combo.setCurrentText("DeepSeek")
                 self.api_key_input.setText(api_keys["DEEPSEEK_API_KEY"])
-            elif "OPENAI_API_KEY" in api_keys:
-                self.provider_combo.setCurrentText("OpenAI (ChatGPT)")
-                self.api_key_input.setText(api_keys["OPENAI_API_KEY"])
 
             # Load Google TTS API Key
             if tts_api_key and hasattr(self, 'tts_api_key_input'):
@@ -1497,15 +1525,15 @@ class ConfigTab(QWidget):
             
             self.ai_status.setText("Status: Belum ada API key")
             self.ai_status.setProperty("class", "status-info")
-            self.ai_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+            self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
             
             self.tts_status.setText("Status: Belum ada file kredensial")
             self.tts_status.setProperty("class", "status-info")
-            self.tts_status.setStyleSheet("color: #888; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+            self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
             
             if hasattr(self, 'template_status'):
                 self.template_status.setText("Status: Semua konfigurasi direset")
-                self.template_status.setStyleSheet("color: #17a2b8; font-size: 12px; padding: 8px; background-color: #333; border-radius: 4px;")
+                self.template_status.setStyleSheet(f"color: {INFO}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px;")
             
             # Reset button states
             self.ai_test_btn.setEnabled(False)

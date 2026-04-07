@@ -2,11 +2,26 @@
 
 import webbrowser
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QGridLayout, QScrollArea, QFrame, QTextEdit
 )
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QFont, QPixmap, QDesktopServices
+
+try:
+    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
+        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
+        CARD_ELEVATED_STYLE, label_title, label_subtitle)
+except ImportError:
+    PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"; BG_ELEVATED = "#1E2A3B"
+    TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#93C5FD"; TEXT_DIM = "#4B7BBA"
+    ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
+    BORDER_GOLD = "#1E4585"; BORDER = "#1A2E4A"; ACCENT = "#60A5FA"
+    SECONDARY = "#1E3A5F"; RADIUS = "10px"; RADIUS_SM = "6px"
+    CARD_ELEVATED_STYLE = f"QFrame {{ background-color: {BG_ELEVATED}; border: 1px solid {BORDER_GOLD}; border-radius: 10px; }}"
+    def label_title(size=16): return f"font-size: {size}pt; font-weight: 700; color: {PRIMARY}; background: transparent;"
+    def label_subtitle(size=11): return f"font-size: {size}px; color: {TEXT_MUTED}; background: transparent;"
 
 class DeveloperTab(QWidget):
     """Tab untuk menampilkan link media sosial developer dengan UI yang menarik."""
@@ -68,19 +83,12 @@ class DeveloperTab(QWidget):
         # Title
         title_label = QLabel("VocaLive Developer")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_font = QFont()
-        title_font.setPointSize(24)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setStyleSheet("color: #4CAF50; margin: 10px;")
+        title_label.setStyleSheet(label_title(size=22) + " margin: 10px;")
         
         # Subtitle
-        subtitle_label = QLabel("Arul CG - Full Stack Developer & Content Creator")
+        subtitle_label = QLabel("Arul CG — Full Stack Developer & Content Creator")
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_font = QFont()
-        subtitle_font.setPointSize(14)
-        subtitle_label.setFont(subtitle_font)
-        subtitle_label.setStyleSheet("color: #ffffff; margin-bottom: 20px;")
+        subtitle_label.setStyleSheet(label_subtitle(size=13) + " margin-bottom: 20px;")
         
         header_layout.addWidget(title_label)
         header_layout.addWidget(subtitle_label)
@@ -183,7 +191,7 @@ class DeveloperTab(QWidget):
         
         # Description
         desc_label = QLabel(description)
-        desc_label.setStyleSheet("color: #cccccc; font-size: 11px;")
+        desc_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
         desc_label.setWordWrap(True)
         
         # Visit button
@@ -211,19 +219,16 @@ class DeveloperTab(QWidget):
         button_layout.addWidget(desc_label)
         button_layout.addWidget(visit_btn)
         
-        # Frame styling
-        button_frame.setStyleSheet("""
-            QFrame {
-                background-color: #2b2b2b;
-                border: 2px solid #444444;
-                border-radius: 12px;
-                padding: 10px;
-                margin: 5px;
-            }
-            QFrame:hover {
-                border-color: #666666;
-                background-color: #333333;
-            }
+        # Frame styling — use CARD_ELEVATED_STYLE as base
+        button_frame.setStyleSheet(CARD_ELEVATED_STYLE + f"""
+            QFrame {{
+                padding: 12px;
+                margin: 4px;
+            }}
+            QFrame:hover {{
+                border-color: {PRIMARY};
+                background-color: {BG_SURFACE};
+            }}
         """)
         
         return button_frame
@@ -248,16 +253,16 @@ class DeveloperTab(QWidget):
 💡 Dikembangkan dengan Python, PyQt6, dan berbagai AI APIs untuk memberikan pengalaman streaming yang lebih interaktif dan engaging!"""
         
         about_text.setPlainText(about_content)
-        about_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #2b2b2b;
-                color: #ffffff;
-                border: 2px solid #444444;
+        about_text.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {BG_ELEVATED};
+                color: {TEXT_PRIMARY};
+                border: 2px solid {BORDER_GOLD};
                 border-radius: 8px;
                 padding: 10px;
                 font-size: 12px;
                 line-height: 1.4;
-            }
+            }}
         """)
         
         about_layout.addWidget(about_text)
@@ -273,73 +278,75 @@ class DeveloperTab(QWidget):
         # Support message
         support_label = QLabel("💖 Jika aplikasi ini membantu, jangan lupa follow dan subscribe!")
         support_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        support_label.setStyleSheet("color: #4CAF50; font-weight: bold; font-size: 14px; margin: 10px;")
+        support_label.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 14px; margin: 10px;")
         
         # Copyright
         copyright_label = QLabel("© 2024 Arul CG - VocaLive Developer")
         copyright_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        copyright_label.setStyleSheet("color: #888888; font-size: 10px; margin: 5px;")
+        copyright_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 10px; margin: 5px;")
         
         footer_layout.addWidget(support_label)
         footer_layout.addWidget(copyright_label)
         
-        footer_frame.setStyleSheet("""
-            QFrame {
-                background-color: #1e1e1e;
+        footer_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_BASE};
                 border-radius: 8px;
+                border: 1px solid {BORDER_GOLD};
                 margin-top: 10px;
-            }
+            }}
         """)
         
         layout.addWidget(footer_frame)
     
     def _apply_styling(self):
         """Apply global styling to the tab."""
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #1a1a1a;
-                color: #ffffff;
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {BG_BASE};
+                color: {TEXT_PRIMARY};
                 font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            
-            QGroupBox {
+            }}
+
+            QGroupBox {{
                 font-weight: bold;
-                border: 2px solid #444444;
+                border: 2px solid {BORDER_GOLD};
                 border-radius: 8px;
                 margin-top: 1ex;
                 padding-top: 10px;
-                background-color: #252525;
-            }
-            
-            QGroupBox::title {
+                background-color: {BG_ELEVATED};
+            }}
+
+            QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 10px 0 10px;
-                color: #4CAF50;
+                color: {ACCENT};
                 font-size: 14px;
                 font-weight: bold;
-            }
-            
-            QScrollArea {
+                background-color: {BG_ELEVATED};
+            }}
+
+            QScrollArea {{
                 border: none;
-                background-color: #1a1a1a;
-            }
-            
-            QScrollBar:vertical {
-                background-color: #2b2b2b;
+                background-color: {BG_BASE};
+            }}
+
+            QScrollBar:vertical {{
+                background-color: {BG_SURFACE};
                 width: 12px;
                 border-radius: 6px;
-            }
-            
-            QScrollBar::handle:vertical {
-                background-color: #555555;
+            }}
+
+            QScrollBar::handle:vertical {{
+                background-color: {BORDER_GOLD};
                 border-radius: 6px;
                 min-height: 20px;
-            }
-            
-            QScrollBar::handle:vertical:hover {
-                background-color: #666666;
-            }
+            }}
+
+            QScrollBar::handle:vertical:hover {{
+                background-color: {PRIMARY};
+            }}
         """)
     
     def _darken_color(self, color, factor=0.2):

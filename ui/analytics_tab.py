@@ -22,14 +22,35 @@ except ImportError:
     ANALYTICS_AVAILABLE = False
     print("[Analytics Tab] analytics_manager not available")
 
+try:
+    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
+        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
+        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
+        btn_success, btn_danger, btn_ghost, CARD_ELEVATED_STYLE,
+        label_value, label_subtitle, label_muted, LOG_TEXTEDIT_STYLE)
+except ImportError:
+    PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"; BG_ELEVATED = "#1E2A3B"
+    TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#93C5FD"; TEXT_DIM = "#4B7BBA"
+    ERROR = "#EF4444"; SUCCESS = "#22C55E"; WARNING = "#F59E0B"; INFO = "#38BDF8"
+    BORDER_GOLD = "#1E4585"; BORDER = "#1A2E4A"; ACCENT = "#60A5FA"
+    SECONDARY = "#1E3A5F"; RADIUS = "10px"; RADIUS_SM = "6px"
+    def btn_success(extra=""): return f"QPushButton {{ background-color: {SUCCESS}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #16A34A; }}"
+    def btn_danger(extra=""): return f"QPushButton {{ background-color: {ERROR}; color: white; border: none; border-radius: 6px; padding: 8px 18px; font-weight: 700; {extra} }} QPushButton:hover {{ background-color: #DC2626; }}"
+    def btn_ghost(extra=""): return f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER}; border-radius: 6px; padding: 7px 18px; {extra} }}"
+    CARD_ELEVATED_STYLE = f"QFrame {{ background-color: {BG_ELEVATED}; border: 1px solid {BORDER_GOLD}; border-radius: 10px; }}"
+    def label_value(size=22): return f"font-size: {size}pt; font-weight: 700; color: {ACCENT}; background: transparent;"
+    def label_subtitle(size=11): return f"font-size: {size}px; color: {TEXT_MUTED}; background: transparent;"
+    def label_muted(size=11): return f"font-size: {size}px; color: {TEXT_DIM}; background: transparent;"
+    LOG_TEXTEDIT_STYLE = f"QTextEdit {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; border: 1px solid {BORDER_GOLD}; border-radius: 6px; padding: 8px; font-family: Consolas, monospace; font-size: 11px; }}"
+
 # Try to import pyqtgraph for charts
 try:
     import pyqtgraph as pg
     from pyqtgraph import PlotWidget
     CHARTS_AVAILABLE = True
     # Configure pyqtgraph for dark theme
-    pg.setConfigOption('background', '#18191A')
-    pg.setConfigOption('foreground', '#FFFFFF')
+    pg.setConfigOption('background', '#1c1208')
+    pg.setConfigOption('foreground', '#FFFBEB')
 except ImportError:
     CHARTS_AVAILABLE = False
     print("[Analytics Tab] pyqtgraph not available - charts disabled")
@@ -70,7 +91,7 @@ class AnalyticsTab(QWidget):
         # Check if analytics available
         if not ANALYTICS_AVAILABLE:
             error_label = QLabel("⚠️ Analytics Manager tidak tersedia")
-            error_label.setStyleSheet("color: #FA383E; font-size: 14px; padding: 20px;")
+            error_label.setStyleSheet(f"color: {ERROR}; font-size: 14px; padding: 20px;")
             error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             main_layout.addWidget(error_label)
             self.setLayout(main_layout)
@@ -78,23 +99,23 @@ class AnalyticsTab(QWidget):
 
         # Tab untuk different views
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #3A3B3C;
-                background-color: #18191A;
-            }
-            QTabBar::tab {
-                background-color: #242526;
-                color: #B0B3B8;
+        self.tabs.setStyleSheet(f"""
+            QTabWidget::pane {{
+                border: 1px solid {BORDER_GOLD};
+                background-color: {BG_BASE};
+            }}
+            QTabBar::tab {{
+                background-color: {BG_SURFACE};
+                color: {TEXT_MUTED};
                 padding: 8px 16px;
                 margin-right: 2px;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
-            }
-            QTabBar::tab:selected {
-                background-color: #1877F2;
+            }}
+            QTabBar::tab:selected {{
+                background-color: {PRIMARY};
                 color: white;
-            }
+            }}
         """)
 
         # Tab 1: Real-time Overview
@@ -133,12 +154,13 @@ class AnalyticsTab(QWidget):
     def _create_header(self):
         """Create header with title and action buttons"""
         header = QFrame()
-        header.setStyleSheet("""
-            QFrame {
-                background-color: #242526;
+        header.setStyleSheet(f"""
+            QFrame {{
+                background-color: {BG_ELEVATED};
                 border-radius: 8px;
                 padding: 10px;
-            }
+                border: 1px solid {BORDER_GOLD};
+            }}
         """)
 
         layout = QHBoxLayout()
@@ -146,68 +168,32 @@ class AnalyticsTab(QWidget):
         # Title
         title = QLabel("📈 Live Analytics Dashboard")
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        title.setStyleSheet("color: #1877F2;")
+        title.setStyleSheet(f"color: {PRIMARY};")
         layout.addWidget(title)
 
         layout.addStretch()
 
         # Session info
         self.session_label = QLabel("No active session")
-        self.session_label.setStyleSheet("color: #B0B3B8; font-size: 12px;")
+        self.session_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
         layout.addWidget(self.session_label)
 
         # Export CSV button
         export_btn = QPushButton("📥 Export CSV")
         export_btn.clicked.connect(self.export_current_session)
-        export_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #42B72A;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #36A420;
-            }
-        """)
+        export_btn.setStyleSheet(btn_success())
         layout.addWidget(export_btn)
 
         # Export PDF button
         pdf_btn = QPushButton("📄 Export PDF")
         pdf_btn.clicked.connect(self.export_to_pdf)
-        pdf_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9B59B6;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #8E44AD;
-            }
-        """)
+        pdf_btn.setStyleSheet(btn_ghost())
         layout.addWidget(pdf_btn)
 
         # Clear data button
         clear_btn = QPushButton("🗑️ Clear All Data")
         clear_btn.clicked.connect(self.clear_all_data)
-        clear_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FA383E;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #E02D32;
-            }
-        """)
+        clear_btn.setStyleSheet(btn_danger())
         layout.addWidget(clear_btn)
 
         header.setLayout(layout)
@@ -219,24 +205,24 @@ class AnalyticsTab(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
+        scroll_area.setStyleSheet(f"""
+            QScrollArea {{
                 border: none;
-                background-color: #18191A;
-            }
-            QScrollBar:vertical {
-                background-color: #242526;
+                background-color: {BG_BASE};
+            }}
+            QScrollBar:vertical {{
+                background-color: {BG_SURFACE};
                 width: 12px;
                 border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #3A3B3C;
+            }}
+            QScrollBar::handle:vertical {{
+                background-color: {BORDER_GOLD};
                 border-radius: 6px;
                 min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #4E4F50;
-            }
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background-color: {PRIMARY};
+            }}
         """)
 
         widget = QWidget()
@@ -265,20 +251,23 @@ class AnalyticsTab(QWidget):
 
         # Additional stats
         stats_group = QGroupBox("📊 Detailed Statistics")
-        stats_group.setStyleSheet("""
-            QGroupBox {
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
+        stats_group.setStyleSheet(f"""
+            QGroupBox {{
+                color: {ACCENT};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
                 font-weight: bold;
-            }
-            QGroupBox::title {
+                background-color: {BG_ELEVATED};
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px;
-            }
+                color: {ACCENT};
+                background-color: {BG_ELEVATED};
+            }}
         """)
 
         stats_layout_inner = QVBoxLayout()
@@ -295,10 +284,10 @@ class AnalyticsTab(QWidget):
         for key, label, default in stat_items:
             row = QHBoxLayout()
             label_widget = QLabel(label)
-            label_widget.setStyleSheet("color: #B0B3B8; font-weight: normal;")
+            label_widget.setStyleSheet(f"color: {TEXT_MUTED}; font-weight: normal;")
 
             value_widget = QLabel(default)
-            value_widget.setStyleSheet("color: #FFFFFF; font-weight: bold; font-size: 14px;")
+            value_widget.setStyleSheet(f"color: {TEXT_PRIMARY}; font-weight: bold; font-size: 14px;")
             value_widget.setAlignment(Qt.AlignmentFlag.AlignRight)
 
             row.addWidget(label_widget)
@@ -318,17 +307,7 @@ class AnalyticsTab(QWidget):
         self.timeline_text = QTextEdit()
         self.timeline_text.setReadOnly(True)
         self.timeline_text.setMaximumHeight(150)
-        self.timeline_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #242526;
-                color: #B0B3B8;
-                border: 1px solid #3A3B3C;
-                border-radius: 4px;
-                padding: 8px;
-                font-family: 'Consolas', monospace;
-                font-size: 11px;
-            }
-        """)
+        self.timeline_text.setStyleSheet(LOG_TEXTEDIT_STYLE)
 
         timeline_layout.addWidget(self.timeline_text)
         timeline_group.setLayout(timeline_layout)
@@ -343,28 +322,22 @@ class AnalyticsTab(QWidget):
     def _create_stat_card(self, title, value, subtitle):
         """Create a statistics card"""
         card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background-color: #242526;
-                border-radius: 8px;
-                border: 1px solid #3A3B3C;
-                padding: 15px;
-            }
-        """)
+        card.setStyleSheet(CARD_ELEVATED_STYLE + "QFrame { padding: 15px; }")
 
         layout = QVBoxLayout()
+        layout.setSpacing(4)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet("color: #B0B3B8; font-size: 12px;")
+        title_label.setStyleSheet(label_subtitle())
         layout.addWidget(title_label)
 
         value_label = QLabel(value)
-        value_label.setStyleSheet("color: #FFFFFF; font-size: 24px; font-weight: bold;")
+        value_label.setStyleSheet(label_value(size=20))
         value_label.setObjectName("value")
         layout.addWidget(value_label)
 
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setStyleSheet("color: #65676B; font-size: 11px;")
+        subtitle_label.setStyleSheet(label_muted())
         subtitle_label.setObjectName("subtitle")
         layout.addWidget(subtitle_label)
 
@@ -378,7 +351,7 @@ class AnalyticsTab(QWidget):
 
         # Description
         desc = QLabel("🏆 Viewers ranked by engagement")
-        desc.setStyleSheet("color: #B0B3B8; margin-bottom: 10px;")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
 
         # Table
@@ -389,24 +362,28 @@ class AnalyticsTab(QWidget):
         ])
 
         # Table styling
-        self.viewers_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #242526;
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
+        self.viewers_table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {BG_ELEVATED};
+                color: {TEXT_PRIMARY};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 4px;
-                gridline-color: #3A3B3C;
-            }
-            QTableWidget::item {
+                gridline-color: {BORDER};
+            }}
+            QTableWidget::item {{
                 padding: 8px;
-            }
-            QHeaderView::section {
-                background-color: #1877F2;
+            }}
+            QTableWidget::item:selected {{
+                background-color: {PRIMARY};
                 color: white;
+            }}
+            QHeaderView::section {{
+                background-color: {SECONDARY};
+                color: {TEXT_PRIMARY};
                 padding: 8px;
-                border: none;
+                border: 1px solid {BORDER_GOLD};
                 font-weight: bold;
-            }
+            }}
         """)
 
         self.viewers_table.horizontalHeader().setStretchLastSection(True)
@@ -425,7 +402,7 @@ class AnalyticsTab(QWidget):
 
         # Description
         desc = QLabel("🔥 Most mentioned keywords and topics")
-        desc.setStyleSheet("color: #B0B3B8; margin-bottom: 10px;")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
 
         # Table
@@ -444,29 +421,30 @@ class AnalyticsTab(QWidget):
 
         # Action suggestions
         suggestions_group = QGroupBox("💡 Suggested Actions")
-        suggestions_group.setStyleSheet("""
-            QGroupBox {
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
+        suggestions_group.setStyleSheet(f"""
+            QGroupBox {{
+                color: {ACCENT};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
                 font-weight: bold;
-            }
+                background-color: {BG_ELEVATED};
+            }}
         """)
 
         suggestions_layout = QVBoxLayout()
         self.suggestions_text = QTextEdit()
         self.suggestions_text.setReadOnly(True)
         self.suggestions_text.setMaximumHeight(100)
-        self.suggestions_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #242526;
-                color: #B0B3B8;
-                border: 1px solid #3A3B3C;
+        self.suggestions_text.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {BG_ELEVATED};
+                color: {TEXT_MUTED};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 4px;
                 padding: 8px;
-            }
+            }}
         """)
         suggestions_layout.addWidget(self.suggestions_text)
         suggestions_group.setLayout(suggestions_layout)
@@ -483,7 +461,7 @@ class AnalyticsTab(QWidget):
 
         # Description
         desc = QLabel("📜 Past live session analytics")
-        desc.setStyleSheet("color: #B0B3B8; margin-bottom: 10px;")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
 
         # Table
@@ -505,18 +483,19 @@ class AnalyticsTab(QWidget):
 
         refresh_btn = QPushButton("🔄 Refresh History")
         refresh_btn.clicked.connect(self.refresh_history)
-        refresh_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #1877F2;
+        refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {PRIMARY};
                 color: white;
                 border: none;
                 padding: 8px 16px;
                 border-radius: 6px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #166FE5;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {ACCENT};
+                color: {BG_BASE};
+            }}
         """)
         btn_layout.addWidget(refresh_btn)
 
@@ -534,30 +513,31 @@ class AnalyticsTab(QWidget):
         
         # Description
         desc = QLabel("📈 Real-time charts showing session performance over time")
-        desc.setStyleSheet("color: #B0B3B8; margin-bottom: 10px;")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
         
         # Chart 1: Viewers over time
         viewers_group = QGroupBox("👥 Viewers Over Time")
-        viewers_group.setStyleSheet("""
-            QGroupBox {
-                color: #FFFFFF;
-                border: 1px solid #3A3B3C;
+        viewers_group.setStyleSheet(f"""
+            QGroupBox {{
+                color: {ACCENT};
+                border: 1px solid {BORDER_GOLD};
                 border-radius: 8px;
                 margin-top: 10px;
                 padding-top: 10px;
                 font-weight: bold;
-            }
+                background-color: {BG_ELEVATED};
+            }}
         """)
         viewers_layout = QVBoxLayout()
         
         self.viewers_chart = PlotWidget()
-        self.viewers_chart.setBackground('#242526')
-        self.viewers_chart.setLabel('left', 'Viewers', color='#1877F2')
-        self.viewers_chart.setLabel('bottom', 'Time (minutes)', color='#B0B3B8')
+        self.viewers_chart.setBackground(BG_ELEVATED)
+        self.viewers_chart.setLabel('left', 'Viewers', color=PRIMARY)
+        self.viewers_chart.setLabel('bottom', 'Time (minutes)', color=TEXT_MUTED)
         self.viewers_chart.showGrid(x=True, y=True, alpha=0.3)
         self.viewers_chart.setMinimumHeight(150)
-        self.viewers_plot = self.viewers_chart.plot([], [], pen=pg.mkPen('#1877F2', width=2), symbol='o', symbolSize=5, symbolBrush='#1877F2')
+        self.viewers_plot = self.viewers_chart.plot([], [], pen=pg.mkPen(PRIMARY, width=2), symbol='o', symbolSize=5, symbolBrush=PRIMARY)
         
         viewers_layout.addWidget(self.viewers_chart)
         viewers_group.setLayout(viewers_layout)
@@ -569,12 +549,12 @@ class AnalyticsTab(QWidget):
         comments_layout = QVBoxLayout()
         
         self.comments_chart = PlotWidget()
-        self.comments_chart.setBackground('#242526')
-        self.comments_chart.setLabel('left', 'Comments', color='#42B72A')
-        self.comments_chart.setLabel('bottom', 'Time (minutes)', color='#B0B3B8')
+        self.comments_chart.setBackground(BG_ELEVATED)
+        self.comments_chart.setLabel('left', 'Comments', color=SUCCESS)
+        self.comments_chart.setLabel('bottom', 'Time (minutes)', color=TEXT_MUTED)
         self.comments_chart.showGrid(x=True, y=True, alpha=0.3)
         self.comments_chart.setMinimumHeight(150)
-        self.comments_plot = self.comments_chart.plot([], [], pen=pg.mkPen('#42B72A', width=2), symbol='o', symbolSize=5, symbolBrush='#42B72A')
+        self.comments_plot = self.comments_chart.plot([], [], pen=pg.mkPen(SUCCESS, width=2), symbol='o', symbolSize=5, symbolBrush=SUCCESS)
         
         comments_layout.addWidget(self.comments_chart)
         comments_group.setLayout(comments_layout)
@@ -585,18 +565,19 @@ class AnalyticsTab(QWidget):
         
         clear_btn = QPushButton("🗑️ Clear Charts")
         clear_btn.clicked.connect(self._clear_charts)
-        clear_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FA383E;
+        clear_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {ERROR};
                 color: white;
                 border: none;
                 padding: 8px 16px;
                 border-radius: 6px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #E02D32;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {WARNING};
+                color: {BG_BASE};
+            }}
         """)
         btn_layout.addWidget(clear_btn)
         btn_layout.addStretch()
@@ -651,10 +632,10 @@ class AnalyticsTab(QWidget):
             platform = stats.get("platform", "").upper()
             session_id = stats.get("session_id", "")
             self.session_label.setText(f"🔴 LIVE - {platform} | {session_id}")
-            self.session_label.setStyleSheet("color: #42B72A; font-size: 12px; font-weight: bold;")
+            self.session_label.setStyleSheet(f"color: {SUCCESS}; font-size: 12px; font-weight: bold;")
         else:
             self.session_label.setText("⚫ No active session")
-            self.session_label.setStyleSheet("color: #B0B3B8; font-size: 12px;")
+            self.session_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
 
         # Update overview cards
         self._update_overview_stats(stats)
@@ -725,7 +706,7 @@ class AnalyticsTab(QWidget):
             rank_item = QTableWidgetItem(f"#{i+1}")
             rank_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             if i < 3:  # Top 3 highlight
-                rank_item.setForeground(QColor("#F5B800"))
+                rank_item.setForeground(QColor(ACCENT))
             self.viewers_table.setItem(i, 0, rank_item)
 
             # Username

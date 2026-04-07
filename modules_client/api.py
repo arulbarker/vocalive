@@ -8,6 +8,8 @@ import json
 import requests
 import logging
 import os
+import re
+import json as _json
 import time
 from modules_client.config_manager import ConfigManager
 from pathlib import Path
@@ -252,34 +254,35 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
     print(f"[API] Using ONLY configured provider: {ai_provider} (NO FALLBACK)")
     
     # Use ONLY the configured AI provider - NO FALLBACK
-    if ai_provider == "chatgpt" or ai_provider == "openai":
-        try:
-            print(f"[API] Using ChatGPT API (as configured)...")
+    # ChatGPT/OpenAI disabled — uncomment to re-enable
+    # if ai_provider == "chatgpt" or ai_provider == "openai":
+    #     ...
 
-            # Check API key first
-            openai_key = cfg.get("api_keys", {}).get("OPENAI_API_KEY")
-            if not openai_key:
-                error_msg = "ERROR: ChatGPT dipilih sebagai AI provider, tetapi OPENAI_API_KEY tidak ditemukan di konfigurasi. Silakan tambahkan API key di Settings."
+    if ai_provider == "gemini":
+        try:
+            print(f"[API] Using Gemini Flash Lite API (as configured)...")
+            gemini_key = cfg.get("api_keys", {}).get("GEMINI_API_KEY")
+            if not gemini_key:
+                error_msg = "ERROR: Gemini dipilih sebagai AI provider, tetapi GEMINI_API_KEY tidak ditemukan. Silakan tambahkan API key di Settings."
                 print(f"[API] {error_msg}")
                 return error_msg
 
-            # Use global instance (already initialized with API key)
-            from modules_client.chatgpt_ai import generate_reply as chatgpt_generate
-            reply = chatgpt_generate(prompt, max_tokens=(max_tokens or 150))
-            
+            from modules_client.gemini_ai import generate_reply as gemini_generate
+            reply = gemini_generate(prompt, max_tokens=(max_tokens or 150), fast_mode=fast_mode)
+
             if reply and len(reply.strip()) > 0:
-                print(f"[API] ChatGPT success: {len(reply)} chars")
+                print(f"[API] Gemini success: {len(reply)} chars")
                 return reply
             else:
-                error_msg = "ERROR: ChatGPT API tidak memberikan respons. Kemungkinan API key habis saldo atau server overload. Coba lagi atau ganti ke DeepSeek di Settings."
+                error_msg = "ERROR: Gemini API tidak memberikan respons. Periksa API key atau coba lagi."
                 print(f"[API] {error_msg}")
                 return error_msg
-                
+
         except Exception as e:
-            error_msg = f"ERROR ChatGPT: {str(e)}. Periksa API key dan saldo akun ChatGPT Anda, atau ganti ke DeepSeek di Settings."
+            error_msg = f"ERROR Gemini: {str(e)}. Periksa API key Gemini Anda di Settings."
             print(f"[API] {error_msg}")
             return error_msg
-    
+
     elif ai_provider == "deepseek":
         try:
             print(f"[API] Using DeepSeek API (as configured)...")
@@ -315,12 +318,88 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
             return error_msg
     
     else:
-        error_msg = f"ERROR: AI provider '{ai_provider}' tidak dikenal. Pilih 'chatgpt' atau 'deepseek' di Settings."
+        error_msg = f"ERROR: AI provider '{ai_provider}' tidak dikenal. Pilih 'gemini' atau 'deepseek' di Settings."
         print(f"[API] {error_msg}")
         return error_msg
 
 # REMOVED: _get_fallback_response - No more fallback responses
 # Users will get clear error messages instead of confusing fallbacks
+
+def generate_reply_with_scene(prompt: str, fast_mode: bool = False) -> tuple[str, int]:
+    """
+    Generate AI reply dan deteksi scene_id produk dalam satu API call.
+
+    Returns:
+        (reply_text, scene_id) — scene_id=0 berarti tidak ada produk yang relevan.
+    """
+    from modules_client.product_scene_manager import ProductSceneManager
+    from modules_client.config_manager import ConfigManager
+
+    psm = ProductSceneManager()
+    product_context = psm.build_product_context()
+
+    if not product_context:
+        # Tidak ada produk terdaftar — gunakan reply biasa
+        reply = generate_reply(prompt, fast_mode=fast_mode)
+        return (reply or ""), 0
+
+    cfg = ConfigManager()
+    ai_provider = cfg.get("ai_provider", "deepseek").lower()
+    max_tokens = 120 if fast_mode else 180  # lebih besar karena AI harus wrap dalam JSON
+
+    raw = None
+    if ai_provider == "gemini":
+        gemini_key = cfg.get("api_keys", {}).get("GEMINI_API_KEY")
+        if not gemini_key:
+            return "ERROR: GEMINI_API_KEY tidak ditemukan di konfigurasi.", 0
+        try:
+            from modules_client.gemini_ai import generate_reply as gemini_gen
+            raw = gemini_gen(prompt, max_tokens=max_tokens, fast_mode=fast_mode, product_context=product_context)
+        except Exception as e:
+            logger.error(f"generate_reply_with_scene Gemini error: {e}")
+            return f"ERROR Gemini: {e}", 0
+    elif ai_provider == "deepseek":
+        deepseek_key = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY")
+        if not deepseek_key:
+            return "ERROR: DEEPSEEK_API_KEY tidak ditemukan di konfigurasi.", 0
+        try:
+            from modules_client.deepseek_ai import generate_reply as deepseek_gen
+            raw = deepseek_gen(prompt, max_tokens=max_tokens, fast_mode=fast_mode, product_context=product_context)
+        except Exception as e:
+            logger.error(f"generate_reply_with_scene DeepSeek error: {e}")
+            return f"ERROR DeepSeek: {e}", 0
+    else:
+        return f"ERROR: AI provider '{ai_provider}' tidak dikenal.", 0
+
+    if not raw:
+        return "", 0
+
+    # Parse JSON response dari AI
+    # Coba direct parse dulu, baru regex sebagai fallback
+    def _parse_scene_json(text: str):
+        try:
+            data = _json.loads(text.strip())
+            return str(data.get("reply", "")).strip(), int(data.get("scene_id", 0))
+        except Exception:
+            pass
+        try:
+            match = re.search(r'\{[^{}]*"reply"[^{}]*\}', text, re.DOTALL)
+            if match:
+                data = _json.loads(match.group())
+                return str(data.get("reply", "")).strip(), int(data.get("scene_id", 0))
+        except Exception:
+            pass
+        return None, None
+
+    reply_text, scene_id = _parse_scene_json(raw)
+    if reply_text is not None:
+        logger.debug(f"generate_reply_with_scene: reply={len(reply_text)}chars, scene_id={scene_id}")
+        return reply_text, scene_id
+
+    logger.warning(f"generate_reply_with_scene: gagal parse JSON. Raw: {raw[:100]}")
+    # Fallback: gunakan raw sebagai reply, scene_id=0
+    return raw.strip(), 0
+
 
 def test_api_connection():
     """Test API connection and return status"""

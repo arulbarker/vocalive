@@ -67,101 +67,29 @@ try:
 except ImportError:
     pass  # dotenv is optional
 
-# Skema warna Facebook Theme - DARK MODE
-FB_COLORS = {
-    "primary": "#1877F2",
-    "secondary": "#4267B2", 
-    "light_bg": "#18191A",
-    "dark_bg": "#0F1419",
-    "text_primary": "#FFFFFF",
-    "text_secondary": "#B0B3B8",
-    "button_primary": "#1877F2",
-    "button_secondary": "#3A3B3C",
-    "success": "#42B72A",
-    "warning": "#F5B800",
-    "error": "#FA383E",
+# Gold Seller brand colors — import dari ui/theme.py
+try:
+    from ui.theme import (
+        GLOBAL_QSS, PRIMARY, BG_BASE, BG_ELEVATED, BG_SURFACE,
+        TEXT_PRIMARY, TEXT_MUTED, BORDER_GOLD, SUCCESS, ACCENT
+    )
+except ImportError:
+    from theme import (
+        GLOBAL_QSS, PRIMARY, BG_BASE, BG_ELEVATED, BG_SURFACE,
+        TEXT_PRIMARY, TEXT_MUTED, BORDER_GOLD, SUCCESS, ACCENT
+    )
+
+GOLD_COLORS = {
+    "primary":    PRIMARY,
+    "background": BG_BASE,
+    "surface":    BG_SURFACE,
+    "text":       TEXT_PRIMARY,
+    "text_muted": TEXT_MUTED,
+    "success":    SUCCESS,
+    "accent":     ACCENT,
 }
 
-# Global dark theme styles
-DARK_THEME = """
-    QMainWindow, QWidget {
-        background-color: #18191A;
-        color: #FFFFFF;
-    }
-    
-    QTabWidget::pane {
-        border: 1px solid #3A3B3C;
-        background-color: #18191A;
-    }
-    
-    QTabBar::tab {
-        background-color: #242526;
-        color: #B0B3B8;
-        padding: 8px 12px;
-        border: none;
-        border-top-left-radius: 4px;
-        border-top-right-radius: 4px;
-    }
-    
-    QTabBar::tab:selected {
-        background-color: #3A3B3C;
-        color: #FFFFFF;
-    }
-    
-    QTabBar::tab:hover:!selected {
-        background-color: #2C2D2E;
-    }
-    
-    QStatusBar {
-        background-color: #242526;
-        color: #B0B3B8;
-    }
-    
-    QLineEdit, QTextEdit {
-        background-color: #3A3B3C;
-        color: #FFFFFF;
-        border: 1px solid #4E4F50;
-        border-radius: 4px;
-        padding: 4px;
-    }
-    
-    QLineEdit:focus, QTextEdit:focus {
-        border: 1px solid #1877F2;
-    }
-    
-    QComboBox {
-        background-color: #3A3B3C;
-        color: #FFFFFF;
-        border: 1px solid #4E4F50;
-        border-radius: 4px;
-        padding: 4px;
-    }
-    
-    QCheckBox {
-        color: #FFFFFF;
-    }
-    
-    QMessageBox {
-        background-color: #18191A;
-    }
-    
-    QMessageBox QLabel {
-        color: #FFFFFF;
-    }
-    
-    QProgressBar {
-        background-color: #3A3B3C;
-        border: none;
-        border-radius: 4px;
-        text-align: center;
-        color: #FFFFFF;
-    }
-    
-    QProgressBar::chunk {
-        background-color: #1877F2;
-        border-radius: 4px;
-    }
-"""
+DARK_THEME = GLOBAL_QSS
 
 # Fallback ConfigManager
 class ConfigManager:
@@ -255,6 +183,24 @@ except ImportError:
                 layout = QVBoxLayout()
                 layout.addWidget(QLabel("Config Tab tidak tersedia"))
                 self.setLayout(layout)
+
+# Import ProductPopupWindow
+try:
+    from ui.product_popup_window import ProductPopupWindow
+    PRODUCT_POPUP_AVAILABLE = True
+    logger.info("ProductPopupWindow imported successfully")
+except ImportError as e:
+    PRODUCT_POPUP_AVAILABLE = False
+    logger.warning(f"ProductPopupWindow not available: {e}")
+
+# Import ProductSceneTab
+try:
+    from ui.product_scene_tab import ProductSceneTab
+    PRODUCT_SCENE_TAB_AVAILABLE = True
+    logger.info("ProductSceneTab imported successfully")
+except ImportError as e:
+    PRODUCT_SCENE_TAB_AVAILABLE = False
+    logger.warning(f"ProductSceneTab not available: {e}")
 
 # Virtual Audio Tab removed - user requested removal
 
@@ -497,32 +443,34 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # Log mode yang digunakan
-        logger.info("VocaLive - Basic Mode Only")
-        
+        logger.info("VocaLive v1.0.0 — Gold Seller Edition")
+
         # Setup window properties
-        self.setWindowTitle("VocaLive - Basic Mode")
-        self.resize(1000, 700)
-        self.setMinimumSize(800, 600)
+        self.setWindowTitle("VocaLive v1.0.0")
+        self.resize(1100, 750)
+        self.setMinimumSize(900, 620)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        
+
+        # Apply Gold Seller theme globally
+        self.setStyleSheet(DARK_THEME)
+
         # Setup status bar
         self._setup_status_bar()
-        
+
         # Setup icon jika tersedia
         self._setup_icon()
-        
+
         # Load configuration
         self.cfg = ConfigManager("config/settings.json")
-        version = "v7.2"
-        self.cfg.set("app_version", version)
-        
+        self.cfg.set("app_version", "v1.0.0")
+
         # Create main tabs directly
         self._create_main_tabs()
-        
+
         # Initialize unified comment processor after tabs are created
         self.unified_processor = None
         self._setup_unified_processor()
-        
+
         # Show main tabs
         self.setCentralWidget(self.main_tabs)
         
@@ -540,7 +488,15 @@ class MainWindow(QMainWindow):
         """Handle application close event with comprehensive cleanup"""
         try:
             logger.info("Application closing...")
-            
+
+            # Close product popup window (top-level, not in tab widget)
+            if hasattr(self, 'product_popup') and self.product_popup is not None:
+                try:
+                    self.product_popup.close()
+                    logger.info("ProductPopupWindow closed")
+                except Exception as e:
+                    logger.error(f"Error closing ProductPopupWindow: {e}")
+
             # Force cleanup all tabs before closing
             for i in range(self.main_tabs.count()):
                 tab = self.main_tabs.widget(i)
@@ -597,13 +553,23 @@ class MainWindow(QMainWindow):
             event.accept()
     
     def _setup_status_bar(self):
-        """Setup status bar dengan label yang diperlukan."""
+        """Setup status bar dengan Gold Seller styling."""
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        
+
         # API status label
-        self.api_status_label = QLabel("API Status: Ready")
+        self.api_status_label = QLabel("● Ready")
+        self.api_status_label.setStyleSheet(
+            f"color: {SUCCESS}; font-size: 11px; font-weight: 600; padding: 0 4px;"
+        )
         self.status_bar.addPermanentWidget(self.api_status_label)
+
+        # Version label
+        version_label = QLabel("VocaLive v1.0.0")
+        version_label.setStyleSheet(
+            f"color: {PRIMARY}; font-size: 11px; font-weight: 700; padding-right: 10px;"
+        )
+        self.status_bar.addPermanentWidget(version_label)
     
     def _setup_icon(self):
         """Setup aplikasi icon jika tersedia."""
@@ -616,6 +582,18 @@ class MainWindow(QMainWindow):
     
     def _create_main_tabs(self):
         """Create main tab widget dengan Cohost Basic dan Config Tab."""
+        # Inisialisasi popup window (top-level, tidak ada parent)
+        self.product_popup = None
+        if PRODUCT_POPUP_AVAILABLE:
+            try:
+                from modules_client.product_scene_manager import ProductSceneManager
+                psm = ProductSceneManager()
+                w, h = psm.get_popup_size()
+                self.product_popup = ProductPopupWindow(w, h)
+                logger.info("ProductPopupWindow created successfully")
+            except Exception as e:
+                logger.error(f"Failed to create ProductPopupWindow: {e}")
+
         self.main_tabs = QTabWidget()
         
         # Add Cohost Basic tab
@@ -624,6 +602,11 @@ class MainWindow(QMainWindow):
                 self.cohost_tab = CohostTabBasic()
                 self.main_tabs.addTab(self.cohost_tab, "Cohost Basic")
                 logger.info("Cohost Basic tab added successfully")
+
+                # Wire popup window ke cohost tab
+                if self.product_popup is not None and hasattr(self.cohost_tab, 'set_popup_window'):
+                    self.cohost_tab.set_popup_window(self.product_popup)
+                    logger.info("ProductPopupWindow wired to CohostTabBasic")
             except Exception as e:
                 logger.error(f"Failed to create Cohost Basic tab: {e}")
                 placeholder = QWidget()
@@ -689,7 +672,21 @@ class MainWindow(QMainWindow):
             self.main_tabs.addTab(placeholder, "👨‍💻 Developer (Error)")
 
         # Virtual Audio tab removed - user requested removal
-        
+
+        # Add Product Scene tab
+        if PRODUCT_SCENE_TAB_AVAILABLE:
+            try:
+                self.product_scene_tab = ProductSceneTab(popup_window=self.product_popup)
+                self.main_tabs.addTab(self.product_scene_tab, "🎬 Product Scene")
+                logger.info("Product Scene tab added successfully")
+            except Exception as e:
+                logger.error(f"Failed to create Product Scene tab: {e}")
+                placeholder = QWidget()
+                layout = QVBoxLayout()
+                layout.addWidget(QLabel(f"Error loading Product Scene Tab: {e}"))
+                placeholder.setLayout(layout)
+                self.main_tabs.addTab(placeholder, "🎬 Product Scene (Error)")
+
         # DISABLED: Old direct connection system - causes double processing
         # Using unified processor system instead to prevent duplicate replies
         logger.info("Direct Cohost-OBS connection disabled - using unified processor system")

@@ -2,20 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Branding Colors — Gold Seller 💰
+## Branding Colors — Ocean Blue 🌊
 
-Palet warna resmi VocaLive. Gunakan ini sebagai acuan di semua perombakan UI.
+Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.**
 
 | Token | Nilai | Kegunaan |
 |-------|-------|---------|
-| Primary | `#D97706` / `hsl(38,80%,48%)` | Warna utama, CTA button, active state |
-| Secondary | `#92400E` / `hsl(38,65%,36%)` | Depth, hover state, border |
-| Accent | `#FCD34D` / `hsl(48,70%,63%)` | Badge, notifikasi, highlight |
-| Background | `#1c1208` | Dark background utama |
-| Text | `#FFFBEB` | Warna teks utama |
-| Border Radius | `10px` | Rounded medium untuk semua komponen |
-
-> Jangan ganti palet ini tanpa konfirmasi eksplisit dari user.
+| Primary | `#2563EB` | Biru cerah — CTA button, active state |
+| Secondary | `#1E3A5F` | Biru tua — depth, hover, border |
+| Accent | `#60A5FA` | Biru muda — badge, notifikasi, highlight |
+| BG Base | `#0F1623` | Dark navy background utama |
+| BG Surface | `#162032` | Card / panel surface |
+| BG Elevated | `#1E2A3B` | Elevated card / header |
+| Text | `#F0F6FF` | Putih biru — teks utama |
+| Border Radius | `10px` | Rounded medium semua komponen |
 
 ## Version History
 
@@ -23,20 +23,17 @@ Palet warna resmi VocaLive. Gunakan ini sebagai acuan di semua perombakan UI.
 
 | Versi | Tanggal | Deskripsi |
 |-------|---------|-----------|
-| **v1.0.0** | 2026-04-05 | Versi awal baru — hapus Avatar Lip-sync & OBS Overlay, fokus ke Cohost AI + TTS |
+| **v1.0.0** | 2026-04-05 | Versi awal — hapus Avatar Lip-sync & OBS Overlay, fokus Cohost AI + TTS |
 
 **Versi saat ini: v1.0.0**
 
-### Aturan Penomoran Versi (Semantic Versioning)
-- `MAJOR` (v**X**.0.0) — perubahan besar / breaking change / fitur utama baru
-- `MINOR` (v1.**X**.0) — fitur baru yang backward-compatible
-- `PATCH` (v1.0.**X**) — bug fix, perbaikan kecil
+Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
-Saat akan rilis versi baru, **update tabel di atas** dan ubah baris "Versi saat ini".
+---
 
 ## What This App Does
 
-**VocaLive** is a Windows desktop application for live streaming automation. It listens to YouTube/TikTok live chat, generates AI replies (ChatGPT/DeepSeek), converts them to speech (Google Cloud TTS / gTTS), and plays them during the stream. It is distributed as a licensed Windows EXE.
+**VocaLive** adalah Windows desktop app untuk live streaming automation. Mendengarkan chat **TikTok Live** (YouTube sementara di-disable), menghasilkan balasan AI (DeepSeek / Gemini 3.1 Flash Lite), mengubahnya ke suara (Google Cloud TTS / Gemini TTS), lalu memutarnya selama siaran. Didistribusikan sebagai EXE berlisensi.
 
 ## Running the App
 
@@ -48,150 +45,256 @@ python main.py
 python build_production_exe_fixed.py
 ```
 
-No test suite exists. Manual testing is done by running `python main.py` directly.
+Tidak ada test suite. Testing manual via `python main.py`. Pastikan `config/settings.json` berisi API key yang valid.
+
+---
 
 ## Architecture
 
 ### Entry Point Flow
-`main.py` → license validation (Google Sheets) → `ui/main_window.py` (MainWindow) → tabs created
 
-### Module Split: `modules_client/` vs `modules_server/`
-- **`modules_client/`** — runs in the GUI process: config, AI calls, TTS wrapper, listeners, analytics, license
-- **`modules_server/`** — heavier services: `tts_engine.py` (Google Cloud TTS + pygame playback), `tts_google.py` (provider logic)
-- `modules_client/tts_engine.py` is a thin wrapper that delegates to `modules_server/tts_engine.py`
+```
+main.py
+  → setup_validator (cek file kritis ada)
+  → license validation (Google Sheets via config/sheet.json)
+  → QApplication + MainWindow (ui/main_window.py)
+      → UnifiedCommentProcessor (filter pipeline)
+      → Tab: CohostTabBasic, ConfigTab, ProductSceneTab, AnalyticsTab, UserManagementTab, DeveloperTab
+```
+
+`main.py` harus **pertama kali** set UTF-8 encoding untuk stdout/stderr (ada di baris awal) sebelum import apapun — ini kritis di mode EXE.
+
+### Module Split
+
+| Direktori | Tanggung Jawab |
+|-----------|----------------|
+| `modules_client/` | Berjalan di GUI process: config, AI calls, TTS wrapper, listeners, analytics, license |
+| `modules_server/` | TTS engine (Google Cloud REST + Gemini TTS + pygame playback) |
+| `listeners/` | **Dead code** — `yt_listener_process.py` dan `tiktok_runner.py` tidak dipakai; listener aktif ada di `cohost_tab_basic.py` sebagai QThread inline |
+| `ui/` | Semua tab PyQt6, design system di `theme.py` |
+| `thirdparty/pytchat_ng/` | Fork pytchat yang dimodifikasi — **jangan ganti dengan pytchat dari pip** |
+
+`modules_client/tts_engine.py` adalah thin wrapper yang mendelegasikan ke `modules_server/tts_engine.py`.
 
 ### Comment Processing Pipeline
-Chat message → `UnifiedCommentProcessor` (in `main_window.py`) → blacklist/whitelist → toxic filter → spam detection → cooldown → `CohostTabBasic.generate_cohost_reply()` → AI (ChatGPT/DeepSeek via `modules_client/api.py`) → TTS
 
-### Listeners Run as Separate Processes
-`listeners/pytchat_listener.py` and `listeners/tiktok_runner.py` are spawned as subprocesses to avoid blocking the PyQt6 GUI thread. They communicate back via signals/queues.
+```
+TikTok chat message
+  → SimpleTikTokListener (QThread di cohost_tab_basic.py)
+      → timestamp filter (skip history lama)
+      → deduplication (hash-based)
+  → UnifiedCommentProcessor (main_window.py)
+      → blacklist/whitelist check (user_list_manager)
+      → toxic keyword filter
+      → spam detection (hash-based, 60s window)
+      → cooldown check
+  → CohostTabBasic.generate_cohost_reply()
+  → generate_reply_with_scene() → AI reply + scene_id produk
+  → TTS speak() → pygame playback
+  → ProductPopupWindow (jika scene_id > 0)
+```
 
-### Config System
-All settings live in `config/settings.json` (user config). `config/settings_default.json` is the template/fallback. `modules_client/config_manager.py` handles read/write with a dict-like interface (`cfg.get(key, default)` / `cfg.set(key, value)`).
+### AI Provider Flow
 
-### UI Tabs (all in `ui/`)
-| File | Tab name |
-|------|----------|
-| `cohost_tab_basic.py` | Cohost Basic (main feature) |
-| `config_tab.py` | Konfigurasi |
-| `analytics_tab.py` | Analytics |
-| `user_management_tab.py` | User Management |
-| `developer_tab.py` | Developer |
+`modules_client/api.py` → routing berdasarkan `ai_provider` di settings:
 
-`config_tab.py` depends on `sales_templates.py` (root level) — if that import fails, the tab silently disappears because imports are wrapped in try/except in `main_window.py`.
+```
+ai_provider == "gemini"   → modules_client/gemini_ai.py
+                              → POST generativelanguage.googleapis.com
+                              → model: gemini-3.1-flash-lite-preview
+ai_provider == "deepseek" → modules_client/deepseek_ai.py
+                              → POST api.deepseek.com
+                              → model: deepseek-chat
+```
 
-### License System
-- Hardware-locked: device fingerprint stored in `config/device.hash`, encrypted license in `config/license.enc`
-- Validated against Google Sheets (`config/sheet.json` credentials)
-- `modules_client/license_monitor.py` continuously monitors license validity at runtime
+Tidak ada fallback antar provider — error ditampilkan langsung ke user. `fast_mode=True` pakai timeout 5s dan max_tokens lebih kecil untuk respons cepat.
 
 ### TTS Flow
-`speak(text)` → `modules_server/tts_engine.py` → Google Cloud TTS (if `config/gcloud_tts_credentials.json` present) → fallback to gTTS → plays via pygame
 
-### AI Call Flow
-`modules_client/api.py` → `http://localhost:8888` (local FastAPI) OR direct ChatGPT/DeepSeek API call depending on config. `fast_mode=True` uses aggressive timeout (80 tokens max) for quick responses.
+```
+speak(text, voice_name)
+  → modules_server/tts_engine.py
+      → voice starts with "Gemini-" → _speak_with_gemini()
+          → POST generativelanguage.googleapis.com/gemini-2.5-flash-lite-preview-tts
+          → output: WAV
+      → else → _speak_with_api_key()
+          → POST texttospeech.googleapis.com (Google Cloud TTS REST)
+          → output: MP3
+      → fallback jika tidak ada api_key: pyttsx3
+  → pygame playback
+```
 
-## Protected Files (Do Not Modify Without Care)
+Auth: `google_tts_api_key` di settings — **satu key Google AI Studio** cukup untuk Gemini AI + Gemini TTS sekaligus. Google Cloud TTS (suara standard/chirp non-Gemini) butuh key terpisah dari Google Cloud Console.
 
-Per `.cursorrules`:
-- `modules_server/tts_engine.py` — TTS engine is stable
-- `modules_client/pytchat_listener.py` — YouTube listener working
-- `modules_client/license_manager.py` — license validation
-- `modules_client/config_manager.py` — central config system
+### Product Scene System
 
-## Key Config Fields (`config/settings.json`)
+Sistem popup video produk saat AI merespons terkait produk tertentu:
+1. **`product_scene_manager.py`** — CRUD scenes, build product context string untuk prompt AI
+2. **`product_scene_tab.py`** — UI manajemen daftar produk + video path
+3. **`generate_reply_with_scene()`** di `api.py` — AI membalas + menentukan `scene_id` dalam satu call (JSON response)
+4. **`product_popup_window.py`** — QDialog yang memutar video produk via QMediaPlayer
+
+### Greeting System
+
+Sistem sapaan otomatis terdiri dari 3 layer:
+1. **`config_tab.py`** — UI untuk mengisi 10 slot teks sapaan
+2. **`greeting_tts_cache.py`** — Pre-render TTS tiap slot ke file audio (hash-based caching di `greeting_cache/`). Gemini voice → `.wav`, lainnya → `.mp3`
+3. **`sequential_greeting_manager.py`** — Timer-based playback, mode random, satu thread
+
+Interval timer diatur di Cohost Tab (bukan Config Tab).
+
+### Config System
+
+- `config/settings.json` — user config (jangan di-commit)
+- `config/settings_default.json` — template fallback
+- `config/voices.json` — daftar semua suara per bahasa, dikelompokkan: `gtts_standard`, `gtts_wavenet`, `chirp3`, `gemini_flash`
+- `modules_client/config_manager.py` — interface `cfg.get(key, default)` / `cfg.set(key, value)`
+
+### License System
+
+- Hardware-locked: fingerprint di `config/device.hash`, license terenkripsi di `config/license.enc`
+- Validasi via Google Sheets (`config/sheet.json` credentials)
+- `modules_client/license_monitor.py` — monitoring kontinu saat runtime
+
+---
+
+## UI Design System
+
+**Semua styling harus menggunakan helper dari `ui/theme.py`.** Jangan hardcode warna di file tab.
+
+```python
+from ui.theme import btn_success, btn_danger, status_badge, ERROR, SUCCESS
+
+self.start_button.setStyleSheet(btn_success("font-size: 13px;"))
+self.stop_button.setStyleSheet(btn_danger())
+self.status_indicator.setStyleSheet(status_badge(ERROR, size=13))
+```
+
+Helper tersedia: `btn_primary()`, `btn_success()`, `btn_danger()`, `btn_ghost()`, `btn_accent()`, `btn_secondary()`, `status_badge(color, size)`, `label_title()`, `label_subtitle()`, `label_value()`, `label_muted()`, `CARD_STYLE`, `CARD_ELEVATED_STYLE`, `HEADER_FRAME_STYLE`, `LOG_TEXTEDIT_STYLE`, `GLOBAL_QSS`.
+
+Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (bukan gold lama).
+
+---
+
+## Key Config Fields
 
 ```json
 {
-  "platform": "YouTube",          // or "TikTok"
-  "paket": "basic",               // "basic" or "pro"
-  "reply_language": "Indonesia",  // "Indonesia", "English", "Malaysian"
+  "platform": "TikTok",
+  "ai_provider": "gemini",
+  "paket": "basic",
+  "output_language": "Indonesia",
   "trigger_words": ["bro", "bang", "min"],
   "viewer_cooldown_minutes": 3,
-  "OPENAI_API_KEY": "...",
-  "DEEPSEEK_API_KEY": "..."
+  "cohost_cooldown": 2,
+  "sequential_greeting_interval": 180,
+  "tiktok_nickname": "@username",
+  "google_tts_api_key": "AIzaSy...",
+  "api_keys": {
+    "GEMINI_API_KEY": "AIzaSy...",
+    "DEEPSEEK_API_KEY": "sk-..."
+  }
 }
 ```
 
-## Sensitive Files (Never Commit)
-
-`config/gcloud_tts_credentials.json`, `config/google_token.json`, `config/sheet.json`, `config/license.enc`, `config/settings.json`, `.env`
+`platform` saat ini hanya `"TikTok"` — YouTube di-disable di UI tapi kode `SimpleListener` dan `video_id_input` tetap ada (dormant).
 
 ## Frozen EXE Considerations
 
-- `getattr(sys, 'frozen', False)` is used throughout to detect EXE mode and adjust paths
-- `main.py` has a UTF-8 encoding fix for `stdout`/`stderr` that must run before any other import
-- Resource paths use `ROOT = os.path.dirname(sys.executable)` in EXE mode
-- Splash screen is disabled (`splash = None`) to prevent QPaintDevice segfault
+- `getattr(sys, 'frozen', False)` dipakai untuk mendeteksi mode EXE dan adjust paths
+- UTF-8 encoding fix di `main.py` harus berjalan **sebelum** import apapun
+- Resource paths: `ROOT = os.path.dirname(sys.executable)` di mode EXE
+- Splash screen di-disable (`splash = None`) untuk mencegah QPaintDevice segfault
+- Default platform di `build_production_exe_fixed.py` baris ~492 harus `"TikTok"`
+
+## Protected Files (Jangan Diubah Tanpa Hati-Hati)
+
+- `modules_server/tts_engine.py` — TTS engine dengan multi-path auth
+- `modules_client/license_manager.py` — validasi lisensi
+- `modules_client/config_manager.py` — sistem config pusat
+- `thirdparty/pytchat_ng/` — fork custom, jangan replace dengan versi pip
+
+## Sensitive Files (Never Commit)
+
+`config/gcloud_tts_credentials.json`, `config/google_token.json`, `config/sheet.json`, `config/license.enc`, `config/device.hash`, `config/settings.json`, `config/user_lists.json`, `.env`
+
+---
+
+## Setup Gemini API Key (Wajib untuk User Baru)
+
+Gemini API key dari Google AI Studio perlu langkah ekstra sebelum bisa digunakan:
+
+1. Buka [aistudio.google.com](https://aistudio.google.com) → **Get API Key**
+2. Klik API key yang dibuat → bagian **API restrictions**
+3. Aktifkan **"Generative Language API"** di daftar restrictions
+4. Tanpa langkah ini, semua request ke Gemini akan return **403 Permission Denied** meski API key valid
+
+Satu API key Google AI Studio berlaku untuk:
+- **Otak AI** → `gemini-3.1-flash-lite-preview` (auto-fallback ke `gemini-flash-lite-latest` jika 403)
+- **Suara TTS Gemini** → `gemini-2.5-flash-lite-preview-tts` (voice prefix `Gemini-*`)
+
+Google Cloud TTS (suara `id-ID-Standard-*` atau `Chirp3-*`) butuh key **terpisah** dari Google Cloud Console — bukan AI Studio.
+
+### Auth Format Gemini REST API
+
+Gunakan **header** `x-goog-api-key`, bukan query param `?key=`. Field system prompt menggunakan camelCase `systemInstruction`:
+
+```python
+headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+payload = {
+    "systemInstruction": {"role": "system", "parts": [{"text": system_prompt}]},
+    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+    "generationConfig": {"maxOutputTokens": 150, "temperature": 0.7},
+}
+requests.post(f"{GEMINI_API_BASE}/{model}:generateContent", headers=headers, json=payload)
+```
+
+---
+
+## Re-enabling YouTube
+
+YouTube di-disable bukan dihapus. Untuk re-enable:
+1. `ui/cohost_tab_basic.py` — uncomment baris dropdown `addItems(["YouTube", "TikTok"])` dan blok `if platform == "YouTube":` di `start()`
+2. `build_production_exe_fixed.py` — ubah default platform kembali ke `"YouTube"` jika perlu
 
 ---
 
 # RULES OF ENGAGEMENT
 
 > Baca dan ikuti seluruh aturan ini sebelum melakukan tindakan apapun.
-> Aturan ini TIDAK BISA diabaikan kecuali ada instruksi eksplisit dari user.
 
 ## Git Workflow
 
-### Branch
-- **SELALU** buat branch baru sebelum melakukan perubahan apapun yang berarti
-- Format nama branch:
-  - Fitur baru → `feat/nama-fitur`
-  - Bug fix → `fix/nama-bug`
-  - Hotfix mendesak → `hotfix/nama-issue`
-  - Eksperimen → `experiment/nama-percobaan`
-- JANGAN pernah coding langsung di branch `main` atau `master`
-
-### Commit
-- Lakukan commit setiap kali ada perubahan yang bermakna
-- Format pesan commit wajib:
-  ```
-  type: deskripsi singkat dalam bahasa Indonesia
-
-  - Detail perubahan 1
-  - Detail perubahan 2
-  ```
-  Type yang valid: `feat`, `fix`, `refactor`, `style`, `docs`, `test`, `chore`, `security`
-- Commit harus atomic — satu commit = satu perubahan logis
-
-### Push & Merge
+- **SELALU** buat branch baru sebelum perubahan yang berarti. Format: `feat/`, `fix/`, `hotfix/`, `experiment/`
+- **JANGAN** coding langsung di `main` atau `master`
+- Format commit wajib: `type: deskripsi (bahasa Indonesia)` — type valid: `feat fix refactor style docs chore security`
 - Setelah commit, **selalu push** ke remote branch yang sama
-- **JANGAN PERNAH merge** ke `main`/`master` tanpa perintah eksplisit dari user
-- **JANGAN PERNAH** jalankan `git merge`, `git rebase main`, atau `git push --force` tanpa izin
+- **JANGAN PERNAH** jalankan `git merge`, `git rebase main`, atau `git push --force` tanpa izin eksplisit
 
 ## Konfirmasi Sebelum Eksekusi
 
-Untuk tindakan berikut, **WAJIB tanya user dulu** dan tunggu persetujuan:
+Untuk tindakan berikut, **WAJIB tanya user dulu**:
 
 - Menghapus file atau folder apapun
-- Mengubah struktur database / schema migration
+- Mengubah struktur database / schema
 - Menginstall dependency baru
-- Mengubah konfigurasi environment (`.env`, `config.js`, dll)
-- Melakukan perubahan yang mempengaruhi lebih dari 3 file sekaligus
-- Refactor besar yang mengubah arsitektur aplikasi
-- Mengubah authentication / authorization logic
+- Mengubah file konfigurasi environment
+- Refactor besar yang mengubah arsitektur (berbeda dari perubahan styling multi-file yang normal)
+- Mengubah authentication / license logic
 
 Format tanya: `"⚠️ Saya akan [tindakan]. Ini akan mempengaruhi [dampak]. Boleh lanjut?"`
 
-## Keamanan
+## Larangan Keras
 
-- **TIDAK PERNAH** hardcode API key, password, token, atau secret ke dalam kode
-- Semua credential HARUS menggunakan environment variable
-- Selalu cek apakah `.env` sudah ada di `.gitignore` sebelum commit
-- Semua input dari user HARUS divalidasi dan di-sanitize sebelum diproses
-- Gunakan parameterized query untuk semua operasi database (anti SQL injection)
-
-## Struktur & Kualitas Kode
-
-- Jangan ubah struktur folder yang sudah ada tanpa konfirmasi
-- Setiap fungsi/komponen baru harus disertai komentar tujuannya
-- Hindari fungsi yang terlalu panjang (>50 baris) — pecah menjadi fungsi kecil
-- Hapus `print()` / `console.log` debugging sebelum commit
-- Setiap API call WAJIB punya error handling
+- JANGAN merge ke main tanpa izin
+- JANGAN hapus file tanpa izin
+- JANGAN commit credential/secret
+- JANGAN install dependency tanpa konfirmasi
+- JANGAN push --force tanpa izin eksplisit
 
 ## Laporan Setiap Sesi
 
-Di akhir setiap sesi atau setelah selesai task, berikan ringkasan:
+Di akhir setiap sesi atau setelah selesai task:
 
 ```
 ## ✅ Yang Sudah Dikerjakan
@@ -202,17 +305,8 @@ Di akhir setiap sesi atau setelah selesai task, berikan ringkasan:
 - Commit terakhir: pesan commit
 
 ## ⚡ Yang Perlu Diperhatikan
-- [risiko, hal yang belum selesai, atau keputusan yang butuh input]
+- [risiko, hal yang belum selesai, keputusan yang butuh input]
 
 ## 🔜 Langkah Selanjutnya (rekomendasi)
 - [saran opsional]
 ```
-
-## Larangan Keras
-
-- JANGAN merge ke main tanpa izin
-- JANGAN hapus file tanpa izin
-- JANGAN commit credential/secret
-- JANGAN abaikan error — selalu tangani atau laporkan
-- JANGAN install dependency tanpa konfirmasi
-- JANGAN push --force tanpa izin eksplisit
