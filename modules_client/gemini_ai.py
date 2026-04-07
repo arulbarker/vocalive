@@ -11,7 +11,8 @@ from modules_client.config_manager import config_manager
 
 logger = logging.getLogger('VocaLive')
 
-GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL_PRIMARY = "gemini-3.1-flash-lite-preview"
+GEMINI_MODEL_FALLBACK = "gemini-2.0-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
@@ -20,6 +21,7 @@ class GeminiAI:
 
     def __init__(self):
         self.api_key = config_manager.get("api_keys", {}).get("GEMINI_API_KEY", "")
+        self.model = GEMINI_MODEL_PRIMARY  # akan di-downgrade ke fallback jika 403
         if not self.api_key:
             logger.warning("Gemini API key not found")
 
@@ -60,7 +62,6 @@ class GeminiAI:
         if product_context:
             system_content += f"\n\n{product_context}"
 
-        url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={self.api_key}"
         payload = {
             "system_instruction": {"parts": [{"text": system_content}]},
             "contents": [{"parts": [{"text": prompt}]}],
@@ -72,18 +73,27 @@ class GeminiAI:
 
         for attempt in range(max_retries):
             try:
+                url = f"{GEMINI_API_BASE}/{self.model}:generateContent?key={self.api_key}"
                 timeout = 5 if fast_mode else (10 if attempt == 0 else 15)
                 resp = requests.post(url, json=payload, timeout=timeout)
 
                 if resp.status_code == 200:
                     data = resp.json()
                     reply = data["candidates"][0]["content"]["parts"][0]["text"]
-                    logger.debug(f"Gemini reply: {len(reply)} chars (attempt {attempt + 1})")
+                    logger.debug(f"Gemini reply ({self.model}): {len(reply)} chars")
                     return reply.strip()
+                elif resp.status_code == 403 and self.model == GEMINI_MODEL_PRIMARY:
+                    # Preview model belum tersedia untuk API key ini — turun ke fallback
+                    logger.warning(
+                        f"Gemini 403: model '{self.model}' restricted. "
+                        f"Auto-downgrade ke '{GEMINI_MODEL_FALLBACK}'"
+                    )
+                    self.model = GEMINI_MODEL_FALLBACK
+                    continue  # retry langsung dengan model baru
                 elif resp.status_code == 429:
                     logger.warning(f"Gemini rate limit, attempt {attempt + 1}")
                 else:
-                    logger.error(f"Gemini API error: {resp.status_code} — {resp.text[:200]}")
+                    logger.error(f"Gemini API error: {resp.status_code} — {resp.text[:300]}")
 
             except requests.exceptions.Timeout:
                 logger.warning(f"Gemini timeout attempt {attempt + 1}")
@@ -100,17 +110,28 @@ class GeminiAI:
     def test_connection(self) -> bool:
         if not self.api_key:
             return False
-        url = f"{GEMINI_API_BASE}/{GEMINI_MODEL}:generateContent?key={self.api_key}"
         payload = {
             "contents": [{"parts": [{"text": "Hello"}]}],
             "generationConfig": {"maxOutputTokens": 10},
         }
-        try:
-            resp = requests.post(url, json=payload, timeout=10)
-            return resp.status_code == 200
-        except Exception as e:
-            logger.error(f"Gemini connection test failed: {e}")
-            return False
+        for model in [GEMINI_MODEL_PRIMARY, GEMINI_MODEL_FALLBACK]:
+            try:
+                url = f"{GEMINI_API_BASE}/{model}:generateContent?key={self.api_key}"
+                resp = requests.post(url, json=payload, timeout=10)
+                if resp.status_code == 200:
+                    self.model = model
+                    logger.info(f"Gemini test OK dengan model: {model}")
+                    return True
+                elif resp.status_code == 403:
+                    logger.warning(f"Gemini 403 untuk {model}, coba fallback...")
+                    continue
+                else:
+                    logger.error(f"Gemini test error {resp.status_code}: {resp.text[:200]}")
+                    return False
+            except Exception as e:
+                logger.error(f"Gemini connection test failed ({model}): {e}")
+                return False
+        return False
 
 
 # Global instance

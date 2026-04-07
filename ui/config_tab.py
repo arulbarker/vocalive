@@ -106,23 +106,28 @@ class APITestThread(QThread):
             return False, f"❌ DeepSeek API gagal: {str(e)}"
     
     def test_gemini_api(self):
-        """Test Gemini Flash Lite API"""
-        try:
-            url = (
-                f"https://generativelanguage.googleapis.com/v1beta/models/"
-                f"gemini-3.1-flash-lite-preview:generateContent?key={self.api_key}"
-            )
-            data = {
-                "contents": [{"parts": [{"text": "Hello, test connection"}]}],
-                "generationConfig": {"maxOutputTokens": 10},
-            }
-            response = _session.post(url, json=data, timeout=10)
-            if response.status_code == 200:
-                return True, "✅ Gemini Flash Lite API berhasil terhubung!"
-            else:
-                return False, f"❌ Gemini API error: {response.status_code}"
-        except Exception as e:
-            return False, f"❌ Gemini API gagal: {str(e)}"
+        """Test Gemini API — coba primary model dulu, fallback jika 403"""
+        models = ["gemini-3.1-flash-lite-preview", "gemini-2.0-flash"]
+        data = {
+            "contents": [{"parts": [{"text": "Hello, test connection"}]}],
+            "generationConfig": {"maxOutputTokens": 10},
+        }
+        for model in models:
+            try:
+                url = (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model}:generateContent?key={self.api_key}"
+                )
+                response = _session.post(url, json=data, timeout=10)
+                if response.status_code == 200:
+                    return True, f"✅ Gemini API berhasil terhubung! (model: {model})"
+                elif response.status_code == 403:
+                    continue  # coba model berikutnya
+                else:
+                    return False, f"❌ Gemini API error: {response.status_code} — {response.text[:100]}"
+            except Exception as e:
+                return False, f"❌ Gemini API gagal: {str(e)}"
+        return False, "❌ Semua model Gemini return 403. Pastikan API key dari Google AI Studio (aistudio.google.com)"
 
     # ChatGPT disabled — uncomment to re-enable
     # def test_chatgpt_api(self): ...
