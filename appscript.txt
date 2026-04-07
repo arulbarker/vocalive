@@ -238,13 +238,23 @@ function doGet(e) {
     var deviceToken = e.parameter.token;
     var productId = e.parameter.product;
 
-    // Cek versi aplikasi — tidak butuh email, dihandle sebelum email check
+    // Cek versi aplikasi — per produk, tidak butuh email
     if (action === "version") {
-      return ContentService.createTextOutput(JSON.stringify({
-        "latest": "1.1.3",
-        "notes": "- Fix: gift tidak lagi terbaca dua kali saat live\n- Fix: notif overlay gift dihilangkan\n- Fix: auto-update kini benar-benar replace EXE otomatis",
-        "url": "https://github.com/arulbarker/tikdance-releases/releases/download/v1.1.3/TikDance-v1.1.3.zip"
-      })).setMimeType(ContentService.MimeType.JSON);
+      var VERSION_INFO = {
+        "vocalive": {
+          "latest": "1.0.1",
+          "notes": "- Versi awal VocaLive\n- Sistem login email via Lynk.id\n- TTS Google Cloud + Gemini\n- Cohost AI TikTok Live",
+          "url": "https://github.com/arulbarker/vocalive-releases/releases/download/v1.0.1/VocaLive-v1.0.1.zip"
+        },
+        "tikdance": {
+          "latest": "1.1.3",
+          "notes": "- Fix: gift tidak lagi terbaca dua kali saat live\n- Fix: notif overlay gift dihilangkan\n- Fix: auto-update kini benar-benar replace EXE otomatis",
+          "url": "https://github.com/arulbarker/tikdance-releases/releases/download/v1.1.3/TikDance-v1.1.3.zip"
+        }
+      };
+      var productId = e.parameter.product || "vocalive";
+      var versionData = VERSION_INFO[productId] || VERSION_INFO["vocalive"];
+      return ContentService.createTextOutput(JSON.stringify(versionData)).setMimeType(ContentService.MimeType.JSON);
     }
 
     if (emailDicari.trim() === "") return ContentService.createTextOutput(JSON.stringify({"status": "GAGAL", "message": "Email kosong."})).setMimeType(ContentService.MimeType.JSON);
