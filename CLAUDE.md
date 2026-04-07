@@ -25,8 +25,10 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 |-------|---------|-----------|
 | **v1.0.0** | 2026-04-05 | Versi awal — hapus Avatar Lip-sync & OBS Overlay, fokus Cohost AI + TTS |
 | **v1.0.1** | 2026-04-07 | Tambah suara Malaysia (ms-MY), fix TTS preview, fix Gemini WAV header, Knowledge Produk AI polish |
+| **v1.0.2** | 2026-04-07 | Product popup: QVideoSink+QLabel, chroma key, drag/resize, toggle ON/OFF, AI scene_id fix |
+| **v1.0.3** | 2026-04-07 | Config tab: voice selector TTS test terpisah, auto-deteksi tipe API key, filter voice per key type |
 
-**Versi saat ini: v1.0.1**
+**Versi saat ini: v1.0.3**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
@@ -129,6 +131,9 @@ speak(text, voice_name)
   → temp file dihapus setelah playback
 ```
 
+**`_load_settings()` di `tts_engine.py`**: membaca `tts_voice` (bukan `cohost_voice_model` yang lama).
+Kondisi reload: `if not voice_name:` — bukan `if not voice_name and not language_code:` (kondisi lama menyebabkan settings tidak ter-load saat language_code dipass).
+
 **Nama file temp**: berbasis timestamp millisecond (`tts_1744012345678.mp3`) — bukan hash teks — untuk menghindari Permission Denied saat voice sama di-preview berulang.
 
 **Auth Google API key**: Satu **Google Cloud Console** API key bisa dipakai untuk keduanya jika kedua API di-enable di bagian Restrictions:
@@ -144,6 +149,8 @@ Sistem popup video produk saat AI merespons terkait produk tertentu:
 2. **`product_scene_tab.py`** — UI manajemen daftar produk + video path
 3. **`generate_reply_with_scene()`** di `api.py` — AI membalas + menentukan `scene_id` dalam satu call (JSON response)
 4. **`product_popup_window.py`** — QDialog yang memutar video produk via QMediaPlayer
+
+**`scene_id` BUKAN nomor keranjang TikTok** — hanya ID internal untuk memilih video mana yang diputar. Nomor keranjang (keranjang 1, 2, dst) ada di knowledge produk user. `build_product_context()` secara eksplisit memberitahu AI ini, dan format daftar scene adalah `scene_id=N : nama` bukan `N. nama` untuk menghindari kebingungan.
 
 ### Knowledge Produk untuk AI (Config Tab)
 
@@ -165,6 +172,21 @@ Sistem sapaan otomatis terdiri dari 3 layer:
 3. **`sequential_greeting_manager.py`** — Timer-based playback, mode random, satu thread
 
 Interval timer diatur di Cohost Tab (bukan Config Tab).
+
+### TTS API Key Detection & Voice Filtering
+
+Config tab memiliki tombol **🔍 Deteksi** yang probe dua endpoint:
+- `GET generativelanguage.googleapis.com/v1beta/models?key=...` → deteksi AI Studio key
+- `GET texttospeech.googleapis.com/v1/voices?key=...` → deteksi Google Cloud key
+
+Hasil disimpan ke `settings.json` sebagai `tts_key_type: "gemini" | "cloud" | "all"`.
+
+Signal `ConfigTab.tts_key_type_changed(str)` di-emit dan di-connect di `main_window.py` ke `cohost_tab.update_voice_options()` — sehingga dropdown voice di Cohost tab otomatis filter:
+- `"gemini"` → hanya tampilkan `gemini_flash` sections
+- `"cloud"` → hanya tampilkan `gtts_standard` + `chirp3` sections
+- `"all"` / belum dideteksi → semua voice
+
+Test TTS di Config tab pakai voice dari combo sendiri (terpisah dari voice Cohost tab). Lang code diekstrak dari nama voice (`en-AU-Chirp3-...` → `en-AU`), Gemini voices default ke `id-ID`.
 
 ### Config System
 
@@ -212,6 +234,8 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
   "cohost_cooldown": 2,
   "sequential_greeting_interval": 180,
   "tiktok_nickname": "@username",
+  "tts_voice": "Gemini-Puck (MALE)",
+  "tts_key_type": "gemini",
   "google_tts_api_key": "AIzaSy...",
   "api_keys": {
     "GEMINI_API_KEY": "AIzaSy...",
