@@ -192,7 +192,7 @@ class TTSEngine:
             logger.error(f"Failed to play audio file: {e}")
     
     def _speak_with_gemini(self, text: str, voice_name: str) -> bool:
-        """Panggil Gemini 2.5 Flash TTS API — voices multilingual, output WAV"""
+        """Panggil Gemini 2.5 Flash Lite TTS API — voices multilingual, output WAV"""
         if not _requests:
             logger.warning("requests library not available for Gemini TTS")
             return False
@@ -201,7 +201,7 @@ class TTSEngine:
         raw_voice = voice_name.replace("Gemini-", "", 1)
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.5-flash-preview-tts:generateContent?key={self.google_api_key}"
+            f"gemini-2.5-flash-lite-preview-tts:generateContent?key={self.google_api_key}"
         )
         payload = {
             "contents": [{"parts": [{"text": text}]}],
