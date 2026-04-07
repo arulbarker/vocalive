@@ -143,11 +143,12 @@ Contoh: interval 180 detik → aktual antara 135–225 detik. Tidak pernah persi
 ```json
 {
   "greeting_ai_enabled": false,
-  "greeting_ai_last_updated": null,
-  "greeting_ai_interval_seconds": 180
+  "greeting_ai_last_updated": null
 }
 ```
-Field lama `custom_greeting_slot_1` s/d `custom_greeting_slot_10` tetap ada di file (backward compat) tapi tidak dipakai sistem baru.
+- `greeting_ai_interval_seconds` **tidak ada** — pakai `sequential_greeting_interval` yang sudah ada (tetap bisa diatur user via UI seperti sekarang)
+- Siklus regenerasi AI **hardcode 2 jam** (7200 detik), tidak exposed ke UI
+- Field lama `custom_greeting_slot_1` s/d `custom_greeting_slot_10` tetap ada di file (backward compat) tapi tidak dipakai sistem baru
 
 ---
 
