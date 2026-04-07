@@ -1064,12 +1064,15 @@ class CohostTabBasicSimplified(QWidget):
                             voices.append(f"{voice['model']} ({voice['gender']})")
 
             else:  # English
-                # Add English voices from all voice types
                 for lang_code in ["en-US", "en-GB", "en-AU", "en-IN"]:
-                    for voice_type in ["gtts_standard", "gtts_wavenet", "gtts_neural2", "gtts_news", "gtts_studio", "gtts_polyglot", "gtts_casual", "chirp", "chirp3"]:
+                    for voice_type in ["gtts_standard", "chirp3"]:
                         if voice_type in voices_data and lang_code in voices_data[voice_type]:
                             for voice in voices_data[voice_type][lang_code]:
                                 voices.append(f"{voice['model']} ({voice['gender']})")
+                # Gemini voices for English
+                if "gemini_flash" in voices_data and "en-US" in voices_data["gemini_flash"]:
+                    for voice in voices_data["gemini_flash"]["en-US"]:
+                        voices.append(f"{voice['model']} ({voice['gender']})")
             
             # Fallback to default voices if loading fails
             if not voices:
