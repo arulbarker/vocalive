@@ -508,8 +508,9 @@ class ConfigTab(QWidget):
         # Show/Hide button with better styling
         show_btn = QPushButton("Lihat")
         show_btn.setProperty("class", "secondary")
-        show_btn.setFixedWidth(60)
-        show_btn.setToolTip("Show/Hide API Key")
+        show_btn.setMinimumWidth(70)
+        show_btn.setMaximumWidth(90)
+        show_btn.setToolTip("Tampilkan / sembunyikan API Key")
         show_btn.clicked.connect(lambda: self.toggle_password_visibility(self.api_key_input))
         api_key_container.addWidget(show_btn)
         
@@ -795,7 +796,7 @@ class ConfigTab(QWidget):
         gemini_info.setStyleSheet(f"color: {INFO}; font-size: 11px; font-style: italic; padding: 5px; background-color: {BG_ELEVATED}; border-radius: 4px;")
         group_layout.addWidget(gemini_info)
 
-        # API Key input container
+        # Baris 1: API Key input + tombol Lihat
         api_key_container = QHBoxLayout()
         api_key_label = QLabel("API Key:")
         api_key_label.setMinimumWidth(80)
@@ -810,22 +811,28 @@ class ConfigTab(QWidget):
 
         show_api_btn = QPushButton("Lihat")
         show_api_btn.setProperty("class", "secondary")
-        show_api_btn.setFixedWidth(60)
-        show_api_btn.setToolTip("Show/Hide API Key")
+        show_api_btn.setMinimumWidth(70)
+        show_api_btn.setMaximumWidth(90)
+        show_api_btn.setToolTip("Tampilkan / sembunyikan API Key")
         show_api_btn.clicked.connect(lambda: self.toggle_password_visibility(self.tts_api_key_input))
         api_key_container.addWidget(show_api_btn)
-
-        self.tts_detect_btn = QPushButton("Deteksi Tipe")
-        self.tts_detect_btn.setFixedWidth(110)
-        self.tts_detect_btn.setToolTip("Deteksi otomatis tipe API key (AI Studio / Google Cloud)")
-        self.tts_detect_btn.setEnabled(False)
-        self.tts_detect_btn.clicked.connect(self._detect_key_type)
-        api_key_container.addWidget(self.tts_detect_btn)
-
         group_layout.addLayout(api_key_container)
 
+        # Baris 2: tombol Deteksi Tipe (baris sendiri agar tidak terpotong)
+        detect_row = QHBoxLayout()
+        self.tts_detect_btn = QPushButton("Deteksi Tipe API Key")
+        self.tts_detect_btn.setMinimumWidth(180)
+        self.tts_detect_btn.setMaximumWidth(220)
+        self.tts_detect_btn.setFixedHeight(32)
+        self.tts_detect_btn.setToolTip("Deteksi otomatis: AI Studio (Gemini) atau Google Cloud (Standard/Chirp3)")
+        self.tts_detect_btn.setEnabled(False)
+        self.tts_detect_btn.clicked.connect(self._detect_key_type)
+        detect_row.addWidget(self.tts_detect_btn)
+        detect_row.addStretch()
+        group_layout.addLayout(detect_row)
+
         # Key type detection result label
-        self.tts_key_type_label = QLabel("Tipe key: belum dideteksi — klik 🔍 Deteksi")
+        self.tts_key_type_label = QLabel("Tipe key: belum dideteksi — klik tombol Deteksi")
         self.tts_key_type_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 3px 5px;")
         group_layout.addWidget(self.tts_key_type_label)
 
@@ -1255,7 +1262,7 @@ class ConfigTab(QWidget):
         if not api_key:
             return
 
-        self.tts_detect_btn.setText("Mendeteksi...")
+        self.tts_detect_btn.setText("Mendeteksi API Key...")
         self.tts_detect_btn.setEnabled(False)
         self.tts_key_type_label.setText("Mendeteksi tipe key...")
         self.tts_key_type_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 3px 5px;")
@@ -1299,7 +1306,7 @@ class ConfigTab(QWidget):
 
     def _on_detection_done(self, supports_gemini: bool, supports_cloud: bool):
         """Update UI berdasarkan hasil deteksi key type."""
-        self.tts_detect_btn.setText("Deteksi Tipe")
+        self.tts_detect_btn.setText("Deteksi Tipe API Key")
         self.tts_detect_btn.setEnabled(True)
 
         if supports_gemini and supports_cloud:
