@@ -698,6 +698,14 @@ class MainWindow(QMainWindow):
                 self.config_tab = ConfigTab()
                 self.main_tabs.addTab(self.config_tab, "Konfigurasi")
                 logger.info("Config tab added successfully")
+
+                # Saat key type terdeteksi di Config tab → refresh voice list di Cohost tab
+                if hasattr(self, 'cohost_tab') and hasattr(self.cohost_tab, 'update_voice_options'):
+                    def _on_key_type(key_type):
+                        lang = self.cohost_tab.cfg.get("output_language", "Indonesia")
+                        self.cohost_tab.update_voice_options(lang)
+                        logger.info(f"[MAIN] Voice list Cohost diperbarui setelah deteksi key_type={key_type}")
+                    self.config_tab.tts_key_type_changed.connect(_on_key_type)
             except Exception as e:
                 logger.error(f"Failed to create Config tab: {e}")
                 placeholder = QWidget()

@@ -1078,35 +1078,51 @@ class CohostTabBasicSimplified(QWidget):
     def update_voice_options(self, language):
         """Update voice options based on selected language using voices.json"""
         self.voice_combo.clear()
-        
+
+        # Baca tipe key yang sudah dideteksi di Config tab
+        key_type = self.cfg.get("tts_key_type", "all")  # "gemini" | "cloud" | "all"
+
         try:
             # Load voices from voices.json
             voices_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "voices.json")
             with open(voices_file, 'r', encoding='utf-8') as f:
                 voices_data = json.load(f)
-            
+
+            # Tentukan section yang ditampilkan berdasarkan tipe key
+            if key_type == "gemini":
+                id_sections  = ["gemini_flash"]
+                my_sections  = ["gemini_flash"]
+                en_sections  = ["gemini_flash"]
+            elif key_type == "cloud":
+                id_sections  = ["gtts_standard", "gtts_wavenet", "chirp3"]
+                my_sections  = ["gtts_standard", "chirp3"]
+                en_sections  = ["gtts_standard", "chirp3"]
+            else:  # "all" atau belum dideteksi
+                id_sections  = ["gtts_standard", "gtts_wavenet", "chirp3", "gemini_flash"]
+                my_sections  = ["gtts_standard", "chirp3", "gemini_flash"]
+                en_sections  = ["gtts_standard", "chirp3"]
+
             voices = []
             if language == "Indonesia":
-                # Add Indonesian voices from all voice types including Gemini Flash
-                for voice_type in ["gtts_standard", "gtts_wavenet", "chirp3", "gemini_flash"]:
+                for voice_type in id_sections:
                     if voice_type in voices_data and "id-ID" in voices_data[voice_type]:
                         for voice in voices_data[voice_type]["id-ID"]:
                             voices.append(f"{voice['model']} ({voice['gender']})")
 
             elif language == "Malaysia":
-                for voice_type in ["gtts_standard", "chirp3", "gemini_flash"]:
+                for voice_type in my_sections:
                     if voice_type in voices_data and "ms-MY" in voices_data[voice_type]:
                         for voice in voices_data[voice_type]["ms-MY"]:
                             voices.append(f"{voice['model']} ({voice['gender']})")
 
             else:  # English
                 for lang_code in ["en-US", "en-GB", "en-AU", "en-IN"]:
-                    for voice_type in ["gtts_standard", "chirp3"]:
+                    for voice_type in en_sections:
                         if voice_type in voices_data and lang_code in voices_data[voice_type]:
                             for voice in voices_data[voice_type][lang_code]:
                                 voices.append(f"{voice['model']} ({voice['gender']})")
-                # Gemini voices for English
-                if "gemini_flash" in voices_data and "en-US" in voices_data["gemini_flash"]:
+                # Gemini voices for English (hanya jika tidak mode cloud-only)
+                if key_type != "cloud" and "gemini_flash" in voices_data and "en-US" in voices_data["gemini_flash"]:
                     for voice in voices_data["gemini_flash"]["en-US"]:
                         voices.append(f"{voice['model']} ({voice['gender']})")
             

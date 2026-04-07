@@ -212,7 +212,9 @@ class PolishKnowledgeThread(QThread):
 
 class ConfigTab(QWidget):
     """Tab Konfigurasi untuk API Keys"""
-    
+
+    tts_key_type_changed = pyqtSignal(str)  # "gemini" | "cloud" | "all"
+
     def __init__(self):
         super().__init__()
         self.cfg = ConfigManager("config/settings.json")
@@ -1320,6 +1322,10 @@ class ConfigTab(QWidget):
         self.tts_key_type_label.setText(label)
         self.tts_key_type_label.setStyleSheet(f"color: {color}; font-size: 11px; padding: 3px 5px; font-weight: bold;")
         self._populate_tts_voice_combo(key_type)
+        # Simpan ke config agar Cohost tab bisa baca
+        self.cfg.set("tts_key_type", key_type)
+        # Broadcast ke tab lain (main_window akan forward ke Cohost tab)
+        self.tts_key_type_changed.emit(key_type)
         logger.info(f"[TTS_DETECT] gemini={supports_gemini}, cloud={supports_cloud} → key_type={key_type}")
 
     def test_google_tts(self):
