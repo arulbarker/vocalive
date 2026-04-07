@@ -110,7 +110,7 @@ class APITestThread(QThread):
         try:
             url = (
                 f"https://generativelanguage.googleapis.com/v1beta/models/"
-                f"gemini-2.0-flash-lite:generateContent?key={self.api_key}"
+                f"gemini-3.1-flash-lite-preview:generateContent?key={self.api_key}"
             )
             data = {
                 "contents": [{"parts": [{"text": "Hello, test connection"}]}],

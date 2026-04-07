@@ -1,5 +1,5 @@
 """
-Gemini AI Integration — Gemini 2.0 Flash Lite
+Gemini AI Integration — Gemini 3.1 Flash Lite Preview
 """
 
 import requests
@@ -11,7 +11,7 @@ from modules_client.config_manager import config_manager
 
 logger = logging.getLogger('VocaLive')
 
-GEMINI_MODEL = "gemini-2.0-flash-lite"
+GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
