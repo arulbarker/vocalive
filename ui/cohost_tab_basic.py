@@ -1058,24 +1058,28 @@ class CohostTabBasicSimplified(QWidget):
                             voices.append(f"{voice['model']} ({voice['gender']})")
 
             elif language == "Malaysia":
-                # Add Malaysia voices from all voice types
-                for voice_type in ["gtts_standard", "gtts_wavenet"]:
+                for voice_type in ["gtts_standard", "chirp3", "gemini_flash"]:
                     if voice_type in voices_data and "ms-MY" in voices_data[voice_type]:
                         for voice in voices_data[voice_type]["ms-MY"]:
                             voices.append(f"{voice['model']} ({voice['gender']})")
 
             else:  # English
-                # Add English voices from all voice types
                 for lang_code in ["en-US", "en-GB", "en-AU", "en-IN"]:
-                    for voice_type in ["gtts_standard", "gtts_wavenet", "gtts_neural2", "gtts_news", "gtts_studio", "gtts_polyglot", "gtts_casual", "chirp", "chirp3"]:
+                    for voice_type in ["gtts_standard", "chirp3"]:
                         if voice_type in voices_data and lang_code in voices_data[voice_type]:
                             for voice in voices_data[voice_type][lang_code]:
                                 voices.append(f"{voice['model']} ({voice['gender']})")
+                # Gemini voices for English
+                if "gemini_flash" in voices_data and "en-US" in voices_data["gemini_flash"]:
+                    for voice in voices_data["gemini_flash"]["en-US"]:
+                        voices.append(f"{voice['model']} ({voice['gender']})")
             
             # Fallback to default voices if loading fails
             if not voices:
                 if language == "Indonesia":
                     voices = ["id-ID-Standard-A (FEMALE)", "id-ID-Standard-B (MALE)"]
+                elif language == "Malaysia":
+                    voices = ["ms-MY-Standard-A (FEMALE)", "ms-MY-Standard-B (MALE)"]
                 else:
                     voices = ["en-US-Standard-A (MALE)", "en-US-Standard-C (FEMALE)"]
             
@@ -1124,9 +1128,17 @@ class CohostTabBasicSimplified(QWidget):
 
             # Check if this is a Gemini voice
             if voice_model.startswith('Gemini-'):
-                # Gemini voices are multilingual, default to Indonesian
-                language_code = "id-ID"
-                sample_text = "Halo, ini adalah contoh suara Gemini untuk preview."
+                # Gemini voices are multilingual — use sample text sesuai bahasa yang dipilih user
+                current_lang = self.cfg.get("language", "Indonesia")
+                if current_lang == "Malaysia":
+                    language_code = "ms-MY"
+                    sample_text = "Helo, ini adalah contoh suara untuk preview. Selamat datang!"
+                elif current_lang == "English":
+                    language_code = "en-US"
+                    sample_text = "Hello, this is a voice preview sample. Welcome!"
+                else:
+                    language_code = "id-ID"
+                    sample_text = "Halo, ini adalah contoh suara untuk preview. Selamat datang!"
             elif '-' in voice_model:
                 parts = voice_model.split('-')
                 if len(parts) >= 2:
@@ -1154,7 +1166,7 @@ class CohostTabBasicSimplified(QWidget):
             # Play TTS preview with Google TTS only (avoid dual playback)
             success = speak(
                 text=sample_text,
-                voice_name=selected_voice,
+                voice_name=voice_model,
                 language_code=language_code,
                 on_finished=on_preview_finished,
                 force_google_tts=True
@@ -1731,14 +1743,21 @@ class CohostTabBasicSimplified(QWidget):
             from modules_server.tts_engine import speak
             
             # Get selected voice and language
-            selected_voice = self.cfg.get("tts_voice", "id-ID-Standard-A")  # FIX: Use Google TTS voice as default
+            selected_voice = self.cfg.get("tts_voice", "id-ID-Standard-A")
+            # Strip gender suffix saved by on_voice_changed e.g. "id-ID-Standard-A (FEMALE)" -> "id-ID-Standard-A"
+            voice_model = selected_voice.split('(')[0].strip()
             output_language = self.cfg.get("output_language", "Indonesia")
-            
-            # Set language code based on selection
-            if output_language == "Indonesia":
-                language_code = "id-ID"
+
+            # Derive language code from voice model name, fallback to output_language
+            if voice_model.startswith("Gemini-"):
+                # Gemini voices are multilingual — pick language code from output_language
+                lang_map = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}
+                language_code = lang_map.get(output_language, "id-ID")
+            elif '-' in voice_model:
+                parts = voice_model.split('-')
+                language_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "id-ID"
             else:
-                language_code = "en-US"
+                language_code = "id-ID"
             
             # Create callback for TTS completion
             def on_tts_finished():
@@ -1749,8 +1768,8 @@ class CohostTabBasicSimplified(QWidget):
                     self.log_message("ERROR", f"TTS callback error: {callback_error}")
             
             # Speak with selected voice and callback (force Google TTS only)
-            speak(text, voice_name=selected_voice, language_code=language_code, on_finished=on_tts_finished, force_google_tts=True)
-            self.log_message("TTS", f"Speaking with voice: {selected_voice}")
+            speak(text, voice_name=voice_model, language_code=language_code, on_finished=on_tts_finished, force_google_tts=True)
+            self.log_message("TTS", f"Speaking with voice: {voice_model}")
             
         except Exception as e:
             print(f"TTS error: {e}")

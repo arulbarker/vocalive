@@ -179,15 +179,21 @@ class TTSEngine:
         if not self.pygame_available or not pygame:
             logger.warning("pygame not available for audio playback")
             return
-        
+
         try:
+            # Stop and unload current track first to release file lock
+            pygame.mixer.music.stop()
+            pygame.mixer.music.unload()
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
-            
+
             # Wait for playback to complete
             while pygame.mixer.music.get_busy():
                 time.sleep(0.1)
-                
+
+            # Unload after playback so the file can be deleted
+            pygame.mixer.music.unload()
+
         except Exception as e:
             logger.error(f"Failed to play audio file: {e}")
     
@@ -197,11 +203,11 @@ class TTSEngine:
             logger.warning("requests library not available for Gemini TTS")
             return False
 
-        # voice_name: "Gemini-Puck" -> "Puck"
-        raw_voice = voice_name.replace("Gemini-", "", 1)
+        # voice_name: "Gemini-Puck" or "Gemini-Puck (MALE)" -> "Puck"
+        raw_voice = voice_name.split('(')[0].strip().replace("Gemini-", "", 1)
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.5-flash-lite-preview-tts:generateContent?key={self.google_api_key}"
+            f"gemini-2.5-flash-preview-tts:generateContent?key={self.google_api_key}"
         )
         payload = {
             "contents": [{"parts": [{"text": text}]}],
@@ -218,16 +224,37 @@ class TTSEngine:
             resp = _requests.post(url, json=payload, timeout=20)
             resp.raise_for_status()
             data = resp.json()
-            audio_b64 = data["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+            inline = data["candidates"][0]["content"]["parts"][0]["inlineData"]
+            audio_b64 = inline["data"]
+            mime_type = inline.get("mimeType", "audio/L16;rate=24000")
             audio_bytes = base64.b64decode(audio_b64)
-            temp_file = self.temp_dir / f"tts_{hash(text) & 0xffffffff:08x}.wav"
-            temp_file.write_bytes(audio_bytes)
+
+            temp_file = self.temp_dir / f"tts_{int(time.time()*1000)}.wav"
+
+            # Gemini TTS returns raw PCM (Linear16) — must wrap with WAV headers
+            # otherwise pygame raises "Unknown WAVE format"
+            sample_rate = 24000
+            for part in mime_type.split(';'):
+                part = part.strip()
+                if part.startswith("rate="):
+                    try:
+                        sample_rate = int(part.split("=")[1])
+                    except Exception:
+                        pass
+
+            import wave as _wave
+            with _wave.open(str(temp_file), 'wb') as wf:
+                wf.setnchannels(1)    # mono
+                wf.setsampwidth(2)    # 16-bit PCM = 2 bytes
+                wf.setframerate(sample_rate)
+                wf.writeframes(audio_bytes)
+
             self._play_audio_file(str(temp_file))
             try:
                 temp_file.unlink()
             except Exception:
                 pass
-            logger.info(f"TTS completed (Gemini Flash / {raw_voice})")
+            logger.info(f"TTS completed (Gemini Flash / {raw_voice}, {sample_rate}Hz)")
             return True
         except Exception as e:
             logger.error(f"Gemini TTS failed: {e}")
@@ -247,9 +274,17 @@ class TTSEngine:
         }
         try:
             resp = _requests.post(url, json=payload, timeout=15)
+            if not resp.ok:
+                err = resp.json() if resp.headers.get("content-type","").startswith("application/json") else resp.text
+                msg = err.get("error", {}).get("message", str(err)) if isinstance(err, dict) else str(err)[:300]
+                logger.error(f"Google TTS {resp.status_code}: {msg}")
+                # Hint if API not enabled on the key
+                if resp.status_code in (400, 403) and ("not been used" in msg or "disabled" in msg or "not enabled" in msg):
+                    logger.error("💡 Fix: buka Google Cloud Console → API key → Restrictions → enable 'Cloud Text-to-Speech API'")
+                return False
             resp.raise_for_status()
             audio_bytes = base64.b64decode(resp.json()["audioContent"])
-            temp_file = self.temp_dir / f"tts_{hash(text) & 0xffffffff:08x}.mp3"
+            temp_file = self.temp_dir / f"tts_{int(time.time()*1000)}.mp3"
             temp_file.write_bytes(audio_bytes)
             self._play_audio_file(str(temp_file))
             try:
@@ -270,7 +305,9 @@ class TTSEngine:
         if not voice_name and not language_code:
             self._load_settings()
 
-        current_voice = voice_name or self.voice_model
+        # Strip gender suffix e.g. "id-ID-Standard-A (FEMALE)" -> "id-ID-Standard-A"
+        raw_voice = voice_name or self.voice_model
+        current_voice = raw_voice.split('(')[0].strip()
         current_lang = language_code or self.language_code
 
         logger.info(f"TTS started: {text[:50]}{'...' if len(text) > 50 else ''} (voice={current_voice}, lang={current_lang})")
@@ -308,7 +345,7 @@ class TTSEngine:
                 audio_config=audio_config
             )
 
-            temp_file = self.temp_dir / f"tts_{hash(text) & 0xffffffff:08x}.mp3"
+            temp_file = self.temp_dir / f"tts_{int(time.time()*1000)}.mp3"
             with open(temp_file, "wb") as out:
                 out.write(response.audio_content)
 
