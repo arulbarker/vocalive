@@ -63,19 +63,28 @@ class GeminiAI:
             system_content += f"\n\n{product_context}"
 
         payload = {
-            "system_instruction": {"parts": [{"text": system_content}]},
-            "contents": [{"parts": [{"text": prompt}]}],
+            "systemInstruction": {
+                "role": "system",
+                "parts": [{"text": system_content}]
+            },
+            "contents": [
+                {"role": "user", "parts": [{"text": prompt}]}
+            ],
             "generationConfig": {
                 "maxOutputTokens": max_tokens,
                 "temperature": 0.7,
             },
         }
+        headers = {
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json",
+        }
 
         for attempt in range(max_retries):
             try:
-                url = f"{GEMINI_API_BASE}/{self.model}:generateContent?key={self.api_key}"
+                url = f"{GEMINI_API_BASE}/{self.model}:generateContent"
                 timeout = 5 if fast_mode else (10 if attempt == 0 else 15)
-                resp = requests.post(url, json=payload, timeout=timeout)
+                resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
 
                 if resp.status_code == 200:
                     data = resp.json()
@@ -113,13 +122,17 @@ class GeminiAI:
         if not self.api_key:
             return False
         payload = {
-            "contents": [{"parts": [{"text": "Hello"}]}],
+            "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
             "generationConfig": {"maxOutputTokens": 10},
+        }
+        headers = {
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json",
         }
         for model in [GEMINI_MODEL_PRIMARY, GEMINI_MODEL_FALLBACK]:
             try:
-                url = f"{GEMINI_API_BASE}/{model}:generateContent?key={self.api_key}"
-                resp = requests.post(url, json=payload, timeout=10)
+                url = f"{GEMINI_API_BASE}/{model}:generateContent"
+                resp = requests.post(url, headers=headers, json=payload, timeout=10)
                 if resp.status_code == 200:
                     self.model = model
                     logger.info(f"Gemini test OK dengan model: {model}")

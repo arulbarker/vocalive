@@ -109,16 +109,20 @@ class APITestThread(QThread):
         """Test Gemini API — coba primary model dulu, fallback jika 403"""
         models = ["gemini-3.1-flash-lite-preview", "gemini-flash-lite-latest"]
         data = {
-            "contents": [{"parts": [{"text": "Hello, test connection"}]}],
+            "contents": [{"role": "user", "parts": [{"text": "Hello, test connection"}]}],
             "generationConfig": {"maxOutputTokens": 10},
+        }
+        headers = {
+            "x-goog-api-key": self.api_key,
+            "Content-Type": "application/json",
         }
         for model in models:
             try:
                 url = (
                     f"https://generativelanguage.googleapis.com/v1beta/models/"
-                    f"{model}:generateContent?key={self.api_key}"
+                    f"{model}:generateContent"
                 )
-                response = _session.post(url, json=data, timeout=10)
+                response = _session.post(url, headers=headers, json=data, timeout=10)
                 if response.status_code == 200:
                     return True, f"✅ Gemini API berhasil terhubung! (model: {model})"
                 elif response.status_code == 403:
