@@ -629,47 +629,39 @@ class ConfigTab(QWidget):
         """Create Sales Template section for live selling context"""
         group = QGroupBox("🛍️ Template Prompt Live Selling")
         group_layout = QVBoxLayout(group)
-        group_layout.setSpacing(15)
-        
-        # Description
-        desc = QLabel("Pilih template prompt untuk berbagai jenis live selling dengan produk keranjang 1-5")
-        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
-        group_layout.addWidget(desc)
-        
-        # Template selection
+        group_layout.setSpacing(12)
+
+        # Hint
+        hint = QLabel("💡 Pilih template → teks langsung muncul di bawah dan bisa kamu edit sesuka hati")
+        hint.setStyleSheet(f"color: {INFO}; font-size: 11px; font-style: italic; padding: 5px; background-color: {BG_ELEVATED}; border-radius: 4px;")
+        group_layout.addWidget(hint)
+
+        # Template dropdown
         template_layout = QHBoxLayout()
         template_label = QLabel("Template:")
-        template_label.setMinimumWidth(100)
+        template_label.setMinimumWidth(80)
         template_layout.addWidget(template_label)
-        
+
         self.template_combo = QComboBox()
-        self.template_combo.addItem("Pilih Template Selling", "")
-        
-        # Add templates from sales_templates.py
+        self.template_combo.addItem("— Pilih Template Selling —", "")
         for key, name, description in get_template_list():
-            self.template_combo.addItem(f"{name} - {description}", key)
-        
-        self.template_combo.currentIndexChanged.connect(lambda index: self.on_template_changed(self.template_combo.itemData(index)))
+            self.template_combo.addItem(f"{name}  ·  {description}", key)
+        self.template_combo.currentIndexChanged.connect(
+            lambda index: self.on_template_changed(self.template_combo.itemData(index))
+        )
         template_layout.addWidget(self.template_combo)
-        template_layout.addStretch()
         group_layout.addLayout(template_layout)
-        
-        # Context Setting Area (Manual + Template)
-        context_label = QLabel("Context Setting (Manual atau dari Template):")
-        context_label.setStyleSheet(f"font-weight: bold; color: {TEXT_PRIMARY}; margin-top: 10px;")
-        group_layout.addWidget(context_label)
-        
-        # Manual context input (editable)
+
+        # Single editable text area
         self.context_input = QTextEdit()
-        self.context_input.setMaximumHeight(200)
-        self.context_input.setMinimumHeight(200)
-        self.context_input.setPlaceholderText("Tulis context setting manual di sini, atau pilih template di bawah untuk mengisi otomatis...")
-        
-        # Load existing context from config
+        self.context_input.setMinimumHeight(230)
+        self.context_input.setMaximumHeight(260)
+        self.context_input.setPlaceholderText(
+            "Tulis context setting di sini, atau pilih template di atas untuk langsung mengisi teks ini..."
+        )
         existing_context = self.cfg.get("user_context", "")
         if existing_context:
             self.context_input.setPlainText(existing_context)
-        
         self.context_input.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {BG_ELEVATED};
@@ -685,66 +677,30 @@ class ConfigTab(QWidget):
                 background-color: {BG_SURFACE};
             }}
         """)
+        self.context_input.textChanged.connect(self._update_char_count)
         group_layout.addWidget(self.context_input)
-        
-        # Template preview area (now editable as example/guide)
-        template_label = QLabel("Template Contoh (Bisa Diedit sebagai Panduan):")
-        template_label.setStyleSheet(f"font-weight: bold; color: {ACCENT}; margin-top: 15px;")
-        group_layout.addWidget(template_label)
-        
-        self.template_preview = QTextEdit()
-        self.template_preview.setMaximumHeight(150)
-        self.template_preview.setMinimumHeight(150)
-        self.template_preview.setPlaceholderText("Pilih template untuk melihat contoh prompt yang baik, lalu edit sesuai kebutuhan...")
-        self.template_preview.setReadOnly(False)  # Now editable!
-        self.template_preview.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {BG_ELEVATED};
-                border: 2px solid {ACCENT};
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 12px;
-                color: {TEXT_PRIMARY};
-                line-height: 1.3;
-            }}
-            QTextEdit:focus {{
-                border: 2px solid {PRIMARY};
-                background-color: {BG_SURFACE};
-            }}
-        """)
-        group_layout.addWidget(self.template_preview)
-        
-        # Button controls
+
+        # Char count
+        self.char_count_label = QLabel("")
+        self.char_count_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px; padding: 2px 4px;")
+        group_layout.addWidget(self.char_count_label)
+        self._update_char_count()
+
+        # Buttons
         button_layout = QHBoxLayout()
-        
-        # Copy template to context button
-        copy_template_btn = QPushButton("⬆️ Copy Template ke Context")
-        copy_template_btn.setProperty("class", "secondary")
-        copy_template_btn.clicked.connect(self.copy_template_to_context)
-        copy_template_btn.setEnabled(False)
-        button_layout.addWidget(copy_template_btn)
-        self.copy_template_btn = copy_template_btn
-        
-        # Save context button
-        save_context_btn = QPushButton("💾 Save Context Setting")
-        save_context_btn.setProperty("class", "success")
+        save_context_btn = QPushButton("💾 Simpan Context")
+        save_context_btn.setStyleSheet(btn_success())
         save_context_btn.clicked.connect(self.save_context_setting)
         button_layout.addWidget(save_context_btn)
-        
-        # Clear context button  
-        clear_context_btn = QPushButton("🗑️ Clear")
-        clear_context_btn.setProperty("class", "danger")
+
+        clear_context_btn = QPushButton("🗑️ Hapus")
+        clear_context_btn.setStyleSheet(btn_danger())
         clear_context_btn.clicked.connect(self.clear_context_setting)
         button_layout.addWidget(clear_context_btn)
-        
+
         button_layout.addStretch()
         group_layout.addLayout(button_layout)
-        
-        # Status
-        self.template_status = QLabel("Status: Belum ada template dipilih")
-        self.template_status.setStyleSheet(f"color: {TEXT_DIM}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px;")
-        group_layout.addWidget(self.template_status)
-        
+
         layout.addWidget(group)
     
     def create_google_tts_section(self, layout):
@@ -1050,32 +1006,15 @@ class ConfigTab(QWidget):
 
         self.update_status_overview()
     
+    def _update_char_count(self):
+        """Update character count label"""
+        count = len(self.context_input.toPlainText())
+        self.char_count_label.setText(f"{count} karakter")
+
     def on_template_changed(self, template_key):
-        """Handle template selection change"""
+        """Load selected template directly into the editable context input"""
         if template_key:
-            template_content = get_template(template_key)
-            self.template_preview.setPlainText(template_content)
-            self.copy_template_btn.setEnabled(True)
-            self.template_status.setText("Status: Template siap di-copy ke Context Setting")
-            self.template_status.setStyleSheet(f"color: {WARNING}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
-        else:
-            self.template_preview.setPlaceholderText("Pilih template untuk melihat contoh prompt yang baik...")
-            self.template_preview.clear()
-            self.copy_template_btn.setEnabled(False)
-            self.template_status.setText("Status: Belum ada template dipilih")
-            self.template_status.setStyleSheet(f"color: {TEXT_DIM}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px;")
-    
-    def copy_template_to_context(self):
-        """Copy template content to context input for editing"""
-        template_content = self.template_preview.toPlainText().strip()
-        if not template_content:
-            QMessageBox.warning(self, "Peringatan", "Template kosong atau belum dipilih.")
-            return
-        
-        # Copy template content to context input
-        self.context_input.setPlainText(template_content)
-        self.template_status.setText("Status: ✅ Template berhasil di-copy ke Context Setting")
-        self.template_status.setStyleSheet(f"color: {SUCCESS}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
+            self.context_input.setPlainText(get_template(template_key))
     
     def save_context_setting(self):
         """Save context setting from manual input"""
@@ -1095,8 +1034,7 @@ class ConfigTab(QWidget):
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             
-            self.template_status.setText("Status: ✅ Context Setting berhasil disimpan")
-            self.template_status.setStyleSheet(f"color: {SUCCESS}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; font-weight: bold;")
+            self.char_count_label.setText(f"{len(context_content)} karakter  ·  ✅ Tersimpan")
             
             QMessageBox.information(
                 self, 
@@ -1120,8 +1058,7 @@ class ConfigTab(QWidget):
         
         if reply == QMessageBox.StandardButton.Yes:
             self.context_input.clear()
-            self.template_status.setText("Status: Context Setting dikosongkan")
-            self.template_status.setStyleSheet(f"color: {INFO}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px;")
+            self.template_combo.setCurrentIndex(0)
     
     def toggle_password_visibility(self, line_edit):
         """Toggle password visibility for line edit"""
