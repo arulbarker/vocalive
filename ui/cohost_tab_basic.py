@@ -1510,22 +1510,13 @@ class CohostTabBasicSimplified(QWidget):
         # All processing is now handled by UnifiedProcessor in main_window.py
         # This ensures no duplicate TTS responses
     
-    def generate_cohost_reply(self, author, message):
+    def generate_cohost_reply(self, author, message, is_vip=False):
         """Generate Cohost reply - called by UnifiedProcessor only"""
         try:
-            # This method is called by unified processor for COHOST_TRIGGER and GENERAL types
-            # It only generates the reply without re-processing the comment
-            
-            # Add to trigger display for UI feedback
             self.add_comment_to_display(author, message, "trigger")
-            
-            # Add to queue for TTS processing
-            self.add_to_queue(author, message)
-            
-            # Notify custom greeting system about trigger activity
+            self.add_to_queue(author, message, is_vip=is_vip)
             if hasattr(self, 'custom_greeting_manager'):
                 self.custom_greeting_manager.add_trigger(author, message, "reply_pending")
-            
         except Exception as e:
             self.logger.error(f"Error in generate_cohost_reply: {e}")
     
@@ -1576,30 +1567,30 @@ class CohostTabBasicSimplified(QWidget):
             return True  # Default to responding if config fails
     
     
-    def add_to_queue(self, author, message):
-        """Add comment to reply queue with spam/toxic filtering"""
-        # Toxic filter
+    def add_to_queue(self, author, message, is_vip=False):
+        """Add comment to reply queue — VIP user bypass cooldown sepenuhnya"""
+        # Toxic filter (berlaku untuk semua, termasuk VIP)
         if self.is_toxic(message):
-            self.log_message("WARN", f"Toxic content detected from {author}, ignored")
+            self.log_message("WARN", f"Toxic content from {author}, ignored")
             return
 
-        # Anti-spam check
-        if self.is_spam(author, message):
-            self.log_message("WARN", f"Spam detected from {author}, ignored")
+        # Spam filter — VIP bypass
+        if not is_vip and self.is_spam(author, message):
+            self.log_message("WARN", f"Spam from {author}, ignored")
             return
 
-        # Check cooldown — jika 0 menit, balas semua komentar tanpa batasan per penonton
+        # Cooldown check — VIP bypass; cooldown=0 berarti reply semua
         now = time.time()
         viewer_cooldown_seconds = self.cfg.get("viewer_cooldown_minutes", 1) * 60
-        if viewer_cooldown_seconds > 0:
+        if not is_vip and viewer_cooldown_seconds > 0:
             if author in self.viewer_cooldowns:
                 if now - self.viewer_cooldowns[author] < viewer_cooldown_seconds:
                     return
-            self.viewer_cooldowns[author] = now
 
-        # Add to queue
+        self.viewer_cooldowns[author] = now
         self.reply_queue.append((author, message, now))
-        self.log_message("INFO", f"Added to queue: {author}")
+        label = "⭐ VIP" if is_vip else author
+        self.log_message("INFO", f"Queued: {label}")
     
     def _process_queue(self):
         """Process reply queue — satu item per satu TTS (serialized pipeline)"""

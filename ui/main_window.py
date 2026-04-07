@@ -392,20 +392,21 @@ class UnifiedCommentProcessor:
                     logger.info(f"[UnifiedProcessor] 🗣️ COHOST TRIGGER MATCHED for {author}")
                     print(f"[TRIGGER ROUTER] 🗣️ Cohost trigger matched -> Routing to Cohost tab")
                     
-                    # Check cohost cooldown
+                    # Check cohost cooldown — VIP user bypass sepenuhnya
                     cohost_user_key = f"cohost_{author}"
-                    if cohost_user_key in self.cohost_user_tracker:
-                        last_reply_time = self.cohost_user_tracker[cohost_user_key]
-                        if current_time - last_reply_time < self.GENERAL_COOLDOWN:
-                            logger.info(f"[UnifiedProcessor] Cohost user {author} in cooldown ({self.GENERAL_COOLDOWN}s)")
-                            return
-                    
-                    # Update cohost tracker
+                    if not is_vip:
+                        if cohost_user_key in self.cohost_user_tracker:
+                            last_reply_time = self.cohost_user_tracker[cohost_user_key]
+                            if current_time - last_reply_time < self.GENERAL_COOLDOWN:
+                                logger.info(f"[UnifiedProcessor] Cohost user {author} in cooldown ({self.GENERAL_COOLDOWN}s)")
+                                return
+
+                    # Update cohost tracker (selalu update, termasuk VIP)
                     self.cohost_user_tracker[cohost_user_key] = current_time
-                    
-                    # Generate AI reply using cohost tab
+
+                    # Generate AI reply using cohost tab — pass is_vip agar bypass viewer_cooldown
                     if hasattr(self.cohost_tab, 'generate_cohost_reply'):
-                        self.cohost_tab.generate_cohost_reply(author, message)
+                        self.cohost_tab.generate_cohost_reply(author, message, is_vip=is_vip)
                         logger.info(f"[UnifiedProcessor] ✅ Routed to Cohost tab for AI reply")
                     else:
                         logger.warning("[UnifiedProcessor] Cohost tab missing generate_cohost_reply method")
