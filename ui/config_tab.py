@@ -65,8 +65,8 @@ class APITestThread(QThread):
         try:
             if self.api_type == "deepseek":
                 success, message = self.test_deepseek_api()
-            elif self.api_type == "chatgpt":
-                success, message = self.test_chatgpt_api()
+            elif self.api_type == "gemini":
+                success, message = self.test_gemini_api()
             else:
                 success, message = False, "Unknown API type"
             
@@ -105,36 +105,27 @@ class APITestThread(QThread):
         except Exception as e:
             return False, f"❌ DeepSeek API gagal: {str(e)}"
     
-    def test_chatgpt_api(self):
-        """Test ChatGPT API"""
+    def test_gemini_api(self):
+        """Test Gemini Flash Lite API"""
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": "gpt-3.5-turbo",
-                "messages": [
-                    {"role": "user", "content": "Hello, test connection"}
-                ],
-                "max_tokens": 10
-            }
-            
-            response = _session.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=10
+            url = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"gemini-2.0-flash-lite:generateContent?key={self.api_key}"
             )
-            
+            data = {
+                "contents": [{"parts": [{"text": "Hello, test connection"}]}],
+                "generationConfig": {"maxOutputTokens": 10},
+            }
+            response = _session.post(url, json=data, timeout=10)
             if response.status_code == 200:
-                return True, "✅ ChatGPT API berhasil terhubung!"
+                return True, "✅ Gemini Flash Lite API berhasil terhubung!"
             else:
-                return False, f"❌ ChatGPT API error: {response.status_code}"
-                
+                return False, f"❌ Gemini API error: {response.status_code}"
         except Exception as e:
-            return False, f"❌ ChatGPT API gagal: {str(e)}"
+            return False, f"❌ Gemini API gagal: {str(e)}"
+
+    # ChatGPT disabled — uncomment to re-enable
+    # def test_chatgpt_api(self): ...
 
 class ConfigTab(QWidget):
     """Tab Konfigurasi untuk API Keys"""
@@ -409,7 +400,8 @@ class ConfigTab(QWidget):
         provider_layout.addWidget(provider_label)
         
         self.provider_combo = QComboBox()
-        self.provider_combo.addItems(["DeepSeek", "OpenAI (ChatGPT)"])
+        # ChatGPT disabled — uncomment to re-enable: ["DeepSeek", "Gemini Flash Lite", "OpenAI (ChatGPT)"]
+        self.provider_combo.addItems(["DeepSeek", "Gemini Flash Lite"])
         self.provider_combo.currentTextChanged.connect(self.on_provider_changed)
         provider_layout.addWidget(self.provider_combo)
         provider_layout.addStretch()
@@ -983,8 +975,8 @@ class ConfigTab(QWidget):
         """Handle provider selection change"""
         if provider == "DeepSeek":
             self.api_key_input.setPlaceholderText("Masukkan DeepSeek API Key (sk-...)")
-        elif provider == "OpenAI (ChatGPT)":
-            self.api_key_input.setPlaceholderText("Masukkan OpenAI API Key (sk-...)")
+        elif provider == "Gemini Flash Lite":
+            self.api_key_input.setPlaceholderText("Masukkan Gemini API Key (AIzaSy...)")
         self.update_status_overview()
     
     def on_api_key_changed(self):
@@ -1143,7 +1135,8 @@ class ConfigTab(QWidget):
         self.ai_test_btn.setEnabled(False)
         
         # Determine API type for testing
-        api_type = "deepseek" if provider == "DeepSeek" else "chatgpt"
+        api_type_map = {"DeepSeek": "deepseek", "Gemini Flash Lite": "gemini"}
+        api_type = api_type_map.get(provider, "deepseek")
         
         # Stop existing thread if running
         if self.test_thread and self.test_thread.isRunning():
@@ -1352,18 +1345,16 @@ class ConfigTab(QWidget):
             provider = self.provider_combo.currentText()
             tts_api_key = self.tts_api_key_input.text().strip()
 
-            # Save AI provider selection (CRITICAL FIX!)
-            if provider == "DeepSeek":
-                config["ai_provider"] = "deepseek"
-            elif provider == "OpenAI (ChatGPT)":
-                config["ai_provider"] = "chatgpt"
+            # Save AI provider selection
+            provider_map = {"DeepSeek": "deepseek", "Gemini Flash Lite": "gemini"}
+            config["ai_provider"] = provider_map.get(provider, "deepseek")
 
             # Save AI API keys
             if api_key:
                 if provider == "DeepSeek":
                     config["api_keys"]["DEEPSEEK_API_KEY"] = api_key
-                elif provider == "OpenAI (ChatGPT)":
-                    config["api_keys"]["OPENAI_API_KEY"] = api_key
+                elif provider == "Gemini Flash Lite":
+                    config["api_keys"]["GEMINI_API_KEY"] = api_key
 
             # Save Google TTS API Key only
             if tts_api_key:
@@ -1398,11 +1389,11 @@ class ConfigTab(QWidget):
                         logger.info("[CONFIG] Reinitializing DeepSeek AI with new API key...")
                         reinitialize_deepseek()
                         logger.info("[CONFIG] ✅ DeepSeek AI reinitialized successfully")
-                    elif provider == "OpenAI (ChatGPT)":
-                        from modules_client.chatgpt_ai import reinitialize_chatgpt
-                        logger.info("[CONFIG] Reinitializing ChatGPT AI with new API key...")
-                        reinitialize_chatgpt()
-                        logger.info("[CONFIG] ✅ ChatGPT AI reinitialized successfully")
+                    elif provider == "Gemini Flash Lite":
+                        from modules_client.gemini_ai import reinitialize_gemini
+                        logger.info("[CONFIG] Reinitializing Gemini AI with new API key...")
+                        reinitialize_gemini()
+                        logger.info("[CONFIG] ✅ Gemini AI reinitialized successfully")
                 except Exception as ai_reinit_error:
                     logger.error(f"[CONFIG] Failed to reinitialize AI: {ai_reinit_error}")
 
@@ -1425,13 +1416,14 @@ class ConfigTab(QWidget):
             tts_api_key = self.cfg.get("google_tts_api_key", "")
             user_context = self.cfg.get("user_context", "")
 
-            # Load AI API key based on available keys
-            if "DEEPSEEK_API_KEY" in api_keys:
+            # Load AI API key berdasarkan ai_provider yang tersimpan
+            ai_provider = self.cfg.get("ai_provider", "deepseek")
+            if ai_provider == "gemini" and "GEMINI_API_KEY" in api_keys:
+                self.provider_combo.setCurrentText("Gemini Flash Lite")
+                self.api_key_input.setText(api_keys["GEMINI_API_KEY"])
+            elif "DEEPSEEK_API_KEY" in api_keys:
                 self.provider_combo.setCurrentText("DeepSeek")
                 self.api_key_input.setText(api_keys["DEEPSEEK_API_KEY"])
-            elif "OPENAI_API_KEY" in api_keys:
-                self.provider_combo.setCurrentText("OpenAI (ChatGPT)")
-                self.api_key_input.setText(api_keys["OPENAI_API_KEY"])
 
             # Load Google TTS API Key
             if tts_api_key and hasattr(self, 'tts_api_key_input'):
