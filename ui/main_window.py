@@ -658,19 +658,6 @@ class MainWindow(QMainWindow):
             placeholder.setLayout(layout)
             self.main_tabs.addTab(placeholder, "👥 User Management (Error)")
 
-        # Add Developer tab
-        try:
-            from ui.developer_tab import DeveloperTab
-            self.developer_tab = DeveloperTab()
-            self.main_tabs.addTab(self.developer_tab, "👨‍💻 Developer")
-            logger.info("Developer tab added successfully")
-        except Exception as e:
-            logger.error(f"Failed to create Developer tab: {e}")
-            placeholder = QWidget()
-            layout = QVBoxLayout()
-            layout.addWidget(QLabel(f"Error loading Developer Tab: {e}"))
-            placeholder.setLayout(layout)
-            self.main_tabs.addTab(placeholder, "👨‍💻 Developer (Error)")
 
         # Virtual Audio tab removed - user requested removal
 
