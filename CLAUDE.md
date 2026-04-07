@@ -220,6 +220,37 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 
 ---
 
+## Setup Gemini API Key (Wajib untuk User Baru)
+
+Gemini API key dari Google AI Studio perlu langkah ekstra sebelum bisa digunakan:
+
+1. Buka [aistudio.google.com](https://aistudio.google.com) → **Get API Key**
+2. Klik API key yang dibuat → bagian **API restrictions**
+3. Aktifkan **"Generative Language API"** di daftar restrictions
+4. Tanpa langkah ini, semua request ke Gemini akan return **403 Permission Denied** meski API key valid
+
+Satu API key Google AI Studio berlaku untuk:
+- **Otak AI** → `gemini-3.1-flash-lite-preview` (auto-fallback ke `gemini-flash-lite-latest` jika 403)
+- **Suara TTS Gemini** → `gemini-2.5-flash-lite-preview-tts` (voice prefix `Gemini-*`)
+
+Google Cloud TTS (suara `id-ID-Standard-*` atau `Chirp3-*`) butuh key **terpisah** dari Google Cloud Console — bukan AI Studio.
+
+### Auth Format Gemini REST API
+
+Gunakan **header** `x-goog-api-key`, bukan query param `?key=`. Field system prompt menggunakan camelCase `systemInstruction`:
+
+```python
+headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+payload = {
+    "systemInstruction": {"role": "system", "parts": [{"text": system_prompt}]},
+    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+    "generationConfig": {"maxOutputTokens": 150, "temperature": 0.7},
+}
+requests.post(f"{GEMINI_API_BASE}/{model}:generateContent", headers=headers, json=payload)
+```
+
+---
+
 ## Re-enabling YouTube
 
 YouTube di-disable bukan dihapus. Untuk re-enable:
