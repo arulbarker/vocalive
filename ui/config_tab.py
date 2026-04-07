@@ -626,38 +626,41 @@ class ConfigTab(QWidget):
         layout.addWidget(group)
     
     def create_sales_template_section(self, layout):
-        """Create Sales Template section for live selling context"""
-        group = QGroupBox("🛍️ Template Prompt Live Selling")
+        """Create product knowledge section — AI uses this to understand what's being sold"""
+        group = QGroupBox("🧠 Pengetahuan Produk untuk AI")
         group_layout = QVBoxLayout(group)
-        group_layout.setSpacing(12)
+        group_layout.setSpacing(10)
 
-        # Hint
-        hint = QLabel("💡 Pilih template → teks langsung muncul di bawah dan bisa kamu edit sesuka hati")
-        hint.setStyleSheet(f"color: {INFO}; font-size: 11px; font-style: italic; padding: 5px; background-color: {BG_ELEVATED}; border-radius: 4px;")
-        group_layout.addWidget(hint)
+        # Clear description of purpose
+        desc = QLabel("Tulis di sini apa yang kamu jual di live — nomor keranjang, nama produk, harga, promo, dll.\nAI akan membaca ini dan menjawab komentar penonton sesuai produkmu.")
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; padding: 6px; line-height: 1.5;")
+        desc.setWordWrap(True)
+        group_layout.addWidget(desc)
 
-        # Template dropdown
-        template_layout = QHBoxLayout()
-        template_label = QLabel("Template:")
-        template_label.setMinimumWidth(80)
-        template_layout.addWidget(template_label)
-
-        self.template_combo = QComboBox()
-        self.template_combo.addItem("— Pilih Template Selling —", "")
-        for key, name, description in get_template_list():
-            self.template_combo.addItem(f"{name}  ·  {description}", key)
-        self.template_combo.currentIndexChanged.connect(
-            lambda index: self.on_template_changed(self.template_combo.itemData(index))
+        # Example hint
+        example = QLabel(
+            "Contoh format:\n"
+            "Keranjang 1 — Lipstik Merah Rose 45rb\n"
+            "Keranjang 2 — Foundation NC20 Match 89rb\n"
+            "Keranjang 3 — Paket Skincare 3in1 150rb (promo hari ini!)"
         )
-        template_layout.addWidget(self.template_combo)
-        group_layout.addLayout(template_layout)
+        example.setStyleSheet(
+            f"color: {ACCENT}; font-size: 11px; font-family: monospace; "
+            f"padding: 8px 12px; background-color: {BG_ELEVATED}; border-left: 3px solid {ACCENT}; border-radius: 4px;"
+        )
+        example.setWordWrap(True)
+        group_layout.addWidget(example)
 
-        # Single editable text area
+        # Editable knowledge text area
         self.context_input = QTextEdit()
-        self.context_input.setMinimumHeight(230)
-        self.context_input.setMaximumHeight(260)
+        self.context_input.setMinimumHeight(200)
+        self.context_input.setMaximumHeight(240)
         self.context_input.setPlaceholderText(
-            "Tulis context setting di sini, atau pilih template di atas untuk langsung mengisi teks ini..."
+            "Tulis produk yang kamu jual di sini...\n\n"
+            "Keranjang 1 — [nama produk] [harga]\n"
+            "Keranjang 2 — [nama produk] [harga]\n"
+            "...\n\n"
+            "Bisa juga tambahkan info lain: promo, stok terbatas, cara order, dll."
         )
         existing_context = self.cfg.get("user_context", "")
         if existing_context:
@@ -670,7 +673,7 @@ class ConfigTab(QWidget):
                 padding: 12px;
                 font-size: 12px;
                 color: {TEXT_PRIMARY};
-                line-height: 1.4;
+                line-height: 1.5;
             }}
             QTextEdit:focus {{
                 border: 2px solid {PRIMARY};
@@ -680,15 +683,39 @@ class ConfigTab(QWidget):
         self.context_input.textChanged.connect(self._update_char_count)
         group_layout.addWidget(self.context_input)
 
-        # Char count
+        # Char count + quick fill from template
+        bottom_layout = QHBoxLayout()
         self.char_count_label = QLabel("")
-        self.char_count_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px; padding: 2px 4px;")
-        group_layout.addWidget(self.char_count_label)
+        self.char_count_label.setStyleSheet(f"color: {TEXT_DIM}; font-size: 11px;")
+        bottom_layout.addWidget(self.char_count_label)
+        bottom_layout.addStretch()
+
+        # Quick-fill from template (subtle, secondary role)
+        self.template_combo = QComboBox()
+        self.template_combo.addItem("⚡ Isi cepat dari template...", "")
+        for key, name, description in get_template_list():
+            self.template_combo.addItem(f"{name}", key)
+        self.template_combo.setMaximumWidth(220)
+        self.template_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: {BG_ELEVATED};
+                border: 1px solid {BORDER};
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-size: 11px;
+                color: {TEXT_MUTED};
+            }}
+        """)
+        self.template_combo.currentIndexChanged.connect(
+            lambda index: self.on_template_changed(self.template_combo.itemData(index))
+        )
+        bottom_layout.addWidget(self.template_combo)
+        group_layout.addLayout(bottom_layout)
         self._update_char_count()
 
         # Buttons
         button_layout = QHBoxLayout()
-        save_context_btn = QPushButton("💾 Simpan Context")
+        save_context_btn = QPushButton("💾 Simpan")
         save_context_btn.setStyleSheet(btn_success())
         save_context_btn.clicked.connect(self.save_context_setting)
         button_layout.addWidget(save_context_btn)
