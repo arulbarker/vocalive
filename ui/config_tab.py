@@ -539,24 +539,41 @@ class ConfigTab(QWidget):
     
     
     def create_viewer_greeting_section(self, layout):
-        """Create Custom Greeting System with 10 slots (simplified without individual timers)"""
-        group = QGroupBox("🎙️ Sistem Sapaan Otomatis (Custom TTS)")
-        group_layout = QVBoxLayout(group)
-        group_layout.setSpacing(15)
+        """Greeting AI System — ON/OFF toggle + status indicator"""
+        try:
+            from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE,
+                                   BG_ELEVATED, TEXT_PRIMARY, TEXT_MUTED, SUCCESS,
+                                   WARNING, ERROR, BORDER, btn_primary, btn_success,
+                                   btn_danger, btn_ghost, CARD_STYLE)
+            BORDER_COLOR = BORDER
+        except ImportError:
+            PRIMARY = "#2563EB"; ACCENT = "#60A5FA"; BG_SURFACE = "#162032"
+            BG_ELEVATED = "#1E2A3B"; TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#94A3B8"
+            SUCCESS = "#10B981"; WARNING = "#F59E0B"; ERROR = "#EF4444"
+            BORDER_COLOR = "#1E3A5F"
+            def btn_success(extra=""): return f"background-color:{SUCCESS};color:white;border:none;border-radius:6px;padding:6px 14px;{extra}"
+            def btn_danger(extra=""): return f"background-color:{ERROR};color:white;border:none;border-radius:6px;padding:6px 14px;{extra}"
 
-        # Description
-        desc = QLabel("Sistem sapaan otomatis dengan 10 slot custom. Timer diatur di Cohost Tab. TTS disimpan untuk hemat API.")
-        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
+        from PyQt6.QtWidgets import (QGroupBox, QVBoxLayout, QHBoxLayout,
+                                      QLabel, QPushButton, QCheckBox, QFrame)
+        from PyQt6.QtCore import Qt
+
+        group = QGroupBox("Greeting AI")
+        group_layout = QVBoxLayout(group)
+        group_layout.setSpacing(12)
+
+        # Deskripsi
+        desc = QLabel(
+            "AI generate 10 sapaan unik setiap 2 jam menggunakan konteks dari tab Knowledge.\n"
+            "Audio fingerprint berubah otomatis lebih aman dari deteksi spam TikTok."
+        )
+        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; padding: 4px; line-height: 1.5;")
+        desc.setWordWrap(True)
         group_layout.addWidget(desc)
 
-        # Timer info
-        timer_info = QLabel("⏱️ Timer Interval: Diatur di Cohost Tab → Greeting Timer (berlaku untuk semua slot)")
-        timer_info.setStyleSheet(f"color: {WARNING}; font-size: 12px; font-weight: bold; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; margin-bottom: 10px;")
-        group_layout.addWidget(timer_info)
-
-        # Enable/Disable greeting system
-        self.greeting_enabled_cb = QCheckBox("🔊 Aktifkan Sistem Sapaan Otomatis")
-        self.greeting_enabled_cb.setStyleSheet(f"""
+        # Toggle ON/OFF
+        self.greeting_ai_cb = QCheckBox("Aktifkan Greeting AI")
+        self.greeting_ai_cb.setStyleSheet(f"""
             QCheckBox {{
                 color: {TEXT_PRIMARY};
                 font-size: 13px;
@@ -564,8 +581,7 @@ class ConfigTab(QWidget):
                 padding: 5px;
             }}
             QCheckBox::indicator {{
-                width: 18px;
-                height: 18px;
+                width: 18px; height: 18px;
             }}
             QCheckBox::indicator:checked {{
                 background-color: {PRIMARY};
@@ -574,131 +590,58 @@ class ConfigTab(QWidget):
             }}
             QCheckBox::indicator:unchecked {{
                 background-color: {BG_SURFACE};
-                border: 2px solid {BORDER};
+                border: 2px solid {BORDER_COLOR};
                 border-radius: 3px;
             }}
         """)
-        # Check from sequential_greeting_enabled first (primary key), fallback to custom_greeting_enabled
-        greeting_enabled = self.cfg.get("sequential_greeting_enabled", self.cfg.get("custom_greeting_enabled", False))
-        self.greeting_enabled_cb.setChecked(greeting_enabled)
-        self.greeting_enabled_cb.stateChanged.connect(self.on_custom_greeting_enabled_changed)
-        group_layout.addWidget(self.greeting_enabled_cb)
+        greeting_ai_enabled = self.cfg.get("greeting_ai_enabled", False)
+        self.greeting_ai_cb.setChecked(greeting_ai_enabled)
+        self.greeting_ai_cb.stateChanged.connect(self.on_greeting_ai_enabled_changed)
+        group_layout.addWidget(self.greeting_ai_cb)
 
-        # 10 Greeting Slots Section
-        slots_frame = QFrame()
-        slots_frame.setStyleSheet(f"""
+        # Status frame
+        status_frame = QFrame()
+        status_frame.setStyleSheet(f"""
             QFrame {{
-                background-color: {BG_SURFACE};
-                border: 1px solid {BORDER_GOLD};
+                background-color: {BG_ELEVATED};
+                border: 1px solid {BORDER_COLOR};
                 border-radius: 8px;
-                padding: 15px;
-                margin: 5px;
+                padding: 12px;
             }}
         """)
-        slots_layout = QVBoxLayout(slots_frame)
-        slots_layout.setSpacing(10)
+        status_layout = QVBoxLayout(status_frame)
+        status_layout.setSpacing(6)
 
-        # Slots title
-        slots_title = QLabel("📝 10 Slot Sapaan Custom (Timer mengikuti Cohost Tab):")
-        slots_title.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 14px; margin-bottom: 10px;")
-        slots_layout.addWidget(slots_title)
+        self.greeting_ai_status_label = QLabel("Tidak aktif")
+        self.greeting_ai_status_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 13px; font-weight: bold;")
+        status_layout.addWidget(self.greeting_ai_status_label)
 
-        # Create 10 greeting slots (without individual timers)
-        self.greeting_slots = []
+        last_updated = self.cfg.get("greeting_ai_last_updated", None)
+        last_text = f"Terakhir diperbarui: {last_updated}" if last_updated else "Belum pernah diperbarui"
+        self.greeting_ai_updated_label = QLabel(last_text)
+        self.greeting_ai_updated_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; font-style: italic;")
+        status_layout.addWidget(self.greeting_ai_updated_label)
 
-        for i in range(10):
-            slot_container = QFrame()
-            slot_container.setStyleSheet(f"""
-                QFrame {{
-                    background-color: {BG_ELEVATED};
-                    border: 1px solid {BORDER};
-                    border-radius: 6px;
-                    padding: 8px;
-                    margin: 2px;
-                }}
-            """)
-            slot_layout = QHBoxLayout(slot_container)
-            slot_layout.setSpacing(10)
+        group_layout.addWidget(status_frame)
 
-            # Slot number label
-            slot_label = QLabel(f"#{i+1}:")
-            slot_label.setStyleSheet(f"color: {PRIMARY}; font-weight: bold; font-size: 12px; min-width: 25px;")
-            slot_layout.addWidget(slot_label)
+        # Tombol regenerasi manual
+        regen_btn_layout = QHBoxLayout()
+        self.greeting_ai_regen_btn = QPushButton("Generate Ulang Sekarang")
+        try:
+            self.greeting_ai_regen_btn.setStyleSheet(btn_success())
+        except Exception:
+            self.greeting_ai_regen_btn.setStyleSheet("background-color:#10B981;color:white;border:none;border-radius:6px;padding:6px 14px;")
+        self.greeting_ai_regen_btn.setEnabled(greeting_ai_enabled)
+        self.greeting_ai_regen_btn.clicked.connect(self.on_greeting_ai_regen_clicked)
+        regen_btn_layout.addWidget(self.greeting_ai_regen_btn)
+        regen_btn_layout.addStretch()
+        group_layout.addLayout(regen_btn_layout)
 
-            # Text input for greeting
-            text_input = QLineEdit()
-            text_input.setPlaceholderText(f"Masukkan teks sapaan slot {i+1}... (kosong = skip)")
-            text_input.setStyleSheet(f"""
-                QLineEdit {{
-                    background-color: {BG_SURFACE};
-                    border: 1px solid {BORDER};
-                    border-radius: 4px;
-                    padding: 6px;
-                    font-size: 12px;
-                    color: {TEXT_PRIMARY};
-                }}
-                QLineEdit:focus {{
-                    border: 2px solid {PRIMARY};
-                }}
-            """)
-            # Load existing text from config
-            existing_text = self.cfg.get(f"custom_greeting_slot_{i+1}", "")
-            if existing_text:
-                text_input.setText(existing_text)
-            text_input.textChanged.connect(lambda text, slot=i+1: self.on_greeting_slot_changed(slot, text))
-            slot_layout.addWidget(text_input, stretch=4)
-
-            # Preview/Test button
-            test_btn = QPushButton("🔊")
-            test_btn.setMaximumWidth(30)
-            test_btn.setMaximumHeight(25)
-            test_btn.setToolTip(f"Test sapaan slot {i+1}")
-            test_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {SUCCESS};
-                    border: none;
-                    border-radius: 4px;
-                    color: white;
-                    font-size: 12px;
-                    padding: 2px;
-                }}
-                QPushButton:hover {{
-                    background-color: {ACCENT};
-                    color: {BG_BASE};
-                }}
-            """)
-            test_btn.clicked.connect(lambda checked, slot=i+1: self.test_greeting_slot(slot))
-            slot_layout.addWidget(test_btn)
-
-            slots_layout.addWidget(slot_container)
-
-            # Store references
-            self.greeting_slots.append(text_input)
-
-        group_layout.addWidget(slots_frame)
-
-        # Control buttons
-        control_layout = QHBoxLayout()
-
-        # Save all slots button
-        save_btn = QPushButton("💾 Simpan Semua Slot")
-        save_btn.setStyleSheet(btn_success())
-        save_btn.clicked.connect(self.save_all_greeting_slots)
-        control_layout.addWidget(save_btn)
-
-        # Clear all slots button
-        clear_btn = QPushButton("🗑️ Kosongkan Semua")
-        clear_btn.setStyleSheet(btn_danger())
-        clear_btn.clicked.connect(self.clear_all_greeting_slots)
-        control_layout.addWidget(clear_btn)
-
-        control_layout.addStretch()
-        group_layout.addLayout(control_layout)
-
-        # Status info
-        status_label = QLabel("💡 Slot kosong akan dilewat. Timer interval diatur di Cohost Tab. File TTS disimpan otomatis untuk hemat API.")
-        status_label.setStyleSheet(f"color: {WARNING}; font-size: 11px; font-style: italic; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px; margin-top: 10px;")
-        group_layout.addWidget(status_label)
+        # Info
+        info = QLabel("Interval putaran diatur di Cohost Tab. Sapaan diperbarui otomatis setiap 2 jam.")
+        info.setStyleSheet(f"color: {WARNING}; font-size: 11px; font-style: italic; padding: 6px; background-color: {BG_ELEVATED}; border-radius: 4px;")
+        info.setWordWrap(True)
+        group_layout.addWidget(info)
 
         layout.addWidget(group)
     
@@ -1884,3 +1827,57 @@ class ConfigTab(QWidget):
         except Exception as e:
             print(f"Error clearing greeting slots: {e}")
             QMessageBox.critical(self, "Error", f"Gagal mengosongkan slot: {str(e)}")
+
+    def on_greeting_ai_enabled_changed(self):
+        """Handle Greeting AI toggle ON/OFF."""
+        try:
+            enabled = self.greeting_ai_cb.isChecked()
+            self.cfg.set("greeting_ai_enabled", enabled)
+            self.cfg.set("sequential_greeting_enabled", enabled)
+            self.cfg.set("custom_greeting_enabled", enabled)
+
+            if hasattr(self, 'greeting_ai_regen_btn'):
+                self.greeting_ai_regen_btn.setEnabled(enabled)
+
+            if not enabled:
+                self.update_greeting_ai_status("idle", "Tidak aktif")
+
+            print(f"[CONFIG] Greeting AI: {'ON' if enabled else 'OFF'}")
+        except Exception as e:
+            print(f"[CONFIG] Error on_greeting_ai_enabled_changed: {e}")
+
+    def on_greeting_ai_regen_clicked(self):
+        """Trigger manual regenerasi greeting AI."""
+        try:
+            from modules_client.sequential_greeting_manager import get_sequential_greeting_manager
+            mgr = get_sequential_greeting_manager()
+            mgr.force_regenerate()
+            self.update_greeting_ai_status("regenerating", "Memperbarui sapaan AI...")
+        except Exception as e:
+            print(f"[CONFIG] Error on_greeting_ai_regen_clicked: {e}")
+
+    def update_greeting_ai_status(self, state: str, message: str):
+        """Update status label di UI (dipanggil dari greeting manager via callback)."""
+        try:
+            if not hasattr(self, 'greeting_ai_status_label'):
+                return
+
+            state_icons = {
+                "idle":         "Tidak aktif",
+                "preparing":    "Menyiapkan...",
+                "active":       "Aktif",
+                "paused":       "Dijeda",
+                "regenerating": "Memperbarui...",
+                "error":        "Error",
+            }
+            prefix = state_icons.get(state, "")
+            display = f"{prefix} — {message}" if prefix and message != prefix else message
+            self.greeting_ai_status_label.setText(display)
+
+            if state == "active":
+                last_updated = self.cfg.get("greeting_ai_last_updated", "—")
+                if hasattr(self, 'greeting_ai_updated_label'):
+                    self.greeting_ai_updated_label.setText(f"Terakhir diperbarui: {last_updated}")
+
+        except Exception as e:
+            print(f"[CONFIG] Error update_greeting_ai_status: {e}")
