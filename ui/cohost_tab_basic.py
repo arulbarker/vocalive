@@ -1905,11 +1905,11 @@ class CohostTabBasicSimplified(QWidget):
                 # Check if AI has valid API key
                 ai_configured = False
                 if ai_provider == "deepseek":
-                    deepseek_key = api_keys.get("DEEPSEEK_API_KEY", "").strip()
-                    ai_configured = bool(deepseek_key)
+                    ai_configured = bool(api_keys.get("DEEPSEEK_API_KEY", "").strip())
+                elif ai_provider == "gemini":
+                    ai_configured = bool(api_keys.get("GEMINI_API_KEY", "").strip())
                 elif ai_provider == "chatgpt":
-                    openai_key = api_keys.get("OPENAI_API_KEY", "").strip()
-                    ai_configured = bool(openai_key)
+                    ai_configured = bool(api_keys.get("OPENAI_API_KEY", "").strip())
 
                 if ai_configured:
                     self.ai_status_label.setText("🟢 AI: Ready")
