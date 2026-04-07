@@ -293,6 +293,91 @@ class GreetingTTSCache:
         except Exception as e:
             print(f"[TTS_CACHE] Error during cleanup: {e}")
     
+    def prerender_batch(self, texts: list, voice_name: str, language_code: str, batch_id: str) -> list:
+        """
+        Pre-render list teks ke file audio dengan prefix batch_id.
+        Return list path file yang berhasil di-render.
+        Teks yang gagal di-skip (tidak crash).
+        """
+        successful_files = []
+
+        for i, text in enumerate(texts):
+            if not text or not text.strip():
+                continue
+
+            text = text.strip()
+            is_gemini = voice_name and voice_name.startswith('Gemini-')
+            extension = ".wav" if is_gemini else ".mp3"
+            filename = f"greeting_ai_{batch_id}_{i:02d}{extension}"
+            file_path = self.cache_dir / filename
+
+            try:
+                from modules_server import tts_engine
+                from pathlib import Path
+                import shutil
+
+                temp_dir = Path("temp")
+                temp_dir.mkdir(exist_ok=True)
+                before_files = set(temp_dir.glob("*.*"))
+
+                success = tts_engine.speak(
+                    text=text,
+                    voice_name=voice_name,
+                    language_code=language_code,
+                    force_google_tts=True
+                )
+
+                if success:
+                    after_files = set(temp_dir.glob("*.*"))
+                    new_files = after_files - before_files
+                    audio_file = next(
+                        (f for f in new_files if f.suffix.lower() in ['.mp3', '.wav']),
+                        None
+                    )
+                    if audio_file and audio_file.exists():
+                        shutil.copy2(str(audio_file), str(file_path))
+                        successful_files.append(str(file_path))
+                        print(f"[TTS_CACHE] Batch render {i+1}/{len(texts)}: {filename}")
+                    else:
+                        print(f"[TTS_CACHE] Slot {i+1} render OK tapi file tidak ditemukan, skip")
+                else:
+                    print(f"[TTS_CACHE] Slot {i+1} TTS gagal, skip")
+
+            except Exception as e:
+                print(f"[TTS_CACHE] Slot {i+1} error: {e}, skip")
+
+        print(f"[TTS_CACHE] Batch '{batch_id}': {len(successful_files)}/{len(texts)} slot berhasil")
+        return successful_files
+
+    def swap_batch(self, old_batch_id: str, new_files: list) -> list:
+        """
+        Atomic swap: ganti referensi active_files ke new_files.
+        Hapus file dengan prefix old_batch_id setelah swap.
+        Return new_files yang dipakai.
+        """
+        if old_batch_id:
+            self.cleanup_batch(old_batch_id)
+        print(f"[TTS_CACHE] Atomic swap selesai — {len(new_files)} file aktif")
+        return new_files
+
+    def cleanup_batch(self, batch_id: str):
+        """Hapus semua file dengan prefix greeting_ai_{batch_id}_"""
+        prefix = f"greeting_ai_{batch_id}_"
+        deleted = 0
+        for f in self.cache_dir.glob(f"{prefix}*"):
+            try:
+                f.unlink()
+                deleted += 1
+            except Exception as e:
+                print(f"[TTS_CACHE] Gagal hapus {f.name}: {e}")
+        if deleted:
+            print(f"[TTS_CACHE] Cleaned {deleted} file batch '{batch_id}'")
+
+    def get_files_for_batch(self, batch_id: str) -> list:
+        """Return list path file yang ada untuk batch_id ini."""
+        prefix = f"greeting_ai_{batch_id}_"
+        return [str(f) for f in sorted(self.cache_dir.glob(f"{prefix}*"))]
+
     def get_cache_stats(self):
         """Get cache statistics"""
         try:
