@@ -298,6 +298,7 @@ class GreetingTTSCache:
         Pre-render list teks ke file audio dengan prefix batch_id.
         Return list path file yang berhasil di-render.
         Teks yang gagal di-skip (tidak crash).
+        PENTING: Dipanggil dari background thread — tidak memutar audio.
         """
         successful_files = []
 
@@ -308,41 +309,19 @@ class GreetingTTSCache:
             text = text.strip()
             is_gemini = voice_name and voice_name.startswith('Gemini-')
             extension = ".wav" if is_gemini else ".mp3"
-            filename = f"greeting_ai_{batch_id}_{i:02d}{extension}"
-            file_path = self.cache_dir / filename
+            target_filename = f"greeting_ai_{batch_id}_{i:02d}{extension}"
+            target_path = self.cache_dir / target_filename
 
             try:
-                from modules_server import tts_engine
-                from pathlib import Path
-                import shutil
-
-                temp_dir = Path("temp")
-                temp_dir.mkdir(exist_ok=True)
-                before_files = set(temp_dir.glob("*.*"))
-
-                success = tts_engine.speak(
-                    text=text,
-                    voice_name=voice_name,
-                    language_code=language_code,
-                    force_google_tts=True
-                )
-
-                if success:
-                    after_files = set(temp_dir.glob("*.*"))
-                    new_files = after_files - before_files
-                    audio_file = next(
-                        (f for f in new_files if f.suffix.lower() in ['.mp3', '.wav']),
-                        None
-                    )
-                    if audio_file and audio_file.exists():
-                        shutil.copy2(str(audio_file), str(file_path))
-                        successful_files.append(str(file_path))
-                        print(f"[TTS_CACHE] Batch render {i+1}/{len(texts)}: {filename}")
-                    else:
-                        print(f"[TTS_CACHE] Slot {i+1} render OK tapi file tidak ditemukan, skip")
+                # generate_and_save_tts sudah handle: render → copy ke cache → return path
+                # Tapi ia pakai nama file hash-based, kita perlu rename ke target_filename
+                cached = self.generate_and_save_tts(text, voice_name, language_code)
+                if cached and Path(cached).exists():
+                    shutil.copy2(cached, str(target_path))
+                    successful_files.append(str(target_path))
+                    print(f"[TTS_CACHE] Batch render {i+1}/{len(texts)}: {target_filename}")
                 else:
-                    print(f"[TTS_CACHE] Slot {i+1} TTS gagal, skip")
-
+                    print(f"[TTS_CACHE] Slot {i+1} gagal di-render, skip")
             except Exception as e:
                 print(f"[TTS_CACHE] Slot {i+1} error: {e}, skip")
 
@@ -353,14 +332,17 @@ class GreetingTTSCache:
         """
         Atomic swap: ganti referensi active_files ke new_files.
         Hapus file dengan prefix old_batch_id setelah swap.
-        Return new_files yang dipakai.
+        Return new_files yang dipakai. Return [] jika new_files kosong.
         """
+        if not new_files:
+            print(f"[TTS_CACHE] swap_batch aborted — new_files kosong, batch lama dipertahankan")
+            return []
         if old_batch_id:
             self.cleanup_batch(old_batch_id)
         print(f"[TTS_CACHE] Atomic swap selesai — {len(new_files)} file aktif")
         return new_files
 
-    def cleanup_batch(self, batch_id: str):
+    def cleanup_batch(self, batch_id: str) -> None:
         """Hapus semua file dengan prefix greeting_ai_{batch_id}_"""
         prefix = f"greeting_ai_{batch_id}_"
         deleted = 0
