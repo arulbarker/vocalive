@@ -34,8 +34,8 @@ FALLBACK_GREETINGS = [
 
 
 def clean_greeting_text(text: str) -> str:
-    """Strip semua simbol — hanya huruf, angka, dan spasi."""
-    cleaned = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+    """Strip semua simbol — hanya huruf, angka, dan spasi. Preserve Unicode letters."""
+    cleaned = re.sub(r'[^\w\s]', '', text).replace('_', ' ')
     return ' '.join(cleaned.split())
 
 
@@ -57,7 +57,7 @@ def _parse_greeting_response(raw: str) -> List[str]:
             greetings = [clean_greeting_text(str(g)) for g in data if str(g).strip()]
             if len(greetings) >= 5:
                 return greetings[:10]
-    except (json.JSONDecodeError, Exception):
+    except Exception:
         pass
 
     # Fallback: parse per-baris, ambil baris yang tidak kosong
@@ -81,6 +81,8 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
     Gunakan user_context dari settings sebagai konteks.
     Return list 10 string plain text (tanpa tanda baca).
     Jika gagal, return FALLBACK_GREETINGS.
+
+    PENTING: Harus dipanggil dari background thread — retry path blocks selama 30 detik.
     """
     api_key = config_manager.get("api_keys", {}).get("GEMINI_API_KEY", "")
     if not api_key:
@@ -135,6 +137,9 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
 
             elif resp.status_code == 403:
                 logger.warning(f"[GREETING_AI] 403 pada {model}, coba fallback model")
+                continue
+            elif resp.status_code == 429:
+                logger.warning(f"[GREETING_AI] Rate limit pada {model}, coba model berikutnya")
                 continue
             else:
                 logger.error(f"[GREETING_AI] API error {resp.status_code}: {resp.text[:200]}")
