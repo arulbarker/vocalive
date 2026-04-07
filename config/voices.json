@@ -181,16 +181,6 @@
       { "model": "id-ID-Chirp3-HD-Orus",   "gender": "MALE" },
       { "model": "id-ID-Chirp3-HD-Puck",   "gender": "MALE" },
       { "model": "id-ID-Chirp3-HD-Zephyr", "gender": "FEMALE" }
-    ],
-    "ms-MY": [
-      { "model": "ms-MY-Chirp3-HD-Aoede",  "gender": "FEMALE" },
-      { "model": "ms-MY-Chirp3-HD-Charon", "gender": "MALE" },
-      { "model": "ms-MY-Chirp3-HD-Fenrir", "gender": "MALE" },
-      { "model": "ms-MY-Chirp3-HD-Kore",   "gender": "FEMALE" },
-      { "model": "ms-MY-Chirp3-HD-Leda",   "gender": "FEMALE" },
-      { "model": "ms-MY-Chirp3-HD-Orus",   "gender": "MALE" },
-      { "model": "ms-MY-Chirp3-HD-Puck",   "gender": "MALE" },
-      { "model": "ms-MY-Chirp3-HD-Zephyr", "gender": "FEMALE" }
     ]
   },
   "gemini_flash": {
