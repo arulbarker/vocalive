@@ -483,12 +483,18 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        
-        # Log mode yang digunakan
-        logger.info("VocaLive v1.0.0 — Gold Seller Edition")
+
+        # Import versi dari satu sumber kebenaran
+        try:
+            from version import VERSION as _VER
+        except Exception:
+            _VER = "1.0.3"
+        self._app_version = _VER
+
+        logger.info(f"VocaLive v{_VER} — Gold Seller Edition")
 
         # Setup window properties
-        self.setWindowTitle("VocaLive v1.0.0")
+        self.setWindowTitle(f"VocaLive v{_VER}")
         self.resize(1100, 750)
         self.setMinimumSize(900, 620)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -504,7 +510,7 @@ class MainWindow(QMainWindow):
 
         # Load configuration
         self.cfg = ConfigManager("config/settings.json")
-        self.cfg.set("app_version", "v1.0.0")
+        self.cfg.set("app_version", f"v{_VER}")
 
         # Create main tabs directly
         self._create_main_tabs()
@@ -902,7 +908,11 @@ def main():
     try:
         app = QApplication(sys.argv)
         app.setApplicationName("VocaLive Basic")
-        app.setApplicationVersion("1.0.0-basic")
+        try:
+            from version import VERSION as _v
+        except Exception:
+            _v = "1.0.3"
+        app.setApplicationVersion(_v)
         
         # Setup logging dengan error handling
         try:

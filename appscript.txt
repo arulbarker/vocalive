@@ -242,9 +242,9 @@ function doGet(e) {
     if (action === "version") {
       var VERSION_INFO = {
         "vocalive": {
-          "latest": "1.0.1",
-          "notes": "- Versi awal VocaLive\n- Sistem login email via Lynk.id\n- TTS Google Cloud + Gemini\n- Cohost AI TikTok Live",
-          "url": "https://github.com/arulbarker/vocalive-releases/releases/download/v1.0.1/VocaLive-v1.0.1.zip"
+          "latest": "1.0.3",
+          "notes": "- Sistem login email via Lynk.id/Whop\n- TTS Google Cloud + Gemini\n- Cohost AI TikTok Live\n- Auto-update system\n- Product popup video",
+          "url": "https://github.com/arulbarker/vocalive-releases/releases/download/v1.0.3/VocaLive-v1.0.3.zip"
         },
         "tikdance": {
           "latest": "1.1.3",
