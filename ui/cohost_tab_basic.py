@@ -646,20 +646,6 @@ class CohostTabBasicSimplified(QWidget):
         from modules_client.sequential_greeting_manager import get_sequential_greeting_manager
         self.sequential_greeting_manager = get_sequential_greeting_manager()
 
-        # Wire Greeting AI status callback
-        try:
-            # Try to find config_tab via parent main window
-            main_win = self.parent()
-            if hasattr(main_win, 'config_tab'):
-                config_tab = main_win.config_tab
-                if hasattr(config_tab, 'update_greeting_ai_status'):
-                    self.sequential_greeting_manager.status_callback = config_tab.update_greeting_ai_status
-                    print("[GREETING_AI] Status callback wired to config_tab")
-            else:
-                print("[GREETING_AI] config_tab not found on parent - status updates will not be displayed")
-        except Exception as e:
-            print(f"[GREETING_AI] Could not wire status callback: {e}")
-
         # Analytics manager for live tracking
         try:
             from modules_client.analytics_manager import get_analytics_manager

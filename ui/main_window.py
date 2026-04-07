@@ -813,6 +813,18 @@ class MainWindow(QMainWindow):
                         self.cohost_tab.update_voice_options(lang)
                         logger.info(f"[MAIN] Voice list Cohost diperbarui setelah deteksi key_type={key_type}")
                     self.config_tab.tts_key_type_changed.connect(_on_key_type)
+
+                # Wire Greeting AI status callback — must be after both tabs exist
+                try:
+                    if (hasattr(self, 'cohost_tab') and
+                            hasattr(self, 'config_tab') and
+                            hasattr(self.config_tab, 'update_greeting_ai_status') and
+                            hasattr(self.cohost_tab, 'sequential_greeting_manager')):
+                        self.cohost_tab.sequential_greeting_manager.status_callback = \
+                            self.config_tab.update_greeting_ai_status
+                        print("[GREETING_AI] Status callback wired successfully")
+                except Exception as e:
+                    print(f"[GREETING_AI] Could not wire status callback: {e}")
             except Exception as e:
                 logger.error(f"Failed to create Config tab: {e}")
                 placeholder = QWidget()
