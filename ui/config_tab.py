@@ -850,11 +850,30 @@ class ConfigTab(QWidget):
 
         group_layout.addWidget(api_key_info_frame)
 
+        # Voice selector for test
+        voice_row = QHBoxLayout()
+        voice_row_label = QLabel("Suara Test:")
+        voice_row_label.setMinimumWidth(80)
+        voice_row_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        voice_row.addWidget(voice_row_label)
+
+        self.tts_voice_combo = QComboBox()
+        self.tts_voice_combo.setMinimumWidth(280)
+        self._populate_tts_voice_combo()
+        voice_row.addWidget(self.tts_voice_combo)
+        voice_row.addStretch()
+        group_layout.addLayout(voice_row)
+
+        voice_hint = QLabel("💡 Pilih suara Gemini (Gemini-*) jika API key dari AI Studio. Suara Standard/Chirp3 butuh Cloud TTS API.")
+        voice_hint.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 2px 5px;")
+        voice_hint.setWordWrap(True)
+        group_layout.addWidget(voice_hint)
+
         # Button container
         tts_button_layout = QHBoxLayout()
 
         # Test button
-        self.tts_test_btn = QPushButton("🔍 Test Google TTS")
+        self.tts_test_btn = QPushButton("🔍 Test TTS")
         self.tts_test_btn.setProperty("class", "success")
         self.tts_test_btn.clicked.connect(self.test_google_tts)
         self.tts_test_btn.setEnabled(False)  # Disabled until API key is provided
@@ -1205,6 +1224,32 @@ class ConfigTab(QWidget):
         self.test_thread.result_ready.connect(self.on_test_result)
         self.test_thread.start()
     
+    def _populate_tts_voice_combo(self):
+        """Isi dropdown suara test dengan semua voice dari voices.json."""
+        self.tts_voice_combo.clear()
+        voices = []
+        try:
+            voices_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'voices.json')
+            with open(voices_file, 'r', encoding='utf-8') as f:
+                voices_data = json.load(f)
+            # Gemini dulu (kompatibel AI Studio key) lalu Standard/Chirp3
+            for section in ["gemini_flash", "gtts_standard", "chirp3"]:
+                if section not in voices_data:
+                    continue
+                for lang_code, voice_list in voices_data[section].items():
+                    for v in voice_list:
+                        voices.append(f"{v['model']} ({v['gender']})")
+        except Exception:
+            pass
+        if not voices:
+            voices = ["Gemini-Puck (MALE)", "Gemini-Aoede (FEMALE)", "id-ID-Standard-A (FEMALE)"]
+        self.tts_voice_combo.addItems(voices)
+        # Default ke Gemini-Puck supaya AI Studio key langsung work
+        for i, v in enumerate(voices):
+            if v.startswith("Gemini-Puck"):
+                self.tts_voice_combo.setCurrentIndex(i)
+                break
+
     def test_google_tts(self):
         """Test Google TTS API Key"""
         api_key = self.tts_api_key_input.text().strip()
@@ -1245,12 +1290,21 @@ class ConfigTab(QWidget):
 
             logger.info("[CONFIG_TEST] TTS engine reinitialized, testing...")
 
-            test_text = "Test Google TTS berhasil!"
+            test_text = "Halo! Ini test suara TTS berhasil."
 
-            # Try to speak with the configured API key
+            # Pakai voice yang dipilih user di combo, bukan voice dari Cohost tab
+            selected_voice = self.tts_voice_combo.currentText().split(' (')[0].strip()
+            lang_code = "id-ID"
+            if selected_voice.startswith("ms-"):
+                lang_code = "ms-MY"
+            elif selected_voice.startswith("en-"):
+                lang_code = "en-US"
+
+            logger.info(f"[CONFIG_TEST] Testing voice: {selected_voice}")
             success = speak(
                 text=test_text,
-                language_code="id-ID",
+                voice_name=selected_voice,
+                language_code=lang_code,
                 force_google_tts=True
             )
 

@@ -154,7 +154,7 @@ class TTSEngine:
                     settings = json.load(f)
                 
                 # Update voice settings
-                self.voice_model = settings.get('cohost_voice_model', 'id-ID-Standard-A')
+                self.voice_model = settings.get('tts_voice', settings.get('cohost_voice_model', 'id-ID-Standard-A'))
                 
                 # Extract language code from voice model
                 if '-' in self.voice_model:
@@ -301,8 +301,8 @@ class TTSEngine:
         if not self.google_client and not self.google_api_key:
             return False
         
-        # Load current settings only if no override provided
-        if not voice_name and not language_code:
+        # Load current settings if no voice override — so Gemini vs Standard routing is correct
+        if not voice_name:
             self._load_settings()
 
         # Strip gender suffix e.g. "id-ID-Standard-A (FEMALE)" -> "id-ID-Standard-A"
