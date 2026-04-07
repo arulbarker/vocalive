@@ -232,6 +232,16 @@ class LiveAnalyticsManager:
             # Update unique viewers
             self.current_session["stats"]["unique_viewers"] = len(self.current_session["viewers"])
 
+    def mark_replied(self, username):
+        """Tandai komentar terakhir dari viewer sebagai sudah dibalas — tanpa menambah total_comments lagi"""
+        with self._lock:
+            if not self.current_session["is_active"]:
+                return
+            viewer = self.current_session["viewers"].get(username)
+            if viewer:
+                viewer["replied_count"] += 1
+            self.current_session["stats"]["total_comments_replied"] += 1
+
     def track_gift(self, username, gift_name, gift_value=0):
         """Track gift/donation dari viewer (TikTok/YouTube SuperChat)"""
         with self._lock:
