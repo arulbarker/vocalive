@@ -277,6 +277,13 @@ class ProductSceneTab(QWidget):
     @pyqtSlot()
     def _add_scene(self):
         """Tambah produk baru — dialog user isi nama manual + pilih video."""
+        from modules_client.product_scene_manager import ProductSceneManager
+        if len(self._psm.get_scenes()) >= ProductSceneManager.MAX_SCENES:
+            QMessageBox.warning(
+                self, "Batas Maksimal",
+                f"Maksimal {ProductSceneManager.MAX_SCENES} produk. Hapus produk lama sebelum menambah baru."
+            )
+            return
         dialog = AddProductDialog(self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return

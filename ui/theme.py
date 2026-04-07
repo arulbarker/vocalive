@@ -146,13 +146,35 @@ QSpinBox:focus, QDoubleSpinBox:focus {{
 }}
 QSpinBox::up-button, QSpinBox::down-button,
 QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
-    background-color: {BG_ELEVATED};
-    border: none;
-    width: 18px;
+    background-color: {SECONDARY};
+    border-left: 1px solid {BORDER_GOLD};
+    width: 22px;
 }}
 QSpinBox::up-button:hover, QSpinBox::down-button:hover,
 QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {{
     background-color: {PRIMARY};
+}}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 6px solid {ACCENT};
+    width: 0px;
+    height: 0px;
+}}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid {ACCENT};
+    width: 0px;
+    height: 0px;
+}}
+QSpinBox::up-arrow:hover, QDoubleSpinBox::up-arrow:hover {{
+    border-bottom-color: {TEXT_PRIMARY};
+}}
+QSpinBox::down-arrow:hover, QDoubleSpinBox::down-arrow:hover {{
+    border-top-color: {TEXT_PRIMARY};
 }}
 
 /* ── CheckBox ── */

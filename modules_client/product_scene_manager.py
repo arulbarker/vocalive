@@ -69,9 +69,14 @@ class ProductSceneManager:
                 return scene
         return None
 
+    MAX_SCENES = 100
+
     def add_scene(self, name: str, video_path: str) -> Dict:
-        """Tambah produk baru. Return scene dict yang dibuat."""
+        """Tambah produk baru. Return scene dict yang dibuat, atau None jika sudah penuh."""
         scenes = self.get_scenes()
+        if len(scenes) >= self.MAX_SCENES:
+            logger.warning(f"ProductSceneManager: batas maksimal {self.MAX_SCENES} produk tercapai")
+            return None
         new_id = max((s["id"] for s in scenes), default=0) + 1
         scene = {"id": new_id, "name": name.strip(), "video_path": video_path}
         scenes.append(scene)
@@ -129,17 +134,21 @@ class ProductSceneManager:
         scenes = self.get_scenes()
         if not scenes:
             return ""
-        product_list = "\n".join(f"{s['id']}. {s['name']}" for s in scenes)
+        product_list = "\n".join(f"scene_id={s['id']} : {s['name']}" for s in scenes)
         return (
-            f"Produk yang tersedia:\n"
+            f"DAFTAR VIDEO SCENE (hanya untuk menentukan video yang ditampilkan, "
+            f"BUKAN nomor keranjang belanja):\n"
             f"{product_list}\n\n"
+            "PENTING: scene_id adalah ID video internal, BUKAN nomor keranjang TikTok. "
+            "Informasi keranjang, harga, dan stok ada di knowledge produk. "
+            "Jangan pernah menyebut 'keranjang [scene_id]' dalam balasan.\n\n"
             "Balas SELALU dalam format JSON berikut (wajib, tanpa teks lain di luar JSON):\n"
-            '{"reply": "<teks balasan>", "scene_id": <nomor produk atau 0>}\n\n'
+            '{"reply": "<teks balasan>", "scene_id": <scene_id video atau 0>}\n\n'
             "Aturan memilih scene_id:\n"
+            "- Pilih scene_id yang nama scene-nya paling cocok dengan topik pertanyaan.\n"
             "- Gunakan scene_id > 0 HANYA jika penonton SECARA SPESIFIK bertanya tentang "
-            "produk tersebut (harga, ukuran, cara beli, stok, dll).\n"
-            "- Gunakan scene_id = 0 untuk sapaan umum ('halo', 'keren', 'mantap'), "
-            "pertanyaan non-produk, atau komentar yang tidak membutuhkan penjelasan produk.\n"
-            "- Jangan tampilkan produk hanya karena komentar menyebut kata yang mirip nama produk.\n"
-            "- Satu sesi live, tampilkan produk hanya jika benar-benar dibutuhkan."
+            "produk tersebut (harga, spesifikasi, warna, cara beli, stok, dll).\n"
+            "- Gunakan scene_id = 0 untuk sapaan umum, pertanyaan non-produk, "
+            "atau komentar yang tidak butuh penjelasan produk.\n"
+            "- Jangan tampilkan video hanya karena komentar menyebut kata mirip nama produk."
         )
