@@ -1092,12 +1092,16 @@ class CohostTabBasicSimplified(QWidget):
                 voices = ["en-US-Standard-A (MALE)", "en-US-Standard-C (FEMALE)"]
         
         self.voice_combo.addItems(voices)
-        
-        # Set saved voice or default
+
+        # Set saved voice — jika tidak ada di list (misal voice dihapus), reset ke voice pertama
         saved_voice = self.cfg.get("tts_voice", voices[0])
         if saved_voice in voices:
             self.voice_combo.setCurrentText(saved_voice)
-        
+        else:
+            self.voice_combo.setCurrentIndex(0)
+            self.cfg.set("tts_voice", voices[0])
+            self.log_message("INFO", f"Voice tersimpan '{saved_voice}' tidak tersedia, reset ke: {voices[0]}")
+
         self.voice_combo.currentTextChanged.connect(self.on_voice_changed)
     
     def on_voice_changed(self, voice):
