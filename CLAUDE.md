@@ -19,14 +19,14 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 
 ## Version History
 
-> Selalu cek tabel ini sebelum rilis agar tidak salah penomoran versi.
+> Selalu cek tabel ini sebelum rilis. Versi dikelola di `version.py` — **satu-satunya tempat mengubah nomor versi**.
 
 | Versi | Tanggal | Deskripsi |
 |-------|---------|-----------|
 | **v1.0.0** | 2026-04-05 | Versi awal — hapus Avatar Lip-sync & OBS Overlay, fokus Cohost AI + TTS |
-| **v1.0.1** | 2026-04-07 | Tambah suara Malaysia (ms-MY), fix TTS preview, fix Gemini WAV header, Knowledge Produk AI polish |
-| **v1.0.2** | 2026-04-07 | Product popup: QVideoSink+QLabel, chroma key, drag/resize, toggle ON/OFF, AI scene_id fix |
-| **v1.0.3** | 2026-04-07 | Config tab: voice selector TTS test terpisah, auto-deteksi tipe API key, filter voice per key type |
+| **v1.0.1** | 2026-04-07 | Tambah suara Malaysia (ms-MY), fix TTS preview, fix Gemini WAV header |
+| **v1.0.2** | 2026-04-07 | Product popup: QVideoSink+QLabel, chroma key, drag/resize, toggle ON/OFF |
+| **v1.0.3** | 2026-04-07 | Email login via AppScript, auto-update system, voice selector + API key detection |
 
 **Versi saat ini: v1.0.3**
 
@@ -36,19 +36,27 @@ Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible,
 
 ## What This App Does
 
-**VocaLive** adalah Windows desktop app untuk live streaming automation. Mendengarkan chat **TikTok Live** (YouTube sementara di-disable), menghasilkan balasan AI (DeepSeek / Gemini 3.1 Flash Lite), mengubahnya ke suara (Google Cloud TTS / Gemini TTS), lalu memutarnya selama siaran. Didistribusikan sebagai EXE berlisensi.
+**VocaLive** adalah Windows desktop app untuk live streaming automation. Mendengarkan chat **TikTok Live**, menghasilkan balasan AI (DeepSeek / Gemini Flash Lite), mengubahnya ke suara (Google Cloud TTS / Gemini TTS), lalu memutarnya selama siaran. Didistribusikan sebagai EXE berlisensi berbasis email.
 
-## Running the App
+## Running & Building
 
 ```bash
 # Development mode
 python main.py
 
-# Build production EXE (Windows)
+# Build production EXE + ZIP siap upload (output: dist/VocaLive-vX.X.X.zip)
 python build_production_exe_fixed.py
 ```
 
-Tidak ada test suite. Testing manual via `python main.py`. Pastikan `config/settings.json` berisi API key yang valid.
+Tidak ada test suite — testing manual via `python main.py`. Pastikan `config/settings.json` berisi API key yang valid.
+
+### Alur Rilis Versi Baru
+
+1. Update `VERSION` di `version.py` (satu-satunya tempat)
+2. Update tabel Version History di CLAUDE.md ini
+3. Jalankan `python build_production_exe_fixed.py`
+4. Upload `dist/VocaLive-vX.X.X.zip` ke GitHub Releases: `https://github.com/arulbarker/vocalive-release/releases` dengan tag `vX.X.X`
+5. Update `appscript.txt` bagian `VERSION_INFO["vocalive"]` → `latest`, `url` → deploy ulang ke Google Apps Script
 
 ---
 
@@ -59,21 +67,23 @@ Tidak ada test suite. Testing manual via `python main.py`. Pastikan `config/sett
 ```
 main.py
   → setup_validator (cek file kritis ada)
-  → license validation (Google Sheets via config/sheet.json)
+  → LicenseManager.is_license_valid() → AppScript HTTP (email-based)
+      → jika gagal → show LicenseDialog (ui/license_dialog.py)
   → QApplication + MainWindow (ui/main_window.py)
+      → UpdateCheckThread (5 detik setelah startup)
       → UnifiedCommentProcessor (filter pipeline)
-      → Tab: CohostTabBasic, ConfigTab, ProductSceneTab, AnalyticsTab, UserManagementTab, DeveloperTab
+      → Tab: CohostTabBasic, ConfigTab, ProductSceneTab, AnalyticsTab, UserManagementTab
 ```
 
-`main.py` harus **pertama kali** set UTF-8 encoding untuk stdout/stderr (ada di baris awal) sebelum import apapun — ini kritis di mode EXE.
+`main.py` harus **pertama kali** set UTF-8 encoding untuk stdout/stderr sebelum import apapun — kritis di mode EXE.
 
 ### Module Split
 
 | Direktori | Tanggung Jawab |
 |-----------|----------------|
-| `modules_client/` | Berjalan di GUI process: config, AI calls, TTS wrapper, listeners, analytics, license |
+| `modules_client/` | GUI process: config, AI calls, TTS wrapper, license, analytics, updater |
 | `modules_server/` | TTS engine (Google Cloud REST + Gemini TTS + pygame playback) |
-| `listeners/` | **Dead code** — `yt_listener_process.py` dan `tiktok_runner.py` tidak dipakai; listener aktif ada di `cohost_tab_basic.py` sebagai QThread inline |
+| `listeners/` | **Dead code** — listener aktif ada di `cohost_tab_basic.py` sebagai QThread inline |
 | `ui/` | Semua tab PyQt6, design system di `theme.py` |
 | `thirdparty/pytchat_ng/` | Fork pytchat yang dimodifikasi — **jangan ganti dengan pytchat dari pip** |
 
@@ -110,7 +120,7 @@ ai_provider == "deepseek" → modules_client/deepseek_ai.py
                               → model: deepseek-chat
 ```
 
-Tidak ada fallback antar provider — error ditampilkan langsung ke user. `fast_mode=True` pakai timeout 5s dan max_tokens lebih kecil untuk respons cepat.
+Tidak ada fallback antar provider — error ditampilkan langsung ke user. `fast_mode=True` pakai timeout 5s dan max_tokens lebih kecil.
 
 ### TTS Flow
 
@@ -121,7 +131,7 @@ speak(text, voice_name)
       → voice starts with "Gemini-" → _speak_with_gemini()
           → POST generativelanguage.googleapis.com/gemini-2.5-flash-preview-tts
           → response: raw PCM (audio/L16, 24kHz mono)
-          → wrap dengan WAV header via stdlib `wave` module sebelum disimpan
+          → wrap dengan WAV header via stdlib `wave` module
           → output: .wav temp file
       → else → _speak_with_api_key()
           → POST texttospeech.googleapis.com (Google Cloud TTS REST)
@@ -131,16 +141,61 @@ speak(text, voice_name)
   → temp file dihapus setelah playback
 ```
 
-**`_load_settings()` di `tts_engine.py`**: membaca `tts_voice` (bukan `cohost_voice_model` yang lama).
-Kondisi reload: `if not voice_name:` — bukan `if not voice_name and not language_code:` (kondisi lama menyebabkan settings tidak ter-load saat language_code dipass).
+**`_load_settings()` di `tts_engine.py`**: membaca `tts_voice`. Kondisi reload: `if not voice_name:` — bukan `if not voice_name and not language_code:`.
 
-**Nama file temp**: berbasis timestamp millisecond (`tts_1744012345678.mp3`) — bukan hash teks — untuk menghindari Permission Denied saat voice sama di-preview berulang.
+**Nama file temp**: berbasis timestamp millisecond (`tts_1744012345678.mp3`) — bukan hash teks — untuk menghindari Permission Denied saat preview berulang.
 
-**Auth Google API key**: Satu **Google Cloud Console** API key bisa dipakai untuk keduanya jika kedua API di-enable di bagian Restrictions:
-- `Cloud Text-to-Speech API` → untuk suara Standard (`id-ID-Standard-*`) dan Chirp3 HD
-- `Generative Language API` → untuk Gemini AI + Gemini TTS (`Gemini-*` voices)
+### License System (Email-based AppScript)
 
-Google AI Studio key **hanya** berlaku untuk Generative Language API (Gemini), tidak bisa untuk Cloud TTS standard/chirp.
+Sistem lisensi menggunakan **email login via Google Apps Script** — tidak ada service account key.
+
+```
+LicenseManager.is_license_valid()
+  → load_license_data() → decrypt config/license.enc (Fernet, hardware-locked key)
+  → check_session_online(email) → GET AppScript ?action=check&email=...&token=SHA256(device_fp)
+      → status "AKTIF" → valid
+      → status "EXPIRED" / "TIDAK_DITEMUKAN" → show login dialog
+  → jika offline dan cache < 24 jam → allow (grace period)
+```
+
+- **`config/license.enc`** — session cache terenkripsi (Fernet). Key = PBKDF2HMAC dari device fingerprint (MAC+CPU+Disk+OS). Plain token tidak pernah disimpan.
+- **`config/device.hash`** — hash fingerprint perangkat untuk hardware-lock
+- **`config/license_config.json`** — override AppScript URL dan APP_SECRET (tidak di-commit, dibaca saat runtime)
+- **`modules_client/license_monitor.py`** — re-check online setiap 4 jam saat runtime
+- **`ui/license_dialog.py`** — email input UI, `LoginWorker(QThread)` untuk non-blocking AppScript call
+
+AppScript URL aktif: ada di `config/license_config.json` lokal (tidak hardcode di kode utama untuk keamanan).
+
+### Auto-Update System
+
+```
+MainWindow.__init__()
+  → QTimer.singleShot(5000, _start_update_check)
+      → UpdateCheckThread → GET AppScript ?action=version&product=vocalive
+          → bandingkan dengan VERSION dari version.py
+          → ada update → _on_update_found() → QMessageBox popup
+              → user klik "Update Sekarang" → UpdateDialog (ui/update_dialog.py)
+                  → DownloadThread → download ZIP dari GitHub
+                  → install_update() → batch script PID-based → app quit → batch copy EXE → relaunch
+```
+
+- **`modules_client/updater.py`** — `check_for_update()`, `UpdateCheckThread`, `DownloadThread`, `install_update()`
+- **`ui/update_dialog.py`** — progress bar download, konfirmasi restart
+- Tombol **"🔄 Cek Update"** di main window untuk cek manual
+- Tombol **"⬆️ Update Tersedia!"** muncul di toolbar jika ada versi baru (orange, hidden by default)
+- Batch script pakai **PID-based wait** (`tasklist /FI "PID eq {pid}"`) — bukan nama proses — lebih reliable
+
+### Version Management
+
+**`version.py`** adalah satu-satunya sumber kebenaran versi:
+
+```python
+VERSION = "1.0.3"           # ← SATU-SATUNYA TEMPAT GANTI VERSI
+VERSION_WIN = "1.0.3.0"    # untuk EXE metadata Windows
+VERSION_TUPLE = (1, 0, 3, 0)
+```
+
+Files yang import dari `version.py`: `updater.py`, `ui/main_window.py`, `main.py`, `build_production_exe_fixed.py`. Jangan hardcode versi di tempat lain.
 
 ### Product Scene System
 
@@ -148,58 +203,34 @@ Sistem popup video produk saat AI merespons terkait produk tertentu:
 1. **`product_scene_manager.py`** — CRUD scenes, build product context string untuk prompt AI
 2. **`product_scene_tab.py`** — UI manajemen daftar produk + video path
 3. **`generate_reply_with_scene()`** di `api.py` — AI membalas + menentukan `scene_id` dalam satu call (JSON response)
-4. **`product_popup_window.py`** — QDialog yang memutar video produk via QMediaPlayer
+4. **`product_popup_window.py`** — QDialog memutar video via QMediaPlayer
 
-**`scene_id` BUKAN nomor keranjang TikTok** — hanya ID internal untuk memilih video mana yang diputar. Nomor keranjang (keranjang 1, 2, dst) ada di knowledge produk user. `build_product_context()` secara eksplisit memberitahu AI ini, dan format daftar scene adalah `scene_id=N : nama` bukan `N. nama` untuk menghindari kebingungan.
-
-### Knowledge Produk untuk AI (Config Tab)
-
-Section "🧠 Pengetahuan Produk untuk AI" di Config Tab — user tulis daftar produk yang dijual (keranjang, harga, promo). AI membaca ini untuk menjawab komentar penonton.
-
-Tombol **"✨ Sempurnakan dengan AI"** menjalankan `PolishKnowledgeThread` (QThread):
-1. Cari info produk via DuckDuckGo Instant Answer API (gratis, no key)
-2. Inject hasil riset ke prompt
-3. AI poles teks → output: blok `## PERAN AI HOST` di atas + detail produk terstruktur
-4. Tombol "↩️ Kembali ke Teks Asli" muncul untuk revert — teks asli disimpan di `self._original_context`
-
-Teks disimpan ke `config/settings.json` field `user_context`, dibaca oleh `gemini_ai.py` dan `deepseek_ai.py` sebagai system context.
+**`scene_id` BUKAN nomor keranjang TikTok** — hanya ID internal. Format daftar scene: `scene_id=N : nama` bukan `N. nama`. `scene_id = 0` = tidak tampilkan popup.
 
 ### Greeting System
 
-Sistem sapaan otomatis terdiri dari 3 layer:
 1. **`config_tab.py`** — UI untuk mengisi 10 slot teks sapaan
-2. **`greeting_tts_cache.py`** — Pre-render TTS tiap slot ke file audio (hash-based caching di `greeting_cache/`). Gemini voice → `.wav`, lainnya → `.mp3`
-3. **`sequential_greeting_manager.py`** — Timer-based playback, mode random, satu thread
+2. **`greeting_tts_cache.py`** — Pre-render TTS tiap slot ke file audio (`greeting_cache/`). Gemini voice → `.wav`, lainnya → `.mp3`
+3. **`sequential_greeting_manager.py`** — Timer-based playback, mode random
 
 Interval timer diatur di Cohost Tab (bukan Config Tab).
 
 ### TTS API Key Detection & Voice Filtering
 
-Config tab memiliki tombol **🔍 Deteksi** yang probe dua endpoint:
+Config tab tombol **🔍 Deteksi** — probe dua endpoint:
 - `GET generativelanguage.googleapis.com/v1beta/models?key=...` → deteksi AI Studio key
 - `GET texttospeech.googleapis.com/v1/voices?key=...` → deteksi Google Cloud key
 
 Hasil disimpan ke `settings.json` sebagai `tts_key_type: "gemini" | "cloud" | "all"`.
 
-Signal `ConfigTab.tts_key_type_changed(str)` di-emit dan di-connect di `main_window.py` ke `cohost_tab.update_voice_options()` — sehingga dropdown voice di Cohost tab otomatis filter:
-- `"gemini"` → hanya tampilkan `gemini_flash` sections
-- `"cloud"` → hanya tampilkan `gtts_standard` + `chirp3` sections
-- `"all"` / belum dideteksi → semua voice
-
-Test TTS di Config tab pakai voice dari combo sendiri (terpisah dari voice Cohost tab). Lang code diekstrak dari nama voice (`en-AU-Chirp3-...` → `en-AU`), Gemini voices default ke `id-ID`.
+Signal `ConfigTab.tts_key_type_changed(str)` → connect di `main_window.py` → `cohost_tab.update_voice_options()`. Voice dropdown otomatis filter berdasarkan tipe key.
 
 ### Config System
 
-- `config/settings.json` — user config (jangan di-commit)
-- `config/settings_default.json` — template fallback
-- `config/voices.json` — daftar semua suara per bahasa, dikelompokkan: `gtts_standard`, `chirp3`, `gemini_flash`. Struktur: `{ "section": { "locale": [ {model, gender} ] } }`. Gemini voices berlaku untuk semua bahasa (multilingual). Chirp3 HD **tidak tersedia** untuk `ms-MY` — hanya `id-ID` dan `en-*`. Jika `tts_voice` tersimpan di settings tidak ada di list terbaru, `cohost_tab_basic.py` auto-reset ke voice pertama yang valid.
+- `config/settings.json` — user config (tidak di-commit). Dibuat dari `settings_default.json` saat pertama kali.
+- `config/settings_default.json` — template bersih tanpa API key, di-ship bersama EXE
+- `config/voices.json` — daftar suara: `gtts_standard`, `chirp3`, `gemini_flash`. Chirp3 HD tidak tersedia untuk `ms-MY`.
 - `modules_client/config_manager.py` — interface `cfg.get(key, default)` / `cfg.set(key, value)`
-
-### License System
-
-- Hardware-locked: fingerprint di `config/device.hash`, license terenkripsi di `config/license.enc`
-- Validasi via Google Sheets (`config/sheet.json` credentials)
-- `modules_client/license_monitor.py` — monitoring kontinu saat runtime
 
 ---
 
@@ -232,19 +263,22 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
   "trigger_words": ["bro", "bang", "min"],
   "viewer_cooldown_minutes": 3,
   "cohost_cooldown": 2,
+  "cohost_max_queue": 4,
   "sequential_greeting_interval": 180,
+  "greeting_play_mode": "random",
   "tiktok_nickname": "@username",
   "tts_voice": "Gemini-Puck (MALE)",
   "tts_key_type": "gemini",
-  "google_tts_api_key": "AIzaSy...",
+  "google_tts_api_key": "",
   "api_keys": {
-    "GEMINI_API_KEY": "AIzaSy...",
-    "DEEPSEEK_API_KEY": "sk-..."
-  }
+    "GEMINI_API_KEY": "",
+    "DEEPSEEK_API_KEY": ""
+  },
+  "user_context": ""
 }
 ```
 
-`platform` saat ini hanya `"TikTok"` — YouTube di-disable di UI tapi kode `SimpleListener` dan `video_id_input` tetap ada (dormant).
+`platform` saat ini hanya `"TikTok"` — YouTube di-disable di UI tapi kode tetap ada (dormant).
 
 ## Frozen EXE Considerations
 
@@ -252,65 +286,52 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 - UTF-8 encoding fix di `main.py` harus berjalan **sebelum** import apapun
 - Resource paths: `ROOT = os.path.dirname(sys.executable)` di mode EXE
 - Splash screen di-disable (`splash = None`) untuk mencegah QPaintDevice segfault
-- Default platform di `build_production_exe_fixed.py` baris ~492 harus `"TikTok"`
 
 ## Product Popup Window — Rendering & Capture
 
-**JANGAN pakai `QVideoWidget`** untuk window yang perlu di-capture TikTok Live Studio / OBS.
-`QVideoWidget` render via D3D hardware overlay → bypass GDI → tidak ter-capture.
+**JANGAN pakai `QVideoWidget`** — render via D3D hardware overlay, tidak ter-capture OBS/TikTok Live Studio.
 **Pakai `QVideoSink` + `QLabel.setPixmap()`** — frame lewat GDI pipeline, ter-capture normal.
 
-**JANGAN pakai `WA_TranslucentBackground`** untuk window yang di-capture — transparent area
-ter-capture sebagai hitam (Windows OS limitation, tidak bisa di-fix via library apapun).
-Solusi "tembus pandang" yang capturable: **Chroma Key** — background `#00B140` (broadcast green),
-user apply Chroma Key filter di TikTok Live Studio.
+**JANGAN pakai `WA_TranslucentBackground`** — transparent area ter-capture sebagai hitam.
+Solusi capturable: **Chroma Key** — background `#00B140`, user apply filter di TikTok Live Studio.
 
-**`QVBoxLayout(self)`** pada top-level widget menyebabkan Qt auto-fill background → transparency gagal.
+**`QVBoxLayout(self)`** pada top-level widget → Qt auto-fill background → transparency gagal.
 Gunakan `setAutoFillBackground(False)` + posisi manual via `setGeometry()` tanpa layout manager.
 
 **`QVideoSink` thread safety**: `videoFrameChanged` emit dari multimedia thread.
 Gunakan intermediate `pyqtSignal(QPixmap)` untuk pass frame ke main thread sebelum `setPixmap()`.
 
-**Toggle ON/OFF popup**: `ProductSceneManager.get_enabled()` / `set_enabled()` — state di `config/product_scenes.json`.
-Check `get_enabled()` sebelum `show_product()` di `cohost_tab_basic.py`.
-
-**AI pilih `scene_id`**: `scene_id = 0` = tidak tampilkan popup. AI sudah diinstruksikan untuk
-pilih `scene_id > 0` hanya jika penonton bertanya spesifik tentang produk (bukan sapaan umum).
-
 ---
 
 ## Protected Files (Jangan Diubah Tanpa Hati-Hati)
 
-- `modules_server/tts_engine.py` — TTS engine dengan multi-path auth
-- `modules_client/license_manager.py` — validasi lisensi
+- `modules_server/tts_engine.py` — TTS engine multi-path auth
+- `modules_client/license_manager.py` — AppScript email login + Fernet session cache
 - `modules_client/config_manager.py` — sistem config pusat
 - `thirdparty/pytchat_ng/` — fork custom, jangan replace dengan versi pip
 
 ## Sensitive Files (Never Commit)
 
-`config/gcloud_tts_credentials.json`, `config/google_token.json`, `config/sheet.json`, `config/license.enc`, `config/device.hash`, `config/settings.json`, `config/user_lists.json`, `.env`
+`config/license.enc`, `config/device.hash`, `config/license_config.json`, `config/settings.json`, `config/sheet.json`, `config/user_lists.json`, `config/gcloud_tts_credentials.json`, `.env`
 
 ---
 
 ## Setup Gemini API Key (Wajib untuk User Baru)
 
-Gemini API key dari Google AI Studio perlu langkah ekstra sebelum bisa digunakan:
-
 1. Buka [aistudio.google.com](https://aistudio.google.com) → **Get API Key**
-2. Klik API key yang dibuat → bagian **API restrictions**
-3. Aktifkan **"Generative Language API"** di daftar restrictions
-4. Tanpa langkah ini, semua request ke Gemini akan return **403 Permission Denied** meski API key valid
+2. Klik API key → bagian **API restrictions** → aktifkan **"Generative Language API"**
+3. Tanpa langkah ini: **403 Permission Denied** meski key valid
 
-Satu **Google Cloud Console** API key bisa untuk semua jika di-enable di Restrictions:
-- **Otak AI** → `gemini-3.1-flash-lite-preview` via Generative Language API (auto-fallback ke `gemini-flash-lite-latest` jika 403)
-- **Suara TTS Gemini** → `gemini-2.5-flash-preview-tts` via Generative Language API (voice prefix `Gemini-*`)
-- **Suara Standard/Chirp3** → `texttospeech.googleapis.com` via Cloud Text-to-Speech API
+Satu **Google Cloud Console** API key untuk semua jika di-enable di Restrictions:
+- **AI** → `gemini-3.1-flash-lite-preview` via Generative Language API
+- **Gemini TTS** → `gemini-2.5-flash-preview-tts` via Generative Language API (prefix `Gemini-*`)
+- **Cloud TTS** → `texttospeech.googleapis.com` via Cloud Text-to-Speech API
 
-Google AI Studio key hanya untuk Generative Language API — tidak support Cloud TTS.
+Google AI Studio key hanya untuk Generative Language API — tidak support Cloud TTS Standard/Chirp3.
 
 ### Auth Format Gemini REST API
 
-Gunakan **header** `x-goog-api-key`, bukan query param `?key=`. Field system prompt menggunakan camelCase `systemInstruction`:
+Gunakan **header** `x-goog-api-key`, bukan query param `?key=`:
 
 ```python
 headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
@@ -328,7 +349,6 @@ requests.post(f"{GEMINI_API_BASE}/{model}:generateContent", headers=headers, jso
 
 YouTube di-disable bukan dihapus. Untuk re-enable:
 1. `ui/cohost_tab_basic.py` — uncomment baris dropdown `addItems(["YouTube", "TikTok"])` dan blok `if platform == "YouTube":` di `start()`
-2. `build_production_exe_fixed.py` — ubah default platform kembali ke `"YouTube"` jika perlu
 
 ---
 
@@ -352,7 +372,7 @@ Untuk tindakan berikut, **WAJIB tanya user dulu**:
 - Mengubah struktur database / schema
 - Menginstall dependency baru
 - Mengubah file konfigurasi environment
-- Refactor besar yang mengubah arsitektur (berbeda dari perubahan styling multi-file yang normal)
+- Refactor besar yang mengubah arsitektur
 - Mengubah authentication / license logic
 
 Format tanya: `"⚠️ Saya akan [tindakan]. Ini akan mempengaruhi [dampak]. Boleh lanjut?"`
