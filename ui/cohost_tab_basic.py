@@ -199,6 +199,32 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
             self.finished.emit(self.author, self.message, fallback_reply, 0)
             print(f"[SimpleReplyThread] Error: {e}")
 
+# TTS THREAD - Jalankan TTS di background agar GUI tidak freeze
+class TTSThread(QThread):
+    """Run TTS (HTTP request + pygame playback) in a background thread.
+    GUI stays fully responsive while audio plays.
+    """
+    finished = pyqtSignal()
+
+    def __init__(self, text, voice_model, language_code, parent=None):
+        super().__init__(parent)
+        self.text = text
+        self.voice_model = voice_model
+        self.language_code = language_code
+        self.daemon = True
+
+    def run(self):
+        try:
+            from modules_server.tts_engine import speak
+            speak(self.text, voice_name=self.voice_model,
+                  language_code=self.language_code,
+                  force_google_tts=True)
+        except Exception as e:
+            print(f"[TTSThread] Error: {e}")
+        finally:
+            self.finished.emit()
+
+
 # SIMPLIFIED LISTENER - Mengurangi kompleksitas pytchat
 class SimpleListener(QThread):
     """Simplified listener dengan minimal overhead"""
@@ -596,12 +622,12 @@ class CohostTabBasicSimplified(QWidget):
         self.logger = Logger()
 
         # Simple state management
-        self.reply_busy = False
+        self.reply_busy = False       # True while TTS is playing → blocks queue pop
         self.conversation_active = False
         self.comment_counter = 0
 
         # Simple data structures
-        self.reply_queue = deque(maxlen=10)  # Limited queue size
+        self.reply_queue = deque(maxlen=20)   # Naikkan ke 20 agar komentar tidak hilang
         self.recent_messages = deque(maxlen=50)  # Limited history
         self.viewer_cooldowns = {}  # Simple cooldown tracking
 
@@ -609,6 +635,7 @@ class CohostTabBasicSimplified(QWidget):
         self.listener_thread = None
         self.tiktok_listener_thread = None
         self.active_reply_threads = []  # Track active threads
+        self._tts_thread = None          # Keep reference to active TTSThread
 
         # Custom greeting system (new)
         from modules_client.custom_greeting_manager import get_greeting_manager
@@ -649,6 +676,11 @@ class CohostTabBasicSimplified(QWidget):
         # Timers - simplified
         self.cooldown_timer = QTimer()
         self.cooldown_timer.timeout.connect(self._process_queue)
+
+        # Cleanup timer: hapus viewer_cooldowns yang sudah expired tiap 5 menit
+        self._cleanup_timer = QTimer()
+        self._cleanup_timer.timeout.connect(self._cleanup_cooldowns)
+        self._cleanup_timer.start(5 * 60 * 1000)  # 5 menit
         
         # Initialize UI
         self.init_ui()
@@ -1102,6 +1134,11 @@ class CohostTabBasicSimplified(QWidget):
             self.cfg.set("tts_voice", voices[0])
             self.log_message("INFO", f"Voice tersimpan '{saved_voice}' tidak tersedia, reset ke: {voices[0]}")
 
+        # Disconnect dulu agar tidak double-connect saat update_voice_options dipanggil ulang
+        try:
+            self.voice_combo.currentTextChanged.disconnect(self.on_voice_changed)
+        except TypeError:
+            pass  # Belum terhubung — tidak apa-apa
         self.voice_combo.currentTextChanged.connect(self.on_voice_changed)
     
     def on_voice_changed(self, voice):
@@ -1417,61 +1454,20 @@ class CohostTabBasicSimplified(QWidget):
         self.log_message("INFO", "Stopped all processes")
     
     def add_comment_to_display(self, username, message, comment_type="normal", ai_response=None):
-        """Add comment and AI response to unified table"""
+        """Add comment to display — delegates to add_status_entry (comments_table dihapus dari UI)"""
         try:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            
-            # Add new row to table
-            row_position = self.comments_table.rowCount()
-            self.comments_table.insertRow(row_position)
-            
-            # Set table items
-            self.comments_table.setItem(row_position, 0, QTableWidgetItem(timestamp))
-            self.comments_table.setItem(row_position, 1, QTableWidgetItem(username))
-            self.comments_table.setItem(row_position, 2, QTableWidgetItem(message))
-            self.comments_table.setItem(row_position, 3, QTableWidgetItem(ai_response or "Processing..."))
-            
-            # Style the cells based on comment type
-            for col in range(4):
-                item = self.comments_table.item(row_position, col)
-                if item:
-                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # Make read-only
-                    
-                    # Set background color based on comment type
-                    if comment_type == "trigger":
-                        item.setBackground(QColor("#ffeb3b"))
-                    elif comment_type == "ai_response":
-                        item.setBackground(QColor("#e8f5e8"))
-            
-            # Auto-scroll to bottom
-            self.comments_table.scrollToBottom()
-            
-            # Limit table rows to prevent memory issues (keep last 100)
-            if self.comments_table.rowCount() > 100:
-                self.comments_table.removeRow(0)
-            
+            # comments_table tidak ada lagi di init_ui; gunakan status_table via add_status_entry
+            # comment_type "trigger" sudah ditandai oleh add_status_entry secara terpisah
+            pass  # Tampilan sudah dihandle di handle_comment() → add_status_entry()
+
+            # ── legacy block di bawah ini dinonaktifkan ────────────────────────────────
+            # row_position = self.comments_table.rowCount()   # AttributeError: no comments_table
         except Exception as e:
             self.log_message("ERROR", f"Error adding comment to display: {e}")
-    
+
     def update_ai_response_in_table(self, username, message, ai_response):
-        """Update AI response in the table for a specific comment"""
-        try:
-            # Find the row with matching username and message
-            for row in range(self.comments_table.rowCount()):
-                user_item = self.comments_table.item(row, 1)
-                comment_item = self.comments_table.item(row, 2)
-                response_item = self.comments_table.item(row, 3)
-                
-                if (user_item and comment_item and response_item and 
-                    user_item.text() == username and comment_item.text() == message and 
-                    response_item.text() == "Processing..."):
-                    
-                    response_item.setText(ai_response)
-                    response_item.setBackground(QColor("#e8f5e8"))
-                    break
-                    
-        except Exception as e:
-            self.log_message("ERROR", f"Error updating AI response: {e}")
+        """No-op — update AI response ditangani oleh update_status_entry_with_ai_response"""
+        pass
     
     def scroll_to_bottom(self):
         """Scroll comments area to bottom"""
@@ -1545,10 +1541,8 @@ class CohostTabBasicSimplified(QWidget):
             cursor.removeSelectedText()
     
     def check_trigger(self, message):
-        """Check if message contains trigger words or question mark - REAL-TIME CONFIG"""
+        """Check if message contains trigger words — gunakan cache config, tidak reload dari disk"""
         try:
-            # FORCE RELOAD to get latest trigger words from user input
-            self.cfg.load_settings()
             triggers = self.cfg.get("trigger_words", [])
             
             self.logger.info(f"[COHOST TRIGGER] Real-time loaded triggers: {triggers}")
@@ -1606,41 +1600,36 @@ class CohostTabBasicSimplified(QWidget):
         self.log_message("INFO", f"Added to queue: {author}")
     
     def _process_queue(self):
-        """Process reply queue - simplified"""
+        """Process reply queue — satu item per satu TTS (serialized pipeline)"""
+        # reply_busy = True artinya TTS sedang bermain; tunggu sampai selesai
         if self.reply_busy or not self.reply_queue:
             return
-        
-        # Limit concurrent threads
-        active_count = sum(1 for t in self.active_reply_threads if t.isRunning())
-        if active_count >= self.max_concurrent_threads:
+
+        # Bersihkan thread yang sudah selesai SEBELUM hitung
+        self.active_reply_threads = [t for t in self.active_reply_threads if t.isRunning()]
+
+        # Batasi AI calls concurrent (max 1 untuk menjaga urutan TTS)
+        if self.active_reply_threads:
             return
-        
-        # Get next item - handle both old format (3 items) and new format (4 items)
+
+        # Ambil item berikutnya dari queue
         queue_item = self.reply_queue.popleft()
         if len(queue_item) == 4:
             author, message, timestamp, is_greeting = queue_item
         else:
             author, message, timestamp = queue_item
             is_greeting = False
-        
-        # Get current language setting
-        current_language = self.language_combo.currentText()
-        
+
         # Notify sequential greeting system about trigger start
         if hasattr(self, 'sequential_greeting_manager'):
             self.sequential_greeting_manager.on_trigger_start()
-        
-        # Create reply thread with greeting flag and language setting
+
+        current_language = self.language_combo.currentText()
         reply_thread = SimpleReplyThread(author, message, is_greeting=is_greeting, language=current_language)
         reply_thread.finished.connect(self.handle_reply)
         reply_thread.start()
-        
-        # Track thread
         self.active_reply_threads.append(reply_thread)
-        
-        # Clean up finished threads
-        self.active_reply_threads = [t for t in self.active_reply_threads if t.isRunning()]
-        
+
         self.log_message("INFO", f"Processing reply for: {author}")
     
     def clean_ai_response(self, text):
@@ -1692,23 +1681,21 @@ class CohostTabBasicSimplified(QWidget):
         return text
     
     def handle_reply(self, author, message, reply, scene_id=0):
-        """Handle generated reply - simplified with context and cleaning"""
-        # Clean the reply
+        """Handle generated reply — display + TTS (non-blocking)"""
+        # Jangan TTS-kan error message dari AI
+        if reply.startswith("ERROR:") or reply.lower().startswith("error"):
+            self.log_message("ERROR", f"AI error untuk {author}, skip TTS: {reply[:80]}")
+            return
+
         clean_reply = self.clean_ai_response(reply)
-        
-        # Display reply in old format for compatibility
+
+        # Tampilkan balasan di log
         timestamp = datetime.now().strftime("%H:%M:%S")
-        reply_text = f"[{timestamp}] AI Reply to {author}: {clean_reply}\n"
-        self.comment_display.append(reply_text)
-        
-        # Update the unified status table with AI response
+        self.comment_display.append(f"[{timestamp}] AI → {author}: {clean_reply}\n")
         self.update_status_entry_with_ai_response(author, clean_reply)
-        
-        # EMIT SIGNAL FIRST - so overlay text appears BEFORE/WITH TTS
-        # This ensures text is visible while TTS is speaking
-        print(f"[OVERLAY] Emitting replyGenerated signal for: {author}")
+
+        # Emit overlay signal sebelum TTS agar teks muncul bersamaan dengan suara
         self.replyGenerated.emit(author, message, clean_reply)
-        print(f"[OVERLAY] Signal emitted successfully")
 
         # Trigger product popup jika ada scene_id
         if scene_id > 0 and self._popup_window is not None:
@@ -1717,44 +1704,33 @@ class CohostTabBasicSimplified(QWidget):
                 if self._psm_cache is None:
                     self._psm_cache = ProductSceneManager()
                 else:
-                    self._psm_cache.reload()  # refresh jika user tambah produk saat live
+                    self._psm_cache.reload()
                 scene = self._psm_cache.get_scene_by_id(scene_id)
                 if scene and scene.get('video_path'):
                     self._popup_window.show_product(scene['video_path'])
-                    self.logger.info(f"[POPUP] Product popup triggered: scene_id={scene_id}, name={scene.get('name')}")
+                    self.logger.info(f"[POPUP] Popup: scene_id={scene_id}, name={scene.get('name')}")
             except Exception as e:
-                self.logger.warning(f"[POPUP] Product popup error: {e}")
+                self.logger.warning(f"[POPUP] Popup error: {e}")
 
-        # Track analytics - mark this comment as replied
         if self.analytics:
             try:
                 self.analytics.track_comment(author, message, replied=True)
             except Exception as e:
-                self.logger.error(f"Analytics tracking error (reply): {e}")
-        
-        # Then do TTS (this may take a few seconds)
+                self.logger.error(f"Analytics error: {e}")
+
+        # Set busy SEBELUM mulai TTS — queue tidak akan diproses sampai TTS selesai
+        self.reply_busy = True
         self.do_tts(clean_reply)
-
-        # Notify sequential greeting system about trigger completion
-        if hasattr(self, 'sequential_greeting_manager'):
-            self.sequential_greeting_manager.on_trigger_complete()
-
-        self.log_message("INFO", f"Reply sent to {author}")
+        self.log_message("INFO", f"Reply → {author}")
     
     def do_tts(self, text):
-        """TTS call with OBS integration"""
+        """Mulai TTS di background thread — GUI tidak freeze"""
         try:
-            from modules_server.tts_engine import speak
-            
-            # Get selected voice and language
             selected_voice = self.cfg.get("tts_voice", "id-ID-Standard-A")
-            # Strip gender suffix saved by on_voice_changed e.g. "id-ID-Standard-A (FEMALE)" -> "id-ID-Standard-A"
             voice_model = selected_voice.split('(')[0].strip()
             output_language = self.cfg.get("output_language", "Indonesia")
 
-            # Derive language code from voice model name, fallback to output_language
             if voice_model.startswith("Gemini-"):
-                # Gemini voices are multilingual — pick language code from output_language
                 lang_map = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}
                 language_code = lang_map.get(output_language, "id-ID")
             elif '-' in voice_model:
@@ -1762,22 +1738,26 @@ class CohostTabBasicSimplified(QWidget):
                 language_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "id-ID"
             else:
                 language_code = "id-ID"
-            
-            # Create callback for TTS completion
-            def on_tts_finished():
-                try:
-                    # Simply emit TTS finished signal (OBS handling removed)
-                    self.ttsFinished.emit()
-                except Exception as callback_error:
-                    self.log_message("ERROR", f"TTS callback error: {callback_error}")
-            
-            # Speak with selected voice and callback (force Google TTS only)
-            speak(text, voice_name=voice_model, language_code=language_code, on_finished=on_tts_finished, force_google_tts=True)
-            self.log_message("TTS", f"Speaking with voice: {voice_model}")
-            
+
+            self._tts_thread = TTSThread(text, voice_model, language_code)
+            self._tts_thread.finished.connect(self._on_tts_finished)
+            self._tts_thread.start()
+            self.log_message("TTS", f"Speaking: {voice_model}")
+
         except Exception as e:
-            print(f"TTS error: {e}")
             self.log_message("ERROR", f"TTS error: {e}")
+            self.reply_busy = False  # Pastikan queue tidak terkunci selamanya
+
+    def _on_tts_finished(self):
+        """Dipanggil saat TTSThread selesai — buka kunci queue"""
+        try:
+            self.ttsFinished.emit()
+            if hasattr(self, 'sequential_greeting_manager'):
+                self.sequential_greeting_manager.on_trigger_complete()
+        except Exception as e:
+            self.log_message("ERROR", f"TTS finished callback: {e}")
+        finally:
+            self.reply_busy = False  # Buka kunci — queue bisa proses item berikutnya
     
     def log_message(self, level, message):
         """Log message to status display"""
@@ -1830,6 +1810,19 @@ class CohostTabBasicSimplified(QWidget):
         except:
             return False
     
+    def _cleanup_cooldowns(self):
+        """Hapus viewer_cooldowns yang sudah expired — cegah memory leak di stream panjang"""
+        try:
+            now = time.time()
+            max_cooldown = self.cfg.get("viewer_cooldown_minutes", 1) * 60
+            # Pertahankan hanya entry yang masih dalam window cooldown
+            self.viewer_cooldowns = {
+                author: ts for author, ts in self.viewer_cooldowns.items()
+                if now - ts < max_cooldown
+            }
+        except Exception as e:
+            self.logger.warning(f"Cooldown cleanup error: {e}")
+
     def add_status_entry(self, author, message, ai_response="", trigger="", status="Received"):
         """Add entry to unified status table"""
         try:
