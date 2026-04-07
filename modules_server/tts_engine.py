@@ -9,11 +9,17 @@ import os
 import sys
 import json
 import time
+import base64
 import logging
 import tempfile
 import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+try:
+    import requests as _requests
+except ImportError:
+    _requests = None
 
 try:
     import pygame
@@ -38,6 +44,7 @@ class TTSEngine:
     
     def __init__(self):
         self.google_client = None
+        self.google_api_key = None   # plain API key (REST auth)
         self.pyttsx3_engine = None
         self.voice_model = "id-ID-Standard-A"
         self.language_code = "id-ID"
@@ -70,13 +77,24 @@ class TTSEngine:
                 logger.warning(f"Failed to initialize pyttsx3: {e}")
     
     def _initialize_google_tts(self):
-        """Initialize Google Cloud TTS using service account credentials"""
+        """Initialize Google Cloud TTS — supports API key or service account credentials"""
+        # Always try to load an API key from settings first (simplest auth)
+        try:
+            settings = self._load_settings()
+            api_key = settings.get('google_tts_api_key', '').strip()
+            if api_key:
+                self.google_api_key = api_key
+                logger.info("Google Cloud TTS will use API key authentication")
+                return
+        except Exception as e:
+            logger.warning(f"Failed to read google_tts_api_key from settings: {e}")
+
         if not texttospeech:
             logger.warning("Google Cloud TTS library not available")
             return
-        
+
         try:
-            # First, try to load credentials from settings.json
+            # Fall back to service account credentials
             settings = self._load_settings()
             credentials_path = settings.get('google_tts_credentials')
             
@@ -173,70 +191,91 @@ class TTSEngine:
         except Exception as e:
             logger.error(f"Failed to play audio file: {e}")
     
+    def _speak_with_api_key(self, text: str, voice_name: str, language_code: str) -> bool:
+        """Call Google Cloud TTS REST API using an API key (no service account needed)"""
+        if not _requests:
+            logger.warning("requests library not available for API key TTS")
+            return False
+
+        url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={self.google_api_key}"
+        payload = {
+            "input": {"text": text},
+            "voice": {"languageCode": language_code, "name": voice_name},
+            "audioConfig": {"audioEncoding": "MP3"}
+        }
+        try:
+            resp = _requests.post(url, json=payload, timeout=15)
+            resp.raise_for_status()
+            audio_bytes = base64.b64decode(resp.json()["audioContent"])
+            temp_file = self.temp_dir / f"tts_{hash(text) & 0xffffffff:08x}.mp3"
+            temp_file.write_bytes(audio_bytes)
+            self._play_audio_file(str(temp_file))
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
+            return True
+        except Exception as e:
+            logger.error(f"Google TTS (API key) failed: {e}")
+            return False
+
     def speak_google_tts(self, text: str, voice_name: str = None, language_code: str = None) -> bool:
         """Speak text using Google Cloud TTS with optional voice override"""
-        if not self.google_client:
+        if not self.google_client and not self.google_api_key:
             return False
         
+        # Load current settings only if no override provided
+        if not voice_name and not language_code:
+            self._load_settings()
+
+        current_voice = voice_name or self.voice_model
+        current_lang = language_code or self.language_code
+
+        logger.info(f"TTS started: {text[:50]}{'...' if len(text) > 50 else ''} (voice={current_voice}, lang={current_lang})")
+
+        # --- API Key path (REST) ---
+        if self.google_api_key:
+            return self._speak_with_api_key(text, current_voice, current_lang)
+
+        # --- Service account path (Python client library) ---
+        if not self.google_client:
+            return False
+
         try:
             start_time = time.time()
-            
-            # Load current settings only if no override provided
-            if not voice_name and not language_code:
-                self._load_settings()
-            
-            # Use provided parameters or fall back to instance settings
-            current_voice = voice_name or self.voice_model
-            current_lang = language_code or self.language_code
-            
-            # Log TTS start
-            logger.info(f"TTS started: {text[:50]}{'...' if len(text) > 50 else ''} (voice={current_voice}, lang={current_lang})")
-            
-            # Calculate and log credits (for monitoring only, no actual deduction)
+
             credits = self._calculate_credits(text)
             logger.info(f"TTS Usage logged: {len(text)} chars = {credits:.4f} credits (monitoring only)")
-            
-            # Prepare the synthesis input
+
             synthesis_input = texttospeech.SynthesisInput(text=text)
-            
-            # Build the voice request
             voice = texttospeech.VoiceSelectionParams(
                 language_code=current_lang,
                 name=current_voice
             )
-            
-            # Select the type of audio file
             audio_config = texttospeech.AudioConfig(
                 audio_encoding=texttospeech.AudioEncoding.MP3
             )
-            
-            # Perform the text-to-speech request
+
             response = self.google_client.synthesize_speech(
                 input=synthesis_input,
                 voice=voice,
                 audio_config=audio_config
             )
-            
-            # Save audio to temporary file
+
             temp_file = self.temp_dir / f"tts_{hash(text) & 0xffffffff:08x}.mp3"
             with open(temp_file, "wb") as out:
                 out.write(response.audio_content)
-            
-            # Play the audio
+
             self._play_audio_file(str(temp_file))
-            
-            # Clean up temporary file
             try:
                 temp_file.unlink()
             except Exception:
                 pass
-            
-            # Log completion
+
             duration = time.time() - start_time
             logger.info(f"TTS completed (Google Cloud) in {duration:.2f}s")
-            
             return True
-            
+
         except Exception as e:
             logger.error(f"Google TTS failed: {e}")
             return False
@@ -308,14 +347,30 @@ def get_tts_engine() -> TTSEngine:
     
     return _tts_engine
 
-def speak(text: str, language_code: str = "id-ID", voice_name: str = None, output_device=None, on_finished=None) -> bool:
+def reinitialize_tts_engine() -> bool:
+    """Reset and recreate the global TTS engine instance (picks up new credentials/settings)"""
+    global _tts_engine
+    with _tts_lock:
+        try:
+            _tts_engine = TTSEngine()
+            logger.info("TTS engine reinitialized successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to reinitialize TTS engine: {e}")
+            _tts_engine = None
+            return False
+
+def speak(text: str, language_code: str = "id-ID", voice_name: str = None, output_device=None, on_finished=None, force_google_tts: bool = False) -> bool:
     """Main speak function - entry point for TTS with compatibility parameters"""
     try:
         engine = get_tts_engine()
-        
-        # Use parameters directly without modifying engine instance
-        # This ensures each call uses the specified voice without affecting other calls
-        result = engine.speak(text, voice_name=voice_name, language_code=language_code)
+
+        if force_google_tts:
+            result = engine.speak_google_tts(text, voice_name=voice_name, language_code=language_code)
+        else:
+            # Use parameters directly without modifying engine instance
+            # This ensures each call uses the specified voice without affecting other calls
+            result = engine.speak(text, voice_name=voice_name, language_code=language_code)
         
         # Call on_finished callback if provided
         if on_finished and callable(on_finished):

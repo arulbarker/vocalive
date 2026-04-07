@@ -746,8 +746,9 @@ class CohostTabBasicSimplified(QWidget):
         platform_layout = QVBoxLayout()
         
         self.platform_combo = QComboBox()
-        self.platform_combo.addItems(["YouTube", "TikTok"])
-        self.platform_combo.setCurrentText(self.cfg.get("platform", "YouTube"))
+        # YouTube disabled — uncomment to re-enable: self.platform_combo.addItems(["YouTube", "TikTok"])
+        self.platform_combo.addItems(["TikTok"])
+        self.platform_combo.setCurrentText("TikTok")
         self.platform_combo.currentTextChanged.connect(self._update_platform_ui)
         platform_layout.addWidget(self.platform_combo)
         
@@ -1270,32 +1271,26 @@ class CohostTabBasicSimplified(QWidget):
             # Stop existing listeners first (force cleanup)
             self.stop()
 
-            if platform == "YouTube":
-                video_id = self.video_id_input.text().strip()
-                if not video_id:
-                    self.log_message("ERROR", "Please enter a YouTube video ID")
-                    return
-
-                # Save video ID
-                self.cfg.set("video_id", video_id)
-
-                # Start analytics session
-                if self.analytics:
-                    try:
-                        self.analytics.start_session(platform="youtube")
-                        self.log_message("INFO", "Analytics session started")
-                    except Exception as e:
-                        self.logger.error(f"Failed to start analytics: {e}")
-
-                # Start YouTube listener
-                self.listener_thread = SimpleListener(video_id)
-                self.listener_thread.newComment.connect(self.handle_comment)
-                self.listener_thread.logMessage.connect(self.log_message)
-                self.listener_thread.start()
-
-                self.log_message("INFO", f"Started YouTube listener for video: {video_id}")
-
-            else:  # TikTok
+            # YouTube disabled — platform is TikTok only
+            # To re-enable YouTube, uncomment the block below and restore the dropdown
+            # if platform == "YouTube":
+            #     video_id = self.video_id_input.text().strip()
+            #     if not video_id:
+            #         self.log_message("ERROR", "Please enter a YouTube video ID")
+            #         return
+            #     self.cfg.set("video_id", video_id)
+            #     if self.analytics:
+            #         try:
+            #             self.analytics.start_session(platform="youtube")
+            #         except Exception as e:
+            #             self.logger.error(f"Failed to start analytics: {e}")
+            #     self.listener_thread = SimpleListener(video_id)
+            #     self.listener_thread.newComment.connect(self.handle_comment)
+            #     self.listener_thread.logMessage.connect(self.log_message)
+            #     self.listener_thread.start()
+            #     self.log_message("INFO", f"Started YouTube listener for video: {video_id}")
+            # else:  # TikTok
+            if True:  # TikTok only
                 username = self.tiktok_input.text().strip()
                 if not username:
                     self.log_message("ERROR", "Please enter a TikTok username")

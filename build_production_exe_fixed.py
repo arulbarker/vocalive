@@ -489,7 +489,7 @@ def create_production_package(version="1.0.11"):
         "language": "id",
         "reply_mode": "Trigger",
         "paket": "basic",
-        "platform": "YouTube"
+        "platform": "TikTok"
     }
     
     (config_dst / "settings.json").write_text(
