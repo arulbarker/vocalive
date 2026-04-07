@@ -138,8 +138,9 @@ class APITestThread(QThread):
 
 
 class PolishKnowledgeThread(QThread):
-    """Thread untuk menyempurnakan teks pengetahuan produk via AI"""
-    finished = pyqtSignal(str)  # hasil AI, atau "" jika gagal
+    """Thread untuk menyempurnakan teks pengetahuan produk via AI + riset web"""
+    finished = pyqtSignal(str)      # hasil AI, atau "" jika gagal
+    status_update = pyqtSignal(str) # progress text untuk label
 
     def __init__(self, text: str):
         super().__init__()
@@ -147,18 +148,58 @@ class PolishKnowledgeThread(QThread):
 
     def run(self):
         try:
+            self.status_update.emit("🔍 Mencari info produk di internet...")
+            research = self._research_products()
+
+            self.status_update.emit("✍️ AI sedang menyempurnakan teks...")
             from modules_client.api import generate_reply
+
+            research_section = f"\n\nHasil riset produk dari internet:\n{research}" if research else ""
+
             prompt = (
-                "Perbaiki dan sempurnakan teks pengetahuan produk live selling berikut. "
-                "Buat lebih terstruktur dan jelas supaya AI mudah menjawab pertanyaan penonton. "
-                "Pertahankan semua info produk asli (nama, keranjang, harga, promo). "
-                "Tulis HANYA teks yang sudah diperbaiki, tanpa komentar atau penjelasan tambahan.\n\n"
-                f"Teks asli:\n{self.text}"
+                "Kamu adalah AI host live selling profesional yang sangat berpengalaman dan antusias. "
+                "Tugasmu: ubah teks pengetahuan produk berikut menjadi knowledge base yang lengkap, "
+                "akurat, dan siap dipakai AI untuk menjawab pertanyaan penonton di TikTok Live.\n\n"
+                "INSTRUKSI:\n"
+                "1. Pertahankan SEMUA info asli dari penjual (nomor keranjang, harga, promo)\n"
+                "2. Tambahkan spesifikasi teknis & keunggulan produk yang kamu tahu\n"
+                "3. Tambahkan poin-poin benefit yang relevan buat pembeli\n"
+                "4. Tulis dengan gaya host yang antusias, persuasif, dan profesional\n"
+                "5. Format rapi: tiap produk punya bagian sendiri, mudah dibaca AI\n"
+                "6. Jika ada nama produk terkenal (HP, kosmetik, elektronik, dll) — "
+                "gunakan pengetahuanmu untuk melengkapi detail spek dan keunggulannya\n\n"
+                f"Teks asli penjual:\n{self.text}"
+                f"{research_section}\n\n"
+                "Tulis HANYA knowledge yang sudah disempurnakan. Jangan tambahkan intro, judul besar, atau komentar."
             )
-            result = generate_reply(prompt, max_tokens=500, fast_mode=False)
+
+            result = generate_reply(prompt, max_tokens=800, fast_mode=False)
             self.finished.emit(result.strip() if result else "")
-        except Exception as e:
+        except Exception:
             self.finished.emit("")
+
+    def _research_products(self) -> str:
+        """Cari info produk via DuckDuckGo Instant Answer API (gratis, no key)"""
+        try:
+            import requests
+            # Buat query dari teks user — ambil 80 char pertama sebagai konteks produk
+            query = f"{self.text[:120]} spesifikasi keunggulan harga"
+            resp = requests.get(
+                "https://api.duckduckgo.com/",
+                params={"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"},
+                timeout=8,
+                headers={"User-Agent": "VocaLive/1.0"}
+            )
+            data = resp.json()
+            parts = []
+            if data.get("Abstract"):
+                parts.append(data["Abstract"])
+            for topic in data.get("RelatedTopics", [])[:3]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    parts.append(topic["Text"])
+            return "\n".join(parts) if parts else ""
+        except Exception:
+            return ""  # riset gagal → AI tetap jalan dengan pengetahuan sendiri
 
 
 class ConfigTab(QWidget):
@@ -1056,6 +1097,7 @@ class ConfigTab(QWidget):
 
         self._polish_thread = PolishKnowledgeThread(text)
         self._polish_thread.finished.connect(self._on_polish_done)
+        self._polish_thread.status_update.connect(self.char_count_label.setText)
         self._polish_thread.start()
 
     def _on_polish_done(self, result: str):
