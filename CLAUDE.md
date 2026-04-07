@@ -230,6 +230,31 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 - Splash screen di-disable (`splash = None`) untuk mencegah QPaintDevice segfault
 - Default platform di `build_production_exe_fixed.py` baris ~492 harus `"TikTok"`
 
+## Product Popup Window — Rendering & Capture
+
+**JANGAN pakai `QVideoWidget`** untuk window yang perlu di-capture TikTok Live Studio / OBS.
+`QVideoWidget` render via D3D hardware overlay → bypass GDI → tidak ter-capture.
+**Pakai `QVideoSink` + `QLabel.setPixmap()`** — frame lewat GDI pipeline, ter-capture normal.
+
+**JANGAN pakai `WA_TranslucentBackground`** untuk window yang di-capture — transparent area
+ter-capture sebagai hitam (Windows OS limitation, tidak bisa di-fix via library apapun).
+Solusi "tembus pandang" yang capturable: **Chroma Key** — background `#00B140` (broadcast green),
+user apply Chroma Key filter di TikTok Live Studio.
+
+**`QVBoxLayout(self)`** pada top-level widget menyebabkan Qt auto-fill background → transparency gagal.
+Gunakan `setAutoFillBackground(False)` + posisi manual via `setGeometry()` tanpa layout manager.
+
+**`QVideoSink` thread safety**: `videoFrameChanged` emit dari multimedia thread.
+Gunakan intermediate `pyqtSignal(QPixmap)` untuk pass frame ke main thread sebelum `setPixmap()`.
+
+**Toggle ON/OFF popup**: `ProductSceneManager.get_enabled()` / `set_enabled()` — state di `config/product_scenes.json`.
+Check `get_enabled()` sebelum `show_product()` di `cohost_tab_basic.py`.
+
+**AI pilih `scene_id`**: `scene_id = 0` = tidak tampilkan popup. AI sudah diinstruksikan untuk
+pilih `scene_id > 0` hanya jika penonton bertanya spesifik tentang produk (bukan sapaan umum).
+
+---
+
 ## Protected Files (Jangan Diubah Tanpa Hati-Hati)
 
 - `modules_server/tts_engine.py` — TTS engine dengan multi-path auth

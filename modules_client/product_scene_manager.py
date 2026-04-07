@@ -17,6 +17,7 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config', 'product_s
 DEFAULT_CONFIG = {
     "popup_width": 608,
     "popup_height": 1080,
+    "enabled": True,
     "scenes": []
 }
 
@@ -98,6 +99,15 @@ class ProductSceneManager:
         ]
         self.save()
 
+    # --- Enabled toggle ---
+
+    def get_enabled(self) -> bool:
+        return self._config.get("enabled", True)
+
+    def set_enabled(self, value: bool):
+        self._config["enabled"] = bool(value)
+        self.save()
+
     # --- Popup size ---
 
     def get_popup_size(self) -> tuple[int, int]:
@@ -121,9 +131,15 @@ class ProductSceneManager:
             return ""
         product_list = "\n".join(f"{s['id']}. {s['name']}" for s in scenes)
         return (
-            f"Produk yang tersedia (pilih scene_id yang paling relevan):\n"
+            f"Produk yang tersedia:\n"
             f"{product_list}\n\n"
             "Balas SELALU dalam format JSON berikut (wajib, tanpa teks lain di luar JSON):\n"
-            '{"reply": "<teks balasan>", "scene_id": <nomor produk atau 0>}\n'
-            "scene_id = 0 jika tidak ada produk yang relevan dengan percakapan."
+            '{"reply": "<teks balasan>", "scene_id": <nomor produk atau 0>}\n\n'
+            "Aturan memilih scene_id:\n"
+            "- Gunakan scene_id > 0 HANYA jika penonton SECARA SPESIFIK bertanya tentang "
+            "produk tersebut (harga, ukuran, cara beli, stok, dll).\n"
+            "- Gunakan scene_id = 0 untuk sapaan umum ('halo', 'keren', 'mantap'), "
+            "pertanyaan non-produk, atau komentar yang tidak membutuhkan penjelasan produk.\n"
+            "- Jangan tampilkan produk hanya karena komentar menyebut kata yang mirip nama produk.\n"
+            "- Satu sesi live, tampilkan produk hanya jika benar-benar dibutuhkan."
         )

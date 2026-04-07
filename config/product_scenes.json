@@ -1,5 +1,27 @@
 {
-  "popup_width": 608,
+  "popup_width": 605,
   "popup_height": 1080,
-  "scenes": []
+  "scenes": [
+    {
+      "id": 1,
+      "name": "harga iphone 11",
+      "video_path": "D:/CAPCUT/dance 3.mp4"
+    },
+    {
+      "id": 2,
+      "name": "spesifikasi iphone 11",
+      "video_path": "D:/CAPCUT/dance 2.mp4"
+    },
+    {
+      "id": 3,
+      "name": "harga iphone 12",
+      "video_path": "D:/CAPCUT/bahan.mp4"
+    },
+    {
+      "id": 4,
+      "name": "warna iphoen 12",
+      "video_path": "D:/CAPCUT/0122-copy.mp4"
+    }
+  ],
+  "enabled": true
 }

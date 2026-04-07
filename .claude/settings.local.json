@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python test:*)"
+      "Bash(python test:*)",
+      "Bash(git push*)",
+      "Bash(git commit*)",
+      "Bash(git add*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git branch*)",
+      "Bash(git checkout*)",
+      "Bash(python -c ':*)",
+      "Bash(python:*)"
     ],
     "deny": []
   }

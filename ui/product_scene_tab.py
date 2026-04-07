@@ -170,12 +170,20 @@ class ProductSceneTab(QWidget):
         self.btn_preview.setStyleSheet(btn_ghost())
         self.btn_preview.clicked.connect(self._open_preview)
 
+        # Toggle ON/OFF fitur product popup
+        self.btn_toggle = QPushButton()
+        self.btn_toggle.setFixedWidth(120)
+        self.btn_toggle.clicked.connect(self._toggle_enabled)
+
         toolbar.addWidget(self.btn_add)
         toolbar.addWidget(self.btn_remove)
         toolbar.addWidget(self.btn_test)
         toolbar.addWidget(self.btn_preview)
         toolbar.addStretch()
+        toolbar.addWidget(self.btn_toggle)
         layout.addLayout(toolbar)
+
+        self._refresh_toggle_btn()
 
         # Table
         self.table = QTableWidget()
@@ -323,11 +331,33 @@ class ProductSceneTab(QWidget):
 
     @pyqtSlot()
     def _open_preview(self):
-        """Buka popup window kosong agar user bisa atur posisi di TikTok Live Studio."""
+        """Buka popup window dalam mode preview — bisa dipanggil berkali-kali."""
         if self._popup_window is None:
             QMessageBox.warning(self, "Error", "Popup window belum diinisialisasi.")
             return
-        self._popup_window.show()
+        self._popup_window.show_preview()
+
+    def _refresh_toggle_btn(self):
+        """Update tampilan tombol toggle sesuai state enabled."""
+        enabled = self._psm.get_enabled()
+        if enabled:
+            self.btn_toggle.setText("● Popup Aktif")
+            self.btn_toggle.setStyleSheet(btn_success("font-size: 12px; font-weight: 700;"))
+        else:
+            self.btn_toggle.setText("○ Popup Mati")
+            self.btn_toggle.setStyleSheet(
+                f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; "
+                f"border: 1px solid {BORDER}; border-radius: 6px; padding: 8px 16px; "
+                f"font-size: 12px; font-weight: 700; }}"
+                f"QPushButton:hover {{ background-color: {SUCCESS}; color: white; }}"
+            )
+
+    @pyqtSlot()
+    def _toggle_enabled(self):
+        """Toggle ON/OFF fitur product popup."""
+        new_state = not self._psm.get_enabled()
+        self._psm.set_enabled(new_state)
+        self._refresh_toggle_btn()
 
     @pyqtSlot()
     def _on_size_changed(self):

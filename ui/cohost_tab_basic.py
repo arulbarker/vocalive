@@ -1690,7 +1690,7 @@ class CohostTabBasicSimplified(QWidget):
         # Emit overlay signal sebelum TTS agar teks muncul bersamaan dengan suara
         self.replyGenerated.emit(author, message, clean_reply)
 
-        # Trigger product popup jika ada scene_id
+        # Trigger product popup jika ada scene_id dan fitur diaktifkan user
         if scene_id > 0 and self._popup_window is not None:
             try:
                 from modules_client.product_scene_manager import ProductSceneManager
@@ -1698,10 +1698,13 @@ class CohostTabBasicSimplified(QWidget):
                     self._psm_cache = ProductSceneManager()
                 else:
                     self._psm_cache.reload()
-                scene = self._psm_cache.get_scene_by_id(scene_id)
-                if scene and scene.get('video_path'):
-                    self._popup_window.show_product(scene['video_path'])
-                    self.logger.info(f"[POPUP] Popup: scene_id={scene_id}, name={scene.get('name')}")
+                if not self._psm_cache.get_enabled():
+                    self.logger.info("[POPUP] Popup dilewati — fitur dimatikan user")
+                else:
+                    scene = self._psm_cache.get_scene_by_id(scene_id)
+                    if scene and scene.get('video_path'):
+                        self._popup_window.show_product(scene['video_path'])
+                        self.logger.info(f"[POPUP] Popup: scene_id={scene_id}, name={scene.get('name')}")
             except Exception as e:
                 self.logger.warning(f"[POPUP] Popup error: {e}")
 
