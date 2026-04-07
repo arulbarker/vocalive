@@ -48,9 +48,9 @@ try:
     import pyqtgraph as pg
     from pyqtgraph import PlotWidget
     CHARTS_AVAILABLE = True
-    # Configure pyqtgraph for dark theme
-    pg.setConfigOption('background', '#1c1208')
-    pg.setConfigOption('foreground', '#FFFBEB')
+    # Configure pyqtgraph for Ocean Blue dark theme
+    pg.setConfigOption('background', '#1E2A3B')   # BG_ELEVATED
+    pg.setConfigOption('foreground', '#F0F6FF')   # TEXT_PRIMARY
 except ImportError:
     CHARTS_AVAILABLE = False
     print("[Analytics Tab] pyqtgraph not available - charts disabled")
@@ -899,169 +899,117 @@ class AnalyticsTab(QWidget):
         self.refresh_history()
     
     def export_to_pdf(self):
-        """Export analytics to PDF report"""
+        """Export analytics ke PDF menggunakan QPrinter built-in PyQt6 — tanpa library tambahan"""
         if not ANALYTICS_AVAILABLE or not self.analytics:
-            QMessageBox.warning(self, "Export Failed", "Analytics manager not available")
+            QMessageBox.warning(self, "Export Gagal", "Analytics manager tidak tersedia")
             return
-        
+
         stats = self.analytics.get_current_stats()
         if not stats.get("is_active") and not stats.get("session_id"):
-            QMessageBox.warning(self, "Export Failed", "No session data to export")
+            QMessageBox.warning(self, "Export Gagal", "Tidak ada data sesi untuk diekspor")
             return
-        
-        # Ask for save location
+
         default_name = f"{stats.get('session_id', 'session')}_report.pdf"
         file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export PDF Report",
-            default_name,
-            "PDF Files (*.pdf)"
+            self, "Export Laporan PDF", default_name, "PDF Files (*.pdf)"
         )
-        
         if not file_path:
             return
-        
+
         try:
-            # Try to use reportlab if available
-            try:
-                from reportlab.lib.pagesizes import letter
-                from reportlab.pdfgen import canvas
-                from reportlab.lib.colors import HexColor
-                
-                c = canvas.Canvas(file_path, pagesize=letter)
-                width, height = letter
-                y = height - 50
-                
-                # Title
-                c.setFont("Helvetica-Bold", 20)
-                c.setFillColor(HexColor('#1877F2'))
-                c.drawString(50, y, "VocaLive Analytics Report")
-                y -= 30
-                
-                # Session info
-                c.setFont("Helvetica-Bold", 12)
-                c.setFillColor(HexColor('#000000'))
-                c.drawString(50, y, f"Session: {stats.get('session_id', 'N/A')}")
-                y -= 20
-                c.setFont("Helvetica", 10)
-                c.drawString(50, y, f"Platform: {stats.get('platform', 'N/A').upper()}")
-                y -= 15
-                c.drawString(50, y, f"Duration: {self.analytics.get_session_duration():.0f} minutes")
-                y -= 30
-                
-                # Statistics section
-                c.setFont("Helvetica-Bold", 14)
-                c.drawString(50, y, "Session Statistics")
-                y -= 20
-                c.setFont("Helvetica", 10)
-                
-                stat_items = [
-                    f"Total Comments: {stats.get('total_comments', 0)}",
-                    f"Comments Replied: {stats.get('total_comments_replied', 0)}",
-                    f"Unique Viewers: {stats.get('unique_viewers', 0)}",
-                    f"Peak Viewers: {stats.get('peak_viewers', 0)}",
-                    f"Total Gifts: Rp {stats.get('total_gifts_value', 0):,}",
-                    f"Total Shares: {stats.get('total_shares', 0)}",
-                    f"Total Likes: {stats.get('total_likes', 0)}",
-                    f"New Follows: {stats.get('total_follows', 0)}",
-                ]
-                
-                for item in stat_items:
-                    c.drawString(70, y, item)
-                    y -= 15
-                
-                y -= 20
-                
-                # Top viewers section
-                c.setFont("Helvetica-Bold", 14)
-                c.drawString(50, y, "Top Viewers")
-                y -= 20
-                c.setFont("Helvetica", 10)
-                
-                top_viewers = self.analytics.get_top_viewers(limit=10)
-                for i, viewer in enumerate(top_viewers[:10]):
-                    c.drawString(70, y, f"{i+1}. {viewer['username']} - {viewer['total_comments']} comments")
-                    y -= 15
-                    if y < 100:  # Page break if needed
-                        c.showPage()
-                        y = height - 50
-                
-                y -= 20
-                
-                # Top keywords section
-                c.setFont("Helvetica-Bold", 14)
-                c.drawString(50, y, "Popular Keywords")
-                y -= 20
-                c.setFont("Helvetica", 10)
-                
-                top_keywords = self.analytics.get_top_keywords(limit=10)
-                for i, (keyword, count) in enumerate(top_keywords[:10]):
-                    c.drawString(70, y, f"{i+1}. {keyword} - {count} mentions")
-                    y -= 15
-                
-                # Footer
-                c.setFont("Helvetica", 8)
-                c.setFillColor(HexColor('#666666'))
-                c.drawString(50, 30, f"Generated by VocaLive - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                
-                c.save()
-                
-                QMessageBox.information(
-                    self,
-                    "Export Success",
-                    f"PDF report exported to:\n{file_path}"
-                )
-                
-            except ImportError:
-                # Fallback: Create text file if reportlab not available
-                text_path = file_path.replace('.pdf', '.txt')
-                with open(text_path, 'w', encoding='utf-8') as f:
-                    f.write("=" * 60 + "\n")
-                    f.write("STREAMMATE AI ANALYTICS REPORT\n")
-                    f.write("=" * 60 + "\n\n")
-                    
-                    f.write(f"Session: {stats.get('session_id', 'N/A')}\n")
-                    f.write(f"Platform: {stats.get('platform', 'N/A').upper()}\n")
-                    f.write(f"Duration: {self.analytics.get_session_duration():.0f} minutes\n\n")
-                    
-                    f.write("-" * 40 + "\n")
-                    f.write("STATISTICS\n")
-                    f.write("-" * 40 + "\n")
-                    f.write(f"Total Comments: {stats.get('total_comments', 0)}\n")
-                    f.write(f"Comments Replied: {stats.get('total_comments_replied', 0)}\n")
-                    f.write(f"Unique Viewers: {stats.get('unique_viewers', 0)}\n")
-                    f.write(f"Peak Viewers: {stats.get('peak_viewers', 0)}\n")
-                    f.write(f"Total Gifts: Rp {stats.get('total_gifts_value', 0):,}\n")
-                    f.write(f"Total Shares: {stats.get('total_shares', 0)}\n")
-                    f.write(f"Total Likes: {stats.get('total_likes', 0)}\n")
-                    f.write(f"New Follows: {stats.get('total_follows', 0)}\n\n")
-                    
-                    f.write("-" * 40 + "\n")
-                    f.write("TOP VIEWERS\n")
-                    f.write("-" * 40 + "\n")
-                    top_viewers = self.analytics.get_top_viewers(limit=10)
-                    for i, viewer in enumerate(top_viewers[:10]):
-                        f.write(f"{i+1}. {viewer['username']} - {viewer['total_comments']} comments\n")
-                    
-                    f.write("\n" + "-" * 40 + "\n")
-                    f.write("POPULAR KEYWORDS\n")
-                    f.write("-" * 40 + "\n")
-                    top_keywords = self.analytics.get_top_keywords(limit=10)
-                    for i, (keyword, count) in enumerate(top_keywords[:10]):
-                        f.write(f"{i+1}. {keyword} - {count} mentions\n")
-                    
-                    f.write("\n" + "=" * 60 + "\n")
-                    f.write(f"Generated by VocaLive - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                
-                QMessageBox.information(
-                    self,
-                    "Export Success",
-                    f"Report exported to:\n{text_path}\n\n(Note: Install 'reportlab' for PDF export)"
-                )
-        
+            from PyQt6.QtPrintSupport import QPrinter
+            from PyQt6.QtGui import QTextDocument
+
+            duration = self.analytics.get_session_duration()
+            total = stats.get("total_comments", 0)
+            replied = stats.get("total_comments_replied", 0)
+            reply_rate = f"{(replied/total*100):.1f}%" if total > 0 else "0%"
+            top_viewers = self.analytics.get_top_viewers(limit=10)
+            top_keywords = self.analytics.get_top_keywords(limit=10)
+
+            # Baris tabel top viewers
+            viewer_rows = "".join(
+                f"<tr><td style='padding:4px 8px;'>#{i+1}</td>"
+                f"<td style='padding:4px 8px;'>{v['username']}</td>"
+                f"<td style='padding:4px 8px;text-align:center'>{v['total_comments']}</td>"
+                f"<td style='padding:4px 8px;text-align:center'>{v.get('replied_count',0)}</td></tr>"
+                for i, v in enumerate(top_viewers)
+            )
+            # Baris tabel top keywords
+            keyword_rows = "".join(
+                f"<tr><td style='padding:4px 8px;'>#{i+1}</td>"
+                f"<td style='padding:4px 8px;'>{kw}</td>"
+                f"<td style='padding:4px 8px;text-align:center'>{cnt}</td></tr>"
+                for i, (kw, cnt) in enumerate(top_keywords)
+            )
+
+            html = f"""
+            <html><head><style>
+                body {{ font-family: Arial, sans-serif; color: #111; margin: 24px; }}
+                h1 {{ color: #2563EB; border-bottom: 2px solid #2563EB; padding-bottom: 6px; }}
+                h2 {{ color: #1E3A5F; margin-top: 24px; border-left: 4px solid #60A5FA; padding-left: 8px; }}
+                table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
+                th {{ background: #2563EB; color: white; padding: 6px 8px; text-align: left; }}
+                tr:nth-child(even) {{ background: #f0f6ff; }}
+                .stat-grid {{ display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }}
+                .stat-box {{ border: 1px solid #60A5FA; border-radius: 6px; padding: 10px 16px; min-width: 140px; }}
+                .stat-val {{ font-size: 22px; font-weight: bold; color: #2563EB; }}
+                .stat-lbl {{ font-size: 11px; color: #666; }}
+                .footer {{ color: #999; font-size: 10px; margin-top: 32px; border-top: 1px solid #ddd; padding-top: 8px; }}
+            </style></head><body>
+            <h1>VocaLive — Laporan Analitik Live</h1>
+            <p><b>Sesi:</b> {stats.get('session_id','N/A')} &nbsp;|&nbsp;
+               <b>Platform:</b> {stats.get('platform','N/A').upper()} &nbsp;|&nbsp;
+               <b>Durasi:</b> {duration:.0f} menit &nbsp;|&nbsp;
+               <b>Dibuat:</b> {datetime.now().strftime('%d %b %Y %H:%M')}</p>
+
+            <h2>Statistik Sesi</h2>
+            <table>
+                <tr><th>Metrik</th><th>Nilai</th></tr>
+                <tr><td>Total Komentar</td><td>{total}</td></tr>
+                <tr><td>Komentar Dibalas</td><td>{replied} ({reply_rate})</td></tr>
+                <tr><td>Penonton Unik</td><td>{stats.get('unique_viewers',0)}</td></tr>
+                <tr><td>Puncak Penonton</td><td>{stats.get('peak_viewers',0)}</td></tr>
+                <tr><td>Total Gift</td><td>Rp {stats.get('total_gifts_value',0):,}</td></tr>
+                <tr><td>Share</td><td>{stats.get('total_shares',0)}</td></tr>
+                <tr><td>Like</td><td>{stats.get('total_likes',0)}</td></tr>
+                <tr><td>Follower Baru</td><td>{stats.get('total_follows',0)}</td></tr>
+            </table>
+
+            <h2>Top Penonton</h2>
+            <table>
+                <tr><th>Rank</th><th>Username</th><th>Komentar</th><th>Dibalas</th></tr>
+                {viewer_rows if viewer_rows else '<tr><td colspan="4">Belum ada data</td></tr>'}
+            </table>
+
+            <h2>Kata Populer</h2>
+            <table>
+                <tr><th>Rank</th><th>Kata</th><th>Sebutan</th></tr>
+                {keyword_rows if keyword_rows else '<tr><td colspan="3">Belum ada data</td></tr>'}
+            </table>
+
+            <p class="footer">Dibuat oleh VocaLive &mdash; {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            </body></html>
+            """
+
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+            printer.setOutputFileName(file_path)
+            printer.setPageMargins(
+                printer.pageLayout().margins()
+            )
+
+            doc = QTextDocument()
+            doc.setHtml(html)
+            doc.print_(printer)
+
+            QMessageBox.information(
+                self, "Export Berhasil",
+                f"Laporan PDF disimpan ke:\n{file_path}"
+            )
+
         except Exception as e:
             QMessageBox.warning(
-                self,
-                "Export Failed",
-                f"Failed to export report:\n{str(e)}"
+                self, "Export Gagal",
+                f"Gagal membuat PDF:\n{str(e)}"
             )
