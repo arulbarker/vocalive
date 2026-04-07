@@ -1,0 +1,427 @@
+// ============================================================
+// MULTI-PRODUCT LOGIN SYSTEM
+// Version: 6.1 (Fix: expired date string + return expired_date ke Python)
+// ============================================================
+
+// --- KONFIGURASI PRODUK ---
+var PRODUCTS = {
+  "affiliate-go": {
+    keywords: ["affiliate go", "aff go"],
+    sheetName: "Affiliate GO Users",
+    appName: "Affiliate GO Foto Studio",
+    defaultMaxDevices: 1,
+    subscriptionDays: 0, // 0 = LIFETIME (Akses Selamanya)
+    emailSubject: "Akses Affiliate GO Foto Studio",
+    emailBody: function(nama) {
+      return "Halo " + nama + ",\n\nTerima kasih telah membeli Affiliate GO!\nSilakan login ke aplikasi menggunakan email ini.\n\nLink Aplikasi: [Masukkan link]\n\nSalam,\nArulCG";
+    },
+    emailSubjectEN: "Access to AffGo - UGC AI",
+    emailBodyEN: function(nama) {
+      return "Hello " + nama + ",\n\nThank you for purchasing AffGo - UGC AI!\nPlease use this email address to log in.\n\nBest regards,\nARL DEV";
+    }
+  },
+  "metode-atm": {
+    keywords: ["metode atm"],
+    sheetName: "Metode ATM Users",
+    appName: "ATM Generator",
+    defaultMaxDevices: 2,
+    subscriptionDays: 0, // 0 = LIFETIME
+    emailSubject: "Akses Metode ATM - Content Generator",
+    emailBody: function(nama) {
+      return "Halo " + nama + ",\n\nTerima kasih telah membeli Metode ATM!\nSilakan login menggunakan email ini.\n\nSalam,\nArulCG";
+    },
+    emailSubjectEN: "Access to ATM Generator",
+    emailBodyEN: function(nama) {
+      return "Hello " + nama + ",\n\nThank you for purchasing ATM Generator!\n...";
+    }
+  },
+  // --- APLIKASI SAAS BERLANGGANAN ---
+  "vocalive": {
+    keywords: ["vocalive", "voca live"],
+    sheetName: "VocaLive Users",
+    appName: "VocaLive",
+    defaultMaxDevices: 1,
+    subscriptionDays: 30, // Aktif 30 Hari / 1 Bulan
+    emailSubject: "Akses VocaLive - Live Streaming AI (Aktif 1 Bulan)",
+    emailBody: function(nama) {
+      return "Halo " + nama + ",\n\n" +
+             "Terima kasih telah berlangganan VocaLive!\n" +
+             "Akses Anda aktif selama 1 Bulan (30 Hari) ke depan.\n\n" +
+             "Silakan login ke aplikasi menggunakan email ini.\n\n" +
+             "Salam,\nArulCG";
+    },
+    emailSubjectEN: "Access to VocaLive - Live Streaming AI",
+    emailBodyEN: function(nama) {
+      return "Hello " + nama + ",\n\nThank you for purchasing VocaLive!\nYour access is valid for 30 days.\n\nBest regards,\nARL DEV";
+    }
+  },
+  "tikdance": {
+    keywords: ["tikdance"],
+    sheetName: "tikdance",
+    appName: "Tikdance App",
+    defaultMaxDevices: 1,
+    subscriptionDays: 30, // Aktif 30 Hari / 1 Bulan
+    emailSubject: "Akses Aplikasi Tikdance (Aktif 1 Bulan)",
+    emailBody: function(nama) {
+      return "Halo " + nama + ",\n\n" +
+             "Terima kasih telah berlangganan Tikdance!\n" +
+             "Akses Anda aktif selama 1 Bulan (30 Hari) ke depan.\n\n" +
+             "Silakan login ke aplikasi menggunakan email ini.\n\n" +
+             "Link Aplikasi: [Masukkan link Tikdance di sini]\n\n" +
+             "Salam,\nArulCG";
+    },
+    emailSubjectEN: "Access to Tikdance App",
+    emailBodyEN: function(nama) {
+      return "Hello " + nama + ",\n\nThank you for purchasing Tikdance!\nYour access is valid for 30 days.\n\nBest regards,\nARL DEV";
+    }
+  }
+};
+
+// ============================================================
+// BAGIAN 1: MENERIMA DATA (doPost)
+// ============================================================
+function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    if (!e || !e.postData || !e.postData.contents) return ContentService.createTextOutput("Error").setMimeType(ContentService.MimeType.TEXT);
+
+    var jsonString = e.postData.contents;
+    var jsonData = JSON.parse(jsonString);
+
+    try {
+      var debugSheet = ss.getSheetByName("DebugLog");
+      if (!debugSheet) debugSheet = ss.insertSheet("DebugLog");
+      debugSheet.appendRow([new Date(), "Webhook Masuk", jsonString]);
+    } catch(err) {}
+
+    var emailUser = ""; var namaUser = ""; var namaProduk = ""; var language = "ID";
+
+    // 1. PINTU LYNK.ID
+    if (jsonData.data && jsonData.data.message_action === "SUCCESS") {
+      emailUser = jsonData.data.message_data.customer.email;
+      namaUser = jsonData.data.message_data.customer.name;
+      var items = jsonData.data.message_data.items;
+      language = "ID";
+      for (var i = 0; i < items.length; i++) {
+        namaProduk = items[i].title;
+        var productConfig = findProductByName(namaProduk);
+        if (productConfig) processUserPurchase(ss, productConfig, emailUser, namaUser, namaProduk, language);
+      }
+      return ContentService.createTextOutput(JSON.stringify({"success": true})).setMimeType(ContentService.MimeType.JSON);
+    }
+    // 2. PINTU WHOP
+    else if (jsonData.type && typeof jsonData.type === 'string' && (jsonData.type.indexOf("payment") > -1 || jsonData.type.indexOf("membership") > -1)) {
+      var dataWhop = jsonData.data || {};
+      if (dataWhop.user && dataWhop.user.email) emailUser = dataWhop.user.email;
+      else if (dataWhop.customer && dataWhop.customer.email) emailUser = dataWhop.customer.email;
+
+      if (dataWhop.user && dataWhop.user.name) namaUser = dataWhop.user.name;
+      else if (dataWhop.user && dataWhop.user.username) namaUser = dataWhop.user.username;
+      else namaUser = "User Whop";
+
+      if (dataWhop.product && dataWhop.product.title) namaProduk = dataWhop.product.title;
+      else namaProduk = "AFF GO - UGC AI";
+
+      language = "EN";
+      if (emailUser !== "") {
+        var productConfig = findProductByName(namaProduk);
+        if (productConfig) processUserPurchase(ss, productConfig, emailUser, namaUser, namaProduk, language);
+      }
+      return ContentService.createTextOutput(JSON.stringify({"success": true})).setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
+  } catch (error) {
+    return ContentService.createTextOutput("Error").setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+function findProductByName(namaProduk) {
+  if (!namaProduk) return null;
+  var productLower = namaProduk.toString().toLowerCase();
+  for (var key in PRODUCTS) {
+    var config = PRODUCTS[key];
+    var keywords = config.keywords || [];
+    for (var i = 0; i < keywords.length; i++) {
+      if (productLower.indexOf(keywords[i].toLowerCase()) > -1) return config;
+    }
+  }
+  return null;
+}
+
+// LOGIKA PEMBELIAN & PERPANJANGAN SAAS
+function processUserPurchase(ss, productConfig, emailUser, namaUser, namaProduk, language) {
+  var sheet = ss.getSheetByName(productConfig.sheetName);
+  if (!sheet) sheet = createProductSheet(ss, productConfig.sheetName);
+
+  var existingRow = findUserInSheet(sheet, emailUser);
+  var now = new Date();
+  var expiredDate = "";
+
+  if (existingRow === -1) {
+    // PEMBELI BARU
+    if (productConfig.subscriptionDays > 0) {
+      expiredDate = new Date(now.getTime() + (productConfig.subscriptionDays * 24 * 60 * 60 * 1000));
+    }
+    sheet.appendRow([now, emailUser.trim(), namaUser, namaProduk, "AKTIF", "", "", "", expiredDate]);
+  } else {
+    // PERPANJANGAN (USER LAMA BELI LAGI)
+    sheet.getRange(existingRow, 5).setValue("AKTIF");
+    sheet.getRange(existingRow, 1).setValue(now);
+
+    if (productConfig.subscriptionDays > 0) {
+      var oldExpiredDate = sheet.getRange(existingRow, 9).getValue();
+      var baseDate = now;
+
+      // Jika masih ada sisa hari, akumulasikan harinya
+      if (oldExpiredDate && oldExpiredDate instanceof Date && oldExpiredDate > now) {
+        baseDate = oldExpiredDate;
+      }
+      var newExpiredDate = new Date(baseDate.getTime() + (productConfig.subscriptionDays * 24 * 60 * 60 * 1000));
+      sheet.getRange(existingRow, 9).setValue(newExpiredDate);
+    }
+  }
+
+  var subject = (language === "EN" && productConfig.emailSubjectEN) ? productConfig.emailSubjectEN : productConfig.emailSubject;
+  var bodyText = (language === "EN" && productConfig.emailBodyEN) ? productConfig.emailBodyEN(namaUser) : productConfig.emailBody(namaUser);
+
+  try { MailApp.sendEmail({ to: emailUser.trim(), subject: subject, body: bodyText }); } catch(err) {}
+}
+
+// ============================================================
+// SECURITY HELPERS
+// ============================================================
+
+/**
+ * Hash a string using SHA-256, returns hex string.
+ * Used to store device tokens securely — plain tokens are never written to the sheet.
+ */
+function hashToken(token) {
+  if (!token) return "";
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token.toString());
+  return bytes.map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); }).join('');
+}
+
+/**
+ * Simple rate limiting via CacheService.
+ * Returns false if caller exceeded the limit (blocks request).
+ * Key is based on email to prevent per-email brute force.
+ */
+function checkRateLimit(key) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var cacheKey = 'rl_' + key.toString().toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 64);
+    var count = parseInt(cache.get(cacheKey) || "0", 10);
+    if (count >= 20) return false; // max 20 request/menit per email
+    cache.put(cacheKey, count + 1, 60);
+    return true;
+  } catch(e) {
+    return true; // jika cache error, jangan blokir
+  }
+}
+
+// ============================================================
+// BAGIAN 2: KOMUNIKASI (doGet)
+// ============================================================
+function doGet(e) {
+  try {
+    if (!e || !e.parameter) return ContentService.createTextOutput(JSON.stringify({"status": "GAGAL", "message": "Akses tidak valid."})).setMimeType(ContentService.MimeType.JSON);
+
+    // Validasi app_secret — tolak request tanpa secret yang valid
+    var expectedSecret = PropertiesService.getScriptProperties().getProperty('APP_SECRET');
+    var clientSecret = e.parameter.app_secret || "";
+    if (!expectedSecret || clientSecret !== expectedSecret) {
+      return ContentService.createTextOutput(JSON.stringify({"status": "GAGAL", "message": "Akses tidak diizinkan."})).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var action = e.parameter.action;
+    var emailDicari = e.parameter.email || "";
+    var deviceToken = e.parameter.token;
+    var productId = e.parameter.product;
+
+    // Cek versi aplikasi — tidak butuh email, dihandle sebelum email check
+    if (action === "version") {
+      return ContentService.createTextOutput(JSON.stringify({
+        "latest": "1.1.3",
+        "notes": "- Fix: gift tidak lagi terbaca dua kali saat live\n- Fix: notif overlay gift dihilangkan\n- Fix: auto-update kini benar-benar replace EXE otomatis",
+        "url": "https://github.com/arulbarker/tikdance-releases/releases/download/v1.1.3/TikDance-v1.1.3.zip"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (emailDicari.trim() === "") return ContentService.createTextOutput(JSON.stringify({"status": "GAGAL", "message": "Email kosong."})).setMimeType(ContentService.MimeType.JSON);
+
+    // Rate limiting — max 20 request/menit per email
+    if (!checkRateLimit(emailDicari)) {
+      return ContentService.createTextOutput(JSON.stringify({"status": "GAGAL", "message": "Terlalu banyak percobaan. Coba lagi dalam 1 menit."})).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var result = {"status": "GAGAL", "message": "Email tidak terdaftar."};
+    var userInfo = findUserAcrossProducts(ss, emailDicari, productId);
+
+    if (userInfo) {
+      var sheet = userInfo.sheet;
+      var rowIndex = userInfo.rowIndex;
+      var rowData = userInfo.rowData;
+      var productConfig = userInfo.productConfig;
+
+      // 🚨 CEK MASA AKTIF (SAAS) — handle Date object maupun string 🚨
+      if (productConfig.subscriptionDays > 0) {
+        var expiredRaw = rowData[8]; // Kolom I
+        var expDateObj = null;
+        if (expiredRaw instanceof Date) {
+          expDateObj = expiredRaw;
+        } else if (expiredRaw) {
+          expDateObj = new Date(expiredRaw); // handle jika tersimpan sebagai string
+        }
+        if (expDateObj && !isNaN(expDateObj.getTime())) {
+          var now = new Date();
+          if (now > expDateObj) {
+            // Expired — set status EXPIRED dan tolak masuk
+            sheet.getRange(rowIndex, 5).setValue("EXPIRED");
+            return ContentService.createTextOutput(JSON.stringify({
+              "status": "GAGAL",
+              "message": "Masa aktif berlangganan Anda telah habis pada " + expDateObj.toLocaleDateString('id-ID') + ". Silakan perpanjang."
+            })).setMimeType(ContentService.MimeType.JSON);
+          } else if (rowData[4] !== "AKTIF") {
+            // Expired date masih valid tapi status bukan AKTIF (misal: baru perpanjang)
+            // → reset otomatis ke AKTIF
+            sheet.getRange(rowIndex, 5).setValue("AKTIF");
+            rowData[4] = "AKTIF"; // update in-memory juga agar handleLogin tidak blokir
+          }
+        }
+      }
+
+      if (action == "login") result = handleLogin(sheet, rowIndex, rowData, emailDicari, deviceToken, productConfig);
+      else if (action == "cek") result = handleCheckSession(sheet, rowIndex, rowData, deviceToken, productConfig);
+      else if (action == "logout") result = handleLogout(sheet, rowIndex, rowData, deviceToken);
+    }
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({"status": "GAGAL", "message": "Error: " + error.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function findUserAcrossProducts(ss, email, productId) {
+  if (productId && PRODUCTS[productId]) {
+    var productConfig = PRODUCTS[productId];
+    var sheet = ss.getSheetByName(productConfig.sheetName);
+    if (sheet) {
+      var rowIndex = findUserInSheet(sheet, email);
+      if (rowIndex !== -1) {
+        var data = sheet.getDataRange().getValues();
+        return { sheet: sheet, rowIndex: rowIndex, rowData: data[rowIndex - 1], productConfig: productConfig };
+      }
+    }
+    return null;
+  }
+  for (var key in PRODUCTS) {
+    var config = PRODUCTS[key];
+    var sheet = ss.getSheetByName(config.sheetName);
+    if (sheet) {
+      var rowIndex = findUserInSheet(sheet, email);
+      if (rowIndex !== -1) {
+        var data = sheet.getDataRange().getValues();
+        return { sheet: sheet, rowIndex: rowIndex, rowData: data[rowIndex - 1], productConfig: config };
+      }
+    }
+  }
+  return null;
+}
+
+function findUserInSheet(sheet, email) {
+  if (!email) return -1;
+  var emailToFind = email.toString().trim().toLowerCase();
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][1] && data[i][1].toString().trim().toLowerCase() === emailToFind) return i + 1;
+  }
+  return -1;
+}
+
+// Helper: ambil expired_date sebagai string MM/dd/yyyy (untuk dikirim ke Python)
+function getExpiredDateString(expiredRaw) {
+  if (!expiredRaw) return null;
+  var expDate = expiredRaw instanceof Date ? expiredRaw : new Date(expiredRaw);
+  if (isNaN(expDate.getTime())) return null;
+  return Utilities.formatDate(expDate, "GMT+7", "MM/dd/yyyy");
+}
+
+function handleLogin(sheet, rowIndex, rowData, email, deviceToken, productConfig) {
+  if (rowData[4] !== "AKTIF") return { "status": "GAGAL", "message": "Akun Anda tidak aktif (EXPIRED). Silakan perpanjang." };
+  var maxSessions = rowData[6] || productConfig.defaultMaxDevices || 1;
+  if (maxSessions > 1) return handleMultiSessionLogin(sheet, rowIndex, rowData, email, deviceToken, maxSessions);
+  else return handleSingleSessionLogin(sheet, rowIndex, rowData, email, deviceToken);
+}
+
+// [FIX] Tambahkan expired_date di response agar Python bisa simpan untuk pengecekan offline
+// Token disimpan sebagai SHA-256 hash — plain token tidak pernah tersimpan di sheet
+function handleSingleSessionLogin(sheet, rowIndex, rowData, email, deviceToken) {
+  sheet.getRange(rowIndex, 6).setValue(hashToken(deviceToken));
+  var result = { "status": "SUKSES", "nama": rowData[2], "email": email, "maxDevices": 1, "activeDevices": 1 };
+  var expStr = getExpiredDateString(rowData[8]);
+  if (expStr) result["expired_date"] = expStr;
+  return result;
+}
+
+function handleMultiSessionLogin(sheet, rowIndex, rowData, email, deviceToken, maxSessions) {
+  var tokensJsonString = rowData[7] || "[]";
+  var tokens = [];
+  try { tokens = JSON.parse(tokensJsonString); if (!Array.isArray(tokens)) tokens = []; } catch (e) { tokens = []; }
+  var hashedToken = hashToken(deviceToken);
+  if (tokens.indexOf(hashedToken) === -1) {
+    tokens.push(hashedToken);
+    while (tokens.length > maxSessions) tokens.shift();
+  }
+  sheet.getRange(rowIndex, 8).setValue(JSON.stringify(tokens));
+  return { "status": "SUKSES", "nama": rowData[2], "email": email, "maxDevices": maxSessions, "activeDevices": tokens.length };
+}
+
+function handleCheckSession(sheet, rowIndex, rowData, deviceToken, productConfig) {
+  var maxSessions = rowData[6] || productConfig.defaultMaxDevices || 1;
+  if (maxSessions > 1) return handleMultiSessionCheck(sheet, rowIndex, rowData, deviceToken);
+  else return handleSingleSessionCheck(sheet, rowIndex, rowData, deviceToken);
+}
+
+// [FIX] Tambahkan expired_date di response VALID agar Python bisa update cache lokal
+// Bandingkan hash token, bukan plain token
+function handleSingleSessionCheck(sheet, rowIndex, rowData, deviceToken) {
+  if (hashToken(deviceToken) === rowData[5]) {
+    var result = { "status": "VALID" };
+    var expStr = getExpiredDateString(rowData[8]);
+    if (expStr) result["expired_date"] = expStr;
+    return result;
+  }
+  return { "status": "INVALID", "message": "Akun login di perangkat lain!" };
+}
+
+function handleMultiSessionCheck(sheet, rowIndex, rowData, deviceToken) {
+  var tokensJsonString = rowData[7] || "[]";
+  var tokens = [];
+  try { tokens = JSON.parse(tokensJsonString); if (!Array.isArray(tokens)) tokens = []; } catch (e) { tokens = []; }
+  if (tokens.indexOf(hashToken(deviceToken)) !== -1) return { "status": "VALID", "activeDevices": tokens.length };
+  else return { "status": "INVALID", "message": "Sesi Anda telah berakhir. Akun login di perangkat lain." };
+}
+
+function handleLogout(sheet, rowIndex, rowData, deviceToken) {
+  var maxSessions = rowData[6] || 1;
+  if (maxSessions > 1) {
+    var tokensJsonString = rowData[7] || "[]";
+    var tokens = [];
+    try { tokens = JSON.parse(tokensJsonString); if (!Array.isArray(tokens)) tokens = []; } catch (e) { tokens = []; }
+    var hashedToken = hashToken(deviceToken);
+    var newTokens = tokens.filter(function(token) { return token !== hashedToken; });
+    sheet.getRange(rowIndex, 8).setValue(JSON.stringify(newTokens));
+  } else {
+    sheet.getRange(rowIndex, 6).setValue("");
+  }
+  return { "status": "SUKSES", "message": "Logout berhasil" };
+}
+
+function createProductSheet(ss, sheetName) {
+  var sheet = ss.insertSheet(sheetName);
+  var headers = ["Waktu", "Email", "Nama", "Produk", "Status", "Token Session", "Max Sessions", "Token JSON", "Expired Date"];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  sheet.setFrozenRows(1);
+  return sheet;
+}

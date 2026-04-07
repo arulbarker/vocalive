@@ -60,7 +60,7 @@ class LicenseMonitor(QObject):
         try:
             print(f"[LICENSE_MONITOR] Checking license status at {datetime.now().strftime('%H:%M:%S')}")
 
-            # CRITICAL: Force online check to detect manual status changes
+            # Cek session via AppScript (action=cek)
             is_valid, message = self.license_manager.is_license_valid(force_online_check=True)
 
             if not is_valid:
