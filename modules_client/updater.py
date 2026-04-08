@@ -234,8 +234,13 @@ def install_update(zip_path: str) -> bool:
             ")\n"
             "\n"
             "echo.\n"
-            "echo Update berhasil! Meluncurkan VocaLive...\n"
-            f'start "" "{current_exe}"\n'
+            "echo ================================\n"
+            "echo  Update Berhasil!\n"
+            "echo  Silakan buka VocaLive kembali.\n"
+            "echo ================================\n"
+            # Tidak auto-launch — start "" dari batch menyebabkan DLL error PyInstaller.
+            # User buka VocaLive manual setelah window ini tutup (5 detik).
+            "timeout /t 5 /nobreak > nul\n"
             "\n"
             ":: Cleanup\n"
             f'del /f /q "{new_exe}" > nul 2>&1\n'

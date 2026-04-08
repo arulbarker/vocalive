@@ -242,9 +242,9 @@ function doGet(e) {
     if (action === "version") {
       var VERSION_INFO = {
         "vocalive": {
-          "latest": "1.0.11",
-          "notes": "- Fix FINAL: DLL error setelah update — batch hapus folder _MEI* lama sebelum launch EXE baru\n- Fix: tab Cohost & Analytics error saat startup (Access Denied path relatif)\n- Fix: tidak perlu login ulang setiap buka aplikasi\n- Fix: tombol Enter berfungsi di dialog login\n- Greeting AI: 10 sapaan unik via Gemini tiap 2 jam",
-          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.11/VocaLive-v1.0.11.zip"
+          "latest": "1.0.12",
+          "notes": "- Fix: tidak ada DLL error setelah update — hapus auto-launch dari batch\n- Fix: tab Cohost & Analytics error saat startup (Access Denied path relatif)\n- Fix: tidak perlu login ulang setiap buka aplikasi\n- Fix: tombol Enter berfungsi di dialog login\n- Greeting AI: 10 sapaan unik via Gemini tiap 2 jam",
+          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.12/VocaLive-v1.0.12.zip"
         },
         "tikdance": {
           "latest": "1.1.3",

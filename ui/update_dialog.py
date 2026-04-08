@@ -219,9 +219,9 @@ class UpdateDialog(QDialog):
         self.progress_bar.setValue(100)
         ok = install_update(zip_path)
         if ok:
-            self.progress_label.setText("Update siap! Aplikasi akan restart otomatis.")
+            self.progress_label.setText("✅ Update berhasil! Silakan buka VocaLive kembali secara manual.")
             self.progress_label.setStyleSheet(f"color: {C_SUCCESS}; font-weight: bold;")
-            QTimer.singleShot(1500, self._quit_for_update)
+            QTimer.singleShot(2500, self._quit_for_update)
         else:
             self._set_status("Gagal install. Coba jalankan sebagai Administrator.", error=True)
             self.btn_later.setEnabled(True)

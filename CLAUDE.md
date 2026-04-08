@@ -35,8 +35,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.9** | 2026-04-08 | Fix FINAL: os.startfile untuk batch update (ShellExecute, zero inherited handles), revert runtime_tmpdir ke None |
 | **v1.0.10** | 2026-04-08 | Fix: Access Denied saat startup EXE — greeting_cache & config/analytics pakai path absolut |
 | **v1.0.11** | 2026-04-08 | Fix: DLL error setelah update — batch hapus _MEI* lama sebelum launch EXE baru |
+| **v1.0.12** | 2026-04-08 | Fix: hapus auto-launch dari batch — start "" menyebabkan DLL error PyInstaller |
 
-**Versi saat ini: v1.0.11**
+**Versi saat ini: v1.0.12**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
