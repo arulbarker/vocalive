@@ -27,8 +27,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.1** | 2026-04-07 | Tambah suara Malaysia (ms-MY), fix TTS preview, fix Gemini WAV header |
 | **v1.0.2** | 2026-04-07 | Product popup: QVideoSink+QLabel, chroma key, drag/resize, toggle ON/OFF |
 | **v1.0.3** | 2026-04-07 | Email login via AppScript, auto-update system, voice selector + API key detection |
+| **v1.0.4** | 2026-04-08 | Greeting AI: 10 sapaan unik via Gemini tiap 2 jam, TTS cache, anti-spam TikTok |
 
-**Versi saat ini: v1.0.3**
+**Versi saat ini: v1.0.4**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
@@ -66,7 +67,7 @@ Tidak ada test suite — testing manual via `python main.py`. Pastikan `config/s
 
 ```
 main.py
-  → setup_validator (cek file kritis ada)
+  → setup_validator (cek settings.json ada — sheet.json & gcloud_tts_credentials.json sudah tidak dicek)
   → LicenseManager.is_license_valid() → AppScript HTTP (email-based)
       → jika gagal → show LicenseDialog (ui/license_dialog.py)
   → QApplication + MainWindow (ui/main_window.py)
@@ -164,7 +165,7 @@ LicenseManager.is_license_valid()
 - **`modules_client/license_monitor.py`** — re-check online setiap 4 jam saat runtime
 - **`ui/license_dialog.py`** — email input UI, `LoginWorker(QThread)` untuk non-blocking AppScript call
 
-AppScript URL aktif: ada di `config/license_config.json` lokal (tidak hardcode di kode utama untuk keamanan).
+AppScript URL aktif: **di-hardcode langsung di `modules_client/license_manager.py:35`** sebagai default. `config/license_config.json` hanya untuk override jika URL berubah — jika file ini tidak ada, URL default dari kode yang dipakai. Saat URL AppScript berubah, **update `license_manager.py:35` dulu**, baru `license_config.json`.
 
 ### Auto-Update System
 
@@ -280,6 +281,27 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 
 `platform` saat ini hanya `"TikTok"` — YouTube di-disable di UI tapi kode tetap ada (dormant).
 
+## Build Pitfalls — Wajib Dibaca Sebelum Modifikasi Build
+
+### Kontrak antara `main.py` dan `build_production_exe_fixed.py`
+
+`check_dependencies()` di `main.py` dan `excludes` di spec file **harus sinkron**. Jika sebuah library ada di `excludes` PyInstaller, jangan masukkan ke `required_modules` di `check_dependencies()` — EXE akan silent exit sebelum window muncul karena `return 1` terjadi tanpa dialog apapun (`console=False`).
+
+Library yang saat ini di-exclude dari build: `whisper`, `torch`, `transformers`, `speech_recognition`, `customtkinter`.
+Library yang wajib ada di `hiddenimports`: seluruh `cryptography.hazmat.primitives.*` (dipakai `license_manager.py`), `pygame.mixer`, `keyboard`.
+
+### Silent Crash di EXE
+
+EXE dibangun dengan `console=False` — tidak ada terminal, semua error sebelum window muncul **tidak terlihat user**. Saat debug EXE yang tidak mau terbuka, cek dua file ini setelah jalankan EXE:
+- `logs/system.log` — startup log dari `main.py`
+- `temp/error_log.txt` — uncaught exception yang di-catch oleh `handle_exception()`
+
+### FFmpeg
+
+FFmpeg **tidak disertakan** dalam build distribusi. Fitur Wav2Lip (lip-sync) sudah dihapus dari v1.0.0. `thirdparty/Wav2Lip/` adalah dead code — jangan ikutkan di build.
+
+---
+
 ## Frozen EXE Considerations
 
 - `getattr(sys, 'frozen', False)` dipakai untuk mendeteksi mode EXE dan adjust paths
@@ -312,7 +334,9 @@ Gunakan intermediate `pyqtSignal(QPixmap)` untuk pass frame ke main thread sebel
 
 ## Sensitive Files (Never Commit)
 
-`config/license.enc`, `config/device.hash`, `config/license_config.json`, `config/settings.json`, `config/sheet.json`, `config/user_lists.json`, `config/gcloud_tts_credentials.json`, `.env`
+`config/license.enc`, `config/device.hash`, `config/license_config.json`, `config/settings.json`, `config/user_lists.json`, `config/viewer_memory.json`, `config/live_state.json`, `.env`
+
+File legacy (masih ada di disk tapi tidak dipakai sistem baru): `config/sheet.json`, `config/gcloud_tts_credentials.json` — jangan commit, tapi juga tidak perlu dihapus.
 
 ---
 
