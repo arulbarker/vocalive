@@ -140,11 +140,21 @@ class SequentialGreetingManager:
         """Placeholder untuk backward compat — sistem ini selalu random."""
         pass
 
-    def force_regenerate(self):
-        """Manual trigger regenerasi dari tombol UI."""
-        if self.state == GreetingState.IDLE:
-            print("[GREETING_AI] Cannot regenerate — system not running")
+    def prepare_texts(self):
+        """
+        Generate 10 teks sapaan dan simpan ke active_texts.
+        Bisa dipanggil sebelum start() — misalnya saat user toggle ON di Config tab.
+        Tidak memulai playback timer.
+        """
+        if self.state not in (GreetingState.IDLE,):
+            print("[GREETING_AI] prepare_texts: sistem sedang berjalan, pakai force_regenerate")
             return
+        self._notify_status("preparing", "Sedang menyiapkan sapaan AI...")
+        prep_thread = threading.Thread(target=self._prepare_texts_only, daemon=True)
+        prep_thread.start()
+
+    def force_regenerate(self):
+        """Manual trigger regenerasi dari tombol UI (bisa dipanggil kapan saja)."""
         print("[GREETING_AI] Manual regenerate triggered")
         regen_thread = threading.Thread(target=self._regenerate, daemon=True)
         regen_thread.start()
@@ -163,18 +173,38 @@ class SequentialGreetingManager:
 
     # ─── Internal ─────────────────────────────────────────────────
 
-    def _prepare_and_start(self):
-        """Background thread: generate AI texts + prerender TTS, lalu mulai playback."""
+    def _prepare_texts_only(self):
+        """Background thread: hanya generate teks, simpan ke active_texts. Tidak mulai timer."""
         try:
             texts = self._generate_texts()
+            with self.texts_lock:
+                self.active_texts = texts
+            self._save_last_updated()
+            self._notify_status("active", f"Siap — {len(texts)} sapaan tersedia (belum live)")
+            print(f"[GREETING_AI] Texts prepared: {len(texts)} items (waiting for live start)")
+        except Exception as e:
+            print(f"[GREETING_AI] prepare_texts_only failed: {e}")
+            self._notify_status("error", f"Gagal menyiapkan sapaan: {e}")
+
+    def _prepare_and_start(self):
+        """Background thread: generate AI texts (atau pakai yg sudah ada) lalu mulai playback."""
+        try:
+            # Cek apakah teks sudah di-prepare sebelumnya (misal saat user toggle ON)
+            with self.texts_lock:
+                already_prepared = len(self.active_texts) > 0
+
+            if already_prepared:
+                print("[GREETING_AI] Using pre-prepared texts, skipping AI generation")
+                with self.texts_lock:
+                    texts = self.active_texts
+            else:
+                texts = self._generate_texts()
+                with self.texts_lock:
+                    self.active_texts = texts
+                self._save_last_updated()
 
             if self.should_stop:
                 return
-
-            with self.texts_lock:
-                self.active_texts = texts
-
-            self._save_last_updated()
 
             with self.thread_lock:
                 if not self.should_stop:

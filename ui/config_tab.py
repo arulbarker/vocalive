@@ -1838,7 +1838,12 @@ class ConfigTab(QWidget):
             if hasattr(self, 'greeting_ai_regen_btn'):
                 self.greeting_ai_regen_btn.setEnabled(enabled)
 
-            if not enabled:
+            if enabled:
+                # Generate sapaan segera saat toggle ON — siap sebelum live dimulai
+                from modules_client.sequential_greeting_manager import get_sequential_greeting_manager
+                mgr = get_sequential_greeting_manager()
+                mgr.prepare_texts()
+            else:
                 self.update_greeting_ai_status("idle", "Tidak aktif")
 
             print(f"[CONFIG] Greeting AI: {'ON' if enabled else 'OFF'}")
@@ -1846,11 +1851,17 @@ class ConfigTab(QWidget):
             print(f"[CONFIG] Error on_greeting_ai_enabled_changed: {e}")
 
     def on_greeting_ai_regen_clicked(self):
-        """Trigger manual regenerasi greeting AI."""
+        """Trigger manual regenerasi greeting AI (bisa sebelum atau saat live)."""
         try:
             from modules_client.sequential_greeting_manager import get_sequential_greeting_manager
+            from modules_client.sequential_greeting_manager import GreetingState
             mgr = get_sequential_greeting_manager()
-            mgr.force_regenerate()
+            if mgr.state == GreetingState.IDLE:
+                # Belum live — pakai prepare_texts (tidak mulai timer)
+                mgr.prepare_texts()
+            else:
+                # Sedang live — pakai force_regenerate (swap teks tanpa stop playback)
+                mgr.force_regenerate()
             self.update_greeting_ai_status("regenerating", "Memperbarui sapaan AI...")
         except Exception as e:
             print(f"[CONFIG] Error on_greeting_ai_regen_clicked: {e}")
