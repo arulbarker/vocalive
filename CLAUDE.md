@@ -30,8 +30,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.4** | 2026-04-08 | Greeting AI: 10 sapaan unik via Gemini tiap 2 jam, TTS cache, anti-spam TikTok |
 | **v1.0.5** | 2026-04-08 | Fix: DLL error setelah auto-update, login ulang setiap restart, Enter di login dialog |
 | **v1.0.6** | 2026-04-08 | Fix: auto-update gagal copy EXE — tambah delay 3s + retry 15x otomatis |
+| **v1.0.7** | 2026-04-08 | Fix: DLL error setelah auto-update — launch EXE baru dari direktori yang benar |
 
-**Versi saat ini: v1.0.6**
+**Versi saat ini: v1.0.7**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 

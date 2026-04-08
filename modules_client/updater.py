@@ -199,6 +199,7 @@ def install_update(zip_path: str) -> bool:
             return True
 
         current_exe = sys.executable
+        current_exe_dir = os.path.dirname(current_exe)
         current_pid = os.getpid()
 
         bat_path = os.path.join(temp_dir, "do_update.bat")
@@ -257,7 +258,7 @@ def install_update(zip_path: str) -> bool:
             "echo.\n"
             "echo Update berhasil! Meluncurkan VocaLive versi terbaru...\n"
             "timeout /t 1 /nobreak >NUL\n"
-            f"start \"\" \"{current_exe}\"\n"
+            f"start /D \"{current_exe_dir}\" \"\" \"{current_exe}\"\n"
             "\n"
             ":: Cleanup: hapus backup dan folder temp\n"
             f"del \"{current_exe}.bak\" >NUL 2>&1\n"
