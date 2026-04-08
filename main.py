@@ -298,10 +298,9 @@ def check_dependencies():
     required_modules = {
         'PyQt6': 'pip install PyQt6',
         'requests': 'pip install requests',
-        'sounddevice': 'pip install sounddevice',
-        'soundfile': 'pip install soundfile',
         'keyboard': 'pip install keyboard',
-        'pathlib': 'Built-in module'
+        'pygame': 'pip install pygame',
+        'cryptography': 'pip install cryptography',
     }
     
     missing_modules = []

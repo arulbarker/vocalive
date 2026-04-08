@@ -95,8 +95,6 @@ class SetupValidator:
         """Check if all required files exist"""
         required_files = {
             "settings.json": "Application settings and API keys",
-            "sheet.json": "Google Sheets credentials for license validation",
-            "gcloud_tts_credentials.json": "Google Cloud TTS credentials"
         }
 
         for filename, description in required_files.items():
@@ -113,9 +111,6 @@ class SetupValidator:
         """Validate JSON syntax of config files"""
         json_files = [
             "settings.json",
-            "sheet.json",
-            "gcloud_tts_credentials.json",
-            "google_oauth.json"  # Optional
         ]
 
         for filename in json_files:
@@ -207,8 +202,6 @@ class SetupValidator:
     def _check_dependencies(self):
         """Check if required Python packages are available"""
         required_packages = [
-            ("gspread", "Google Sheets integration"),
-            ("google.oauth2", "Google authentication"),
             ("cryptography", "License encryption"),
             ("requests", "HTTP requests"),
             ("pygame", "Audio playback")

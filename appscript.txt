@@ -242,9 +242,9 @@ function doGet(e) {
     if (action === "version") {
       var VERSION_INFO = {
         "vocalive": {
-          "latest": "1.0.8",
-          "notes": "- Fix FINAL: DLL error setelah auto-update (pakai explorer launch seperti double-click)\n- Fix: auto-update otomatis retry sampai berhasil\n- Fix: tidak perlu login ulang setiap buka aplikasi\n- Fix: tombol Enter berfungsi di dialog login\n- Greeting AI: 10 sapaan unik via Gemini tiap 2 jam",
-          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.8/VocaLive-v1.0.8.zip"
+          "latest": "1.0.9",
+          "notes": "- Fix FINAL: DLL error setelah auto-update — os.startfile (ShellExecute, zero inherited handles)\n- Fix: auto-update otomatis retry sampai berhasil\n- Fix: tidak perlu login ulang setiap buka aplikasi\n- Fix: tombol Enter berfungsi di dialog login\n- Greeting AI: 10 sapaan unik via Gemini tiap 2 jam",
+          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.9/VocaLive-v1.0.9.zip"
         },
         "tikdance": {
           "latest": "1.1.3",
