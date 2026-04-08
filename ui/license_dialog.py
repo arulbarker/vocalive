@@ -93,6 +93,7 @@ class LicenseDialog(QDialog):
 
         self._build_ui()
         self._center()
+        self.email_input.setFocus()
 
     # ------------------------------------------------------------------
     # UI Build
@@ -247,6 +248,7 @@ class LicenseDialog(QDialog):
         lay.setSpacing(12)
 
         self.btn_cancel = QPushButton("Batal")
+        self.btn_cancel.setAutoDefault(False)
         self.btn_cancel.setMinimumHeight(42)
         self.btn_cancel.setFont(QFont("Segoe UI", 10))
         self.btn_cancel.setStyleSheet(f"""
@@ -277,6 +279,7 @@ class LicenseDialog(QDialog):
             QPushButton:pressed {{ background: #1A44C0; }}
             QPushButton:disabled {{ background: {C_SECONDARY}; color: {C_MUTED}; }}
         """)
+        self.btn_login.setDefault(True)
         self.btn_login.clicked.connect(self._start_login)
         lay.addWidget(self.btn_login)
 
@@ -349,6 +352,14 @@ class LicenseDialog(QDialog):
         cur = self.status_text.textCursor()
         cur.movePosition(cur.MoveOperation.End)
         self.status_text.setTextCursor(cur)
+
+    def keyPressEvent(self, event):
+        """Pastikan Enter selalu trigger login, tidak close dialog."""
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if self.btn_login.isEnabled():
+                self._start_login()
+        else:
+            super().keyPressEvent(event)
 
     def closeEvent(self, event):
         if self.worker and self.worker.isRunning():

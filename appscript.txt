@@ -242,9 +242,9 @@ function doGet(e) {
     if (action === "version") {
       var VERSION_INFO = {
         "vocalive": {
-          "latest": "1.0.4",
-          "notes": "- Greeting AI: 10 sapaan unik via Gemini tiap 2 jam\n- TTS cache untuk greeting (hemat API call)\n- Anti-spam TikTok: interval jitter ±25%\n- Sistem login email via Lynk.id/Whop\n- TTS Google Cloud + Gemini\n- Cohost AI TikTok Live\n- Auto-update system\n- Product popup video",
-          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.4/VocaLive-v1.0.4.zip"
+          "latest": "1.0.5",
+          "notes": "- Fix: DLL error setelah auto-update (tidak perlu reinstall manual)\n- Fix: tidak perlu login ulang setiap buka aplikasi\n- Fix: tombol Enter berfungsi di dialog login\n- Greeting AI: 10 sapaan unik via Gemini tiap 2 jam\n- TTS cache untuk greeting (hemat API call)",
+          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.5/VocaLive-v1.0.5.zip"
         },
         "tikdance": {
           "latest": "1.1.3",

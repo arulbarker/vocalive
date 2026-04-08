@@ -28,8 +28,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.2** | 2026-04-07 | Product popup: QVideoSink+QLabel, chroma key, drag/resize, toggle ON/OFF |
 | **v1.0.3** | 2026-04-07 | Email login via AppScript, auto-update system, voice selector + API key detection |
 | **v1.0.4** | 2026-04-08 | Greeting AI: 10 sapaan unik via Gemini tiap 2 jam, TTS cache, anti-spam TikTok |
+| **v1.0.5** | 2026-04-08 | Fix: DLL error setelah auto-update, login ulang setiap restart, Enter di login dialog |
 
-**Versi saat ini: v1.0.4**
+**Versi saat ini: v1.0.5**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
