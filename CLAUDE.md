@@ -33,8 +33,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.7** | 2026-04-08 | Fix: DLL error setelah auto-update — launch EXE baru dari direktori yang benar |
 | **v1.0.8** | 2026-04-08 | Fix: ganti start ke explorer untuk launch EXE baru (os.startfile equivalent) |
 | **v1.0.9** | 2026-04-08 | Fix FINAL: os.startfile untuk batch update (ShellExecute, zero inherited handles), revert runtime_tmpdir ke None |
+| **v1.0.10** | 2026-04-08 | Fix: Access Denied saat startup EXE — greeting_cache & config/analytics pakai path absolut |
 
-**Versi saat ini: v1.0.9**
+**Versi saat ini: v1.0.10**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
