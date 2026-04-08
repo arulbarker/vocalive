@@ -31,8 +31,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.5** | 2026-04-08 | Fix: DLL error setelah auto-update, login ulang setiap restart, Enter di login dialog |
 | **v1.0.6** | 2026-04-08 | Fix: auto-update gagal copy EXE — tambah delay 3s + retry 15x otomatis |
 | **v1.0.7** | 2026-04-08 | Fix: DLL error setelah auto-update — launch EXE baru dari direktori yang benar |
+| **v1.0.8** | 2026-04-08 | Fix: ganti start ke explorer untuk launch EXE baru (os.startfile equivalent) |
 
-**Versi saat ini: v1.0.7**
+**Versi saat ini: v1.0.8**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
