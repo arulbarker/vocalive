@@ -212,10 +212,17 @@ def install_update(zip_path: str) -> bool:
             "echo ================================\n"
             "echo.\n"
             "echo Menunggu aplikasi selesai...\n"
-            # Tunggu 2 detik agar app benar-benar exit
-            "timeout /t 2 /nobreak > nul\n"
-            # Force-kill sisa proses (mencegah file lock dari inherited handle)
+            # Tunggu 3 detik: Python/PyInstaller perlu waktu graceful shutdown + cleanup _MEI
+            "timeout /t 3 /nobreak > nul\n"
+            # Force-kill sisa proses jika belum mati
             f'taskkill /f /im "{exe_name}" > nul 2>&1\n'
+            "timeout /t 2 /nobreak > nul\n"
+            "\n"
+            # KRITIS: Hapus semua folder _MEI* lama di %TEMP% agar EXE baru
+            # selalu extract fresh. PyInstaller bisa reuse folder lama yg corrupt/salah versi
+            # → DLL error. Setelah taskkill, proses lama sudah mati → folder aman dihapus.
+            "echo Membersihkan folder temp lama...\n"
+            'for /d %%D in ("%TEMP%\\_MEI*") do rd /s /q "%%D" 2>nul\n'
             "timeout /t 1 /nobreak > nul\n"
             "\n"
             "echo Menginstall update...\n"
