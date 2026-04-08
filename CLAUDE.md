@@ -186,23 +186,28 @@ MainWindow.__init__()
           → ada update → _on_update_found() → QMessageBox popup
               → user klik "Update Sekarang" → UpdateDialog (ui/update_dialog.py)
                   → DownloadThread → download ZIP dari GitHub
-                  → install_update() → batch script PID-based → app quit → batch copy EXE → relaunch
+                  → install_update() → os.startfile(bat) → app quit 100ms → batch copy EXE → relaunch
 ```
 
 - **`modules_client/updater.py`** — `check_for_update()`, `UpdateCheckThread`, `DownloadThread`, `install_update()`
 - **`ui/update_dialog.py`** — progress bar download, konfirmasi restart
 - Tombol **"🔄 Cek Update"** di main window untuk cek manual
 - Tombol **"⬆️ Update Tersedia!"** muncul di toolbar jika ada versi baru (orange, hidden by default)
-- Batch script pakai **PID-based wait** (`tasklist /FI "PID eq {pid}"`) — bukan nama proses — lebih reliable
+
+**Kritis — Auto-Update Timing:**
+- `install_update()` calls `os.startfile(bat_path)` → batch berjalan detached
+- `update_dialog.py` quit app setelah **100ms** (bukan delay panjang!) → PyInstaller cleanup `_MEI` selesai
+- Batch tunggu **5 detik** → `_MEI` sudah bersih → `taskkill` safety net → bersihkan `_MEI*` → copy EXE → `start ""`
+- **JANGAN tambah delay** di `QTimer.singleShot` — delay panjang menyebabkan `taskkill /f` membunuh paksa sebelum `_MEI` cleanup selesai → DLL error di EXE baru
 
 ### Version Management
 
 **`version.py`** adalah satu-satunya sumber kebenaran versi:
 
 ```python
-VERSION = "1.0.3"           # ← SATU-SATUNYA TEMPAT GANTI VERSI
-VERSION_WIN = "1.0.3.0"    # untuk EXE metadata Windows
-VERSION_TUPLE = (1, 0, 3, 0)
+VERSION = "1.0.13"          # ← SATU-SATUNYA TEMPAT GANTI VERSI
+VERSION_WIN = "1.0.13.0"   # untuk EXE metadata Windows
+VERSION_TUPLE = (1, 0, 13, 0)
 ```
 
 Files yang import dari `version.py`: `updater.py`, `ui/main_window.py`, `main.py`, `build_production_exe_fixed.py`. Jangan hardcode versi di tempat lain.
@@ -224,6 +229,10 @@ Sistem popup video produk saat AI merespons terkait produk tertentu:
 3. **`sequential_greeting_manager.py`** — Timer-based playback, mode random
 
 Interval timer diatur di Cohost Tab (bukan Config Tab).
+
+**Path `greeting_cache/`**: selalu absolut — `Path(sys.executable).parent / "greeting_cache"` (frozen) atau `project_root / "greeting_cache"` (dev). Jangan pakai path relatif → Access Denied di EXE mode.
+
+**Path `config/analytics/`**: sama, pakai `_get_app_root()` di `analytics_manager.py`.
 
 ### TTS API Key Detection & Voice Filtering
 
