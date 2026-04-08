@@ -263,7 +263,7 @@ class SequentialGreetingManager:
         print(f"[GREETING_AI] Next playback in {jittered:.1f}s")
 
     def _play_random_greeting(self):
-        """Pilih teks acak dan putar via cache (lazy render jika belum ada)."""
+        """Pilih teks acak dan putar via cache (lazy render + simpan, hemat API)."""
         chosen_text = None
         with self.texts_lock:
             if self.active_texts:
@@ -278,8 +278,7 @@ class SequentialGreetingManager:
             from modules_client.greeting_tts_cache import get_greeting_cache
             voice_name, language_code = self._get_voice_params()
             cache = get_greeting_cache()
-            # play_from_cache_or_generate: cache hit = putar file, miss = render + cache + putar
-            success = cache.play_from_cache_or_generate(
+            success = cache.play_greeting_with_cache(
                 text=chosen_text,
                 voice_name=voice_name,
                 language_code=language_code
@@ -318,6 +317,13 @@ class SequentialGreetingManager:
 
             if self.should_stop:
                 return
+
+            # Hapus cache audio lama sebelum teks baru aktif
+            try:
+                from modules_client.greeting_tts_cache import get_greeting_cache
+                get_greeting_cache().cleanup_greeting_audio()
+            except Exception as ce:
+                print(f"[GREETING_AI] Cache cleanup error (non-fatal): {ce}")
 
             with self.texts_lock:
                 self.active_texts = new_texts

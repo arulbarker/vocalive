@@ -293,6 +293,126 @@ class GreetingTTSCache:
         except Exception as e:
             print(f"[TTS_CACHE] Error during cleanup: {e}")
     
+    def play_greeting_with_cache(self, text: str, voice_name: str, language_code: str) -> bool:
+        """
+        Play greeting dengan cache — hemat API call.
+        Cache HIT: putar file, 0 API call.
+        Cache MISS: generate via API → simpan ke cache → putar.
+        """
+        if not text or not text.strip():
+            return False
+        text = text.strip()
+
+        # voice_name dari _get_voice_params sudah clean (sudah strip gender suffix)
+        clean_voice = voice_name.split('(')[0].strip() if voice_name else ""
+        is_gemini = clean_voice.startswith("Gemini-")
+        ext = ".wav" if is_gemini else ".mp3"
+
+        hash_key = self._generate_hash(text, clean_voice, language_code)
+        cache_path = self.cache_dir / f"greeting_{hash_key}{ext}"
+
+        if not cache_path.exists():
+            print(f"[TTS_CACHE] Cache MISS — generate: {text[:40]}...")
+            ok = self._generate_audio_to_file(text, clean_voice, language_code, cache_path)
+            if not ok:
+                # Fallback: speak() langsung (1 API call, tidak di-cache)
+                print("[TTS_CACHE] generate gagal, fallback ke speak()")
+                from modules_server.tts_engine import speak
+                return speak(text=text, voice_name=voice_name, language_code=language_code)
+        else:
+            print(f"[TTS_CACHE] Cache HIT — {cache_path.name}")
+
+        from modules_server.tts_engine import get_tts_engine
+        get_tts_engine()._play_audio_file(str(cache_path))
+        return True
+
+    def _generate_audio_to_file(self, text: str, clean_voice: str, language_code: str, cache_path: Path) -> bool:
+        """Generate TTS audio via API dan simpan langsung ke cache_path (tanpa playback)."""
+        try:
+            import requests
+            import base64
+            from modules_server.tts_engine import get_tts_engine
+
+            engine = get_tts_engine()
+            api_key = engine.google_api_key
+            if not api_key:
+                print("[TTS_CACHE] Tidak ada API key — skip generate")
+                return False
+
+            if clean_voice.startswith("Gemini-"):
+                raw_voice = clean_voice.replace("Gemini-", "", 1)
+                url = (
+                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"gemini-2.5-flash-preview-tts:generateContent?key={api_key}"
+                )
+                payload = {
+                    "contents": [{"parts": [{"text": text}]}],
+                    "generationConfig": {
+                        "responseModalities": ["AUDIO"],
+                        "speechConfig": {
+                            "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": raw_voice}}
+                        }
+                    }
+                }
+                resp = requests.post(url, json=payload, timeout=20)
+                resp.raise_for_status()
+                data = resp.json()
+                inline = data["candidates"][0]["content"]["parts"][0]["inlineData"]
+                audio_bytes = base64.b64decode(inline["data"])
+                mime_type = inline.get("mimeType", "audio/L16;rate=24000")
+
+                sample_rate = 24000
+                for part in mime_type.split(';'):
+                    part = part.strip()
+                    if part.startswith("rate="):
+                        try:
+                            sample_rate = int(part.split("=")[1])
+                        except Exception:
+                            pass
+
+                import wave as _wave
+                with _wave.open(str(cache_path), 'wb') as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(sample_rate)
+                    wf.writeframes(audio_bytes)
+            else:
+                url = f"https://texttospeech.googleapis.com/v1/text:synthesize?key={api_key}"
+                payload = {
+                    "input": {"text": text},
+                    "voice": {"languageCode": language_code, "name": clean_voice},
+                    "audioConfig": {"audioEncoding": "MP3"}
+                }
+                resp = requests.post(url, json=payload, timeout=15)
+                resp.raise_for_status()
+                audio_bytes = base64.b64decode(resp.json()["audioContent"])
+                cache_path.write_bytes(audio_bytes)
+
+            print(f"[TTS_CACHE] ✅ Audio disimpan: {cache_path.name} ({cache_path.stat().st_size} bytes)")
+            return True
+
+        except Exception as e:
+            print(f"[TTS_CACHE] ❌ Generate audio gagal: {e}")
+            try:
+                if cache_path.exists():
+                    cache_path.unlink()
+            except Exception:
+                pass
+            return False
+
+    def cleanup_greeting_audio(self) -> None:
+        """Hapus semua file greeting_*.mp3/wav — dipanggil saat teks di-regenerate tiap 2 jam."""
+        deleted = 0
+        for f in self.cache_dir.glob("greeting_*.*"):
+            if f.suffix.lower() in ('.mp3', '.wav'):
+                try:
+                    f.unlink()
+                    deleted += 1
+                except Exception as e:
+                    print(f"[TTS_CACHE] Gagal hapus {f.name}: {e}")
+        if deleted:
+            print(f"[TTS_CACHE] Cleaned {deleted} file greeting audio lama")
+
     def prerender_batch(self, texts: list, voice_name: str, language_code: str, batch_id: str) -> list:
         """
         Pre-render list teks ke file audio dengan prefix batch_id.
