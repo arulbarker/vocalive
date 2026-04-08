@@ -212,18 +212,15 @@ def install_update(zip_path: str) -> bool:
             "echo ================================\n"
             "echo.\n"
             "echo Menunggu aplikasi selesai...\n"
-            # Tunggu 3 detik: Python/PyInstaller perlu waktu graceful shutdown + cleanup _MEI
-            "timeout /t 3 /nobreak > nul\n"
-            # Force-kill sisa proses jika belum mati
+            # Tunggu 5 detik — app quit langsung (100ms), PyInstaller cleanup _MEI ~1-2s.
+            # 5 detik memberi margin aman agar _MEI sudah bersih sebelum copy + start.
+            "timeout /t 5 /nobreak > nul\n"
+            # Force-kill sisa proses jika entah kenapa belum mati
             f'taskkill /f /im "{exe_name}" > nul 2>&1\n'
-            "timeout /t 2 /nobreak > nul\n"
-            "\n"
-            # KRITIS: Hapus semua folder _MEI* lama di %TEMP% agar EXE baru
-            # selalu extract fresh. PyInstaller bisa reuse folder lama yg corrupt/salah versi
-            # → DLL error. Setelah taskkill, proses lama sudah mati → folder aman dihapus.
-            "echo Membersihkan folder temp lama...\n"
-            'for /d %%D in ("%TEMP%\\_MEI*") do rd /s /q "%%D" 2>nul\n'
             "timeout /t 1 /nobreak > nul\n"
+            "\n"
+            # Bersihkan _MEI* lama sebagai safety net (jika graceful cleanup gagal)
+            'for /d %%D in ("%TEMP%\\_MEI*") do rd /s /q "%%D" 2>nul\n'
             "\n"
             "echo Menginstall update...\n"
             ":retry\n"
@@ -233,14 +230,8 @@ def install_update(zip_path: str) -> bool:
             "    goto retry\n"
             ")\n"
             "\n"
-            "echo.\n"
-            "echo ================================\n"
-            "echo  Update Berhasil!\n"
-            "echo  Silakan buka VocaLive kembali.\n"
-            "echo ================================\n"
-            # Tidak auto-launch — start "" dari batch menyebabkan DLL error PyInstaller.
-            # User buka VocaLive manual setelah window ini tutup (5 detik).
-            "timeout /t 5 /nobreak > nul\n"
+            "echo Update berhasil! Meluncurkan VocaLive...\n"
+            f'start "" "{current_exe}"\n'
             "\n"
             ":: Cleanup\n"
             f'del /f /q "{new_exe}" > nul 2>&1\n'
