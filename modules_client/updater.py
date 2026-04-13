@@ -247,6 +247,16 @@ def install_update(zip_path: str) -> bool:
         # os.startfile tidak mewarisi handle apapun → copy langsung berhasil.
         os.startfile(bat_path)
 
+        # Send PostHog event
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("update_installed", {
+                "old_version": CURRENT_VERSION,
+                "new_version": "unknown",
+            })
+        except Exception:
+            pass
+
         logger.info("Update installer diluncurkan via os.startfile (detached)")
         return True
 
