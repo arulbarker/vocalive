@@ -50,6 +50,10 @@ if sys.platform == "win32":
 import traceback
 import warnings
 
+# Telemetry keys — isi sebelum build EXE production
+POSTHOG_PROJECT_KEY = os.environ.get("POSTHOG_PROJECT_KEY", "")
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+
 # Filter out annoying Qt CSS warnings
 warnings.filterwarnings('ignore', message='.*Unknown property.*')
 
@@ -489,7 +493,12 @@ def main():
         return 1
     
     logger.info("License validation completed successfully")
-    
+
+    # Init monitoring (PostHog + Sentry) — non-blocking, never crashes app
+    from modules_client.telemetry import init as telemetry_init, capture as telemetry_capture
+    telemetry_init(POSTHOG_PROJECT_KEY, SENTRY_DSN, _APP_VERSION)
+    telemetry_capture("app_launched")
+
     # LAUNCH GUI APPLICATION
     try:
         print("[GUI] Launching VocaLive GUI...")
