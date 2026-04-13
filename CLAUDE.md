@@ -79,10 +79,13 @@ main.py
   → setup_validator (cek settings.json ada — sheet.json & gcloud_tts_credentials.json sudah tidak dicek)
   → LicenseManager.is_license_valid() → AppScript HTTP (email-based)
       → jika gagal → show LicenseDialog (ui/license_dialog.py)
+  → telemetry.init(POSTHOG_PROJECT_KEY, SENTRY_DSN, VERSION)
+  → telemetry.capture("app_launched")
   → QApplication + MainWindow (ui/main_window.py)
       → UpdateCheckThread (5 detik setelah startup)
       → UnifiedCommentProcessor (filter pipeline)
       → Tab: CohostTabBasic, ConfigTab, ProductSceneTab, AnalyticsTab, UserManagementTab
+  → [app exit] → telemetry.close()  # flush Sentry session sebagai 'healthy'
 ```
 
 `main.py` harus **pertama kali** set UTF-8 encoding untuk stdout/stderr sebelum import apapun — kritis di mode EXE.
@@ -91,7 +94,7 @@ main.py
 
 | Direktori | Tanggung Jawab |
 |-----------|----------------|
-| `modules_client/` | GUI process: config, AI calls, TTS wrapper, license, analytics, updater |
+| `modules_client/` | GUI process: config, AI calls, TTS wrapper, license, analytics, updater, telemetry |
 | `modules_server/` | TTS engine (Google Cloud REST + Gemini TTS + pygame playback) |
 | `listeners/` | **Dead code** — listener aktif ada di `cohost_tab_basic.py` sebagai QThread inline |
 | `ui/` | Semua tab PyQt6, design system di `theme.py` |
@@ -222,6 +225,46 @@ Sistem popup video produk saat AI merespons terkait produk tertentu:
 
 **`scene_id` BUKAN nomor keranjang TikTok** — hanya ID internal. Format daftar scene: `scene_id=N : nama` bukan `N. nama`. `scene_id = 0` = tidak tampilkan popup.
 
+### Telemetry System (PostHog + Sentry)
+
+**`modules_client/telemetry.py`** — never-crash wrapper untuk PostHog analytics + Sentry error tracking.
+
+```python
+# Panggil di main.py setelah license valid:
+telemetry.init(POSTHOG_PROJECT_KEY, SENTRY_DSN, VERSION)
+
+# Kirim event custom:
+telemetry.capture("event_name", {"key": "value"})
+
+# Panggil sebelum app.quit():
+telemetry.close()  # flush Sentry → session tercatat 'healthy' di Release Health
+```
+
+**Prinsip desain:**
+- Semua SDK calls dibungkus `try/except Exception` — telemetry **tidak boleh crash app**
+- Lazy import: `import posthog` / `import sentry_sdk` di dalam fungsi, bukan top-level
+- `distinct_id` PostHog = device_id dari `config/device_id.dat` (sama dengan license system)
+- `auto_session_tracking=True` di Sentry untuk Release Health (crash-free sessions %)
+
+**Keys (di-hardcode di `main.py` sebagai default, bisa override via env var):**
+- `POSTHOG_PROJECT_KEY` = `phc_uYwH9ByGUHwcPfnX4ThEUxePHMmycTRWictJoyTBnzSA`
+- `SENTRY_DSN` = `https://61478c4ae40ad572269d7e6245405aae@o4511211608211456.ingest.us.sentry.io/4511213925367808`
+
+**Events yang di-track:**
+
+| Event | File | Trigger |
+|-------|------|---------|
+| `app_launched` | `main.py` | Setiap startup berhasil (setelah license valid) |
+| `tiktok_connected` | `cohost_tab_basic.py` | TikTok Live terhubung |
+| `cohost_reply_generated` | `cohost_tab_basic.py` | AI reply dihasilkan (props: `scene_id`, `scene_name`, `provider`) |
+| `tts_played` | `modules_server/tts_engine.py` | TTS berhasil diputar |
+| `tts_failed` | `modules_server/tts_engine.py` | TTS gagal |
+| `scene_triggered` | `ui/product_popup_window.py` | Popup produk ditampilkan (props: `scene_id`, `scene_name`) |
+| `scene_dismissed` | `ui/product_popup_window.py` | Popup produk ditutup |
+| `update_installed` | `modules_client/updater.py` | User install update baru |
+
+**Build:** `posthog`, `sentry_sdk`, `sentry_sdk.integrations`, `sentry_sdk.integrations.stdlib`, `sentry_sdk.integrations.excepthook` harus ada di `hiddenimports` PyInstaller.
+
 ### Greeting System
 
 1. **`config_tab.py`** — UI untuk mengisi 10 slot teks sapaan
@@ -306,7 +349,7 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 `check_dependencies()` di `main.py` dan `excludes` di spec file **harus sinkron**. Jika sebuah library ada di `excludes` PyInstaller, jangan masukkan ke `required_modules` di `check_dependencies()` — EXE akan silent exit sebelum window muncul karena `return 1` terjadi tanpa dialog apapun (`console=False`).
 
 Library yang saat ini di-exclude dari build: `whisper`, `torch`, `transformers`, `speech_recognition`, `customtkinter`.
-Library yang wajib ada di `hiddenimports`: seluruh `cryptography.hazmat.primitives.*` (dipakai `license_manager.py`), `pygame.mixer`, `keyboard`.
+Library yang wajib ada di `hiddenimports`: seluruh `cryptography.hazmat.primitives.*` (dipakai `license_manager.py`), `pygame.mixer`, `keyboard`, `posthog`, `sentry_sdk`, `sentry_sdk.integrations`, `sentry_sdk.integrations.stdlib`, `sentry_sdk.integrations.excepthook`.
 
 ### Silent Crash di EXE
 
@@ -340,6 +383,32 @@ Gunakan `setAutoFillBackground(False)` + posisi manual via `setGeometry()` tanpa
 
 **`QVideoSink` thread safety**: `videoFrameChanged` emit dari multimedia thread.
 Gunakan intermediate `pyqtSignal(QPixmap)` untuk pass frame ke main thread sebelum `setPixmap()`.
+
+---
+
+## Developer Tools — MCP Servers
+
+MCP (Model Context Protocol) server dikonfigurasi di `~/.claude/settings.json` untuk Claude Code.
+
+| Server | URL | Scope |
+|--------|-----|-------|
+| **Sentry** | `https://mcp.sentry.dev/mcp/arl-group` | Org `arl-group` (HTTP streamable) |
+| **PostHog** | `https://mcp.posthog.com/mcp` | OAuth, US region (HTTP streamable) |
+| **GitHub** | `npx @modelcontextprotocol/server-github` | PAT via env `GITHUB_PERSONAL_ACCESS_TOKEN` |
+| **Chrome DevTools** | `npx chrome-devtools-mcp --autoConnect` | Local browser debugging |
+
+Dengan MCP aktif, bisa tanya langsung ke Claude Code:
+- *"Berapa app_launched events hari ini?"* → PostHog MCP
+- *"Ada error baru di Sentry minggu ini?"* → Sentry MCP
+- *"Buat feature flag baru di PostHog"* → PostHog MCP
+
+**Web Monitoring Dashboard** (`D:/VIBE CODING VERSION/vocalive-monitor/`):
+- Next.js 16+ + TypeScript + Tailwind CSS + Vitest
+- `lib/posthog.ts` — `getDailyEventCounts()`, `getDailyActiveUsers()`
+- `lib/sentry.ts` — `getActiveIssues()`, `getTodayErrorCount()`
+- `lib/gemini.ts` — `generateDailyDigest()` via Gemini 2.0 Flash
+- `lib/apps-config.ts` — registry 4 aplikasi yang dipantau
+- `.env.local` — POSTHOG_PERSONAL_API_KEY, SENTRY_AUTH_TOKEN, dll
 
 ---
 
