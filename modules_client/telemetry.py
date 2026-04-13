@@ -97,10 +97,15 @@ def close():
     if not _initialized:
         return
     try:
+        import posthog
+        posthog.shutdown()  # flush + tunggu background thread selesai kirim events
+    except Exception as e:
+        logger.debug(f"[telemetry] posthog shutdown failed (non-fatal): {e}")
+    try:
         import sentry_sdk
         sentry_sdk.flush(timeout=2)
     except Exception as e:
-        logger.debug(f"[telemetry] flush failed (non-fatal): {e}")
+        logger.debug(f"[telemetry] sentry flush failed (non-fatal): {e}")
 
 def set_user_context(extra: dict):
     """Tambah context ke Sentry untuk error report berikutnya."""
