@@ -152,7 +152,15 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
             # API call dengan context-aware prompt
             # PERFORMANCE: Use fast_mode for chat replies (5s timeout, 80 tokens)
             reply, scene_id = generate_reply_with_scene(prompt, fast_mode=True)
-            
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("cohost_reply_generated", {
+                    "provider": cfg.get("ai_provider", "unknown"),
+                    "has_scene": scene_id > 0,
+                })
+            except Exception:
+                pass
+
             # Clean AI response from emojis, formatting, and special chars
             if reply:
                 reply = self._clean_ai_response(reply)
@@ -448,6 +456,12 @@ class SimpleTikTokListener(QThread):
                 self.logMessage.emit("INFO", f"✅ Connected to TikTok Live: @{self.username}")
                 self.logMessage.emit("INFO", f"🎬 Ready to receive comments! Connection timestamp: {self.start_timestamp:.2f}")
                 self.logMessage.emit("INFO", f"📝 Comment filtering: Will process real-time comments immediately")
+                try:
+                    from modules_client.telemetry import capture as _tel_capture
+                    from modules_client.config_manager import ConfigManager as _CM
+                    _tel_capture("tiktok_connected", {"nickname": _CM().get("tiktok_nickname", "")})
+                except Exception:
+                    pass
             
             @self.client.on(CommentEvent)
             async def on_comment(event):
