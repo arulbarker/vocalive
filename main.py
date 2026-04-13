@@ -619,6 +619,13 @@ def main():
             
             print("[GUI] VocaLive GUI closed")
             logger.info(f"GUI application closed with exit code: {exit_code}")
+
+            # Flush Sentry — tutup sesi Release Health dengan bersih
+            try:
+                from modules_client.telemetry import close as telemetry_close
+                telemetry_close()
+            except Exception:
+                pass
             
             # Force cleanup before exit
             try:

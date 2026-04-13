@@ -55,6 +55,7 @@ def init(posthog_api_key: str, sentry_dsn: str, version: str):
             release=f"vocalive@{version}",
             traces_sample_rate=0.1,
             attach_stacktrace=True,
+            auto_session_tracking=True,  # Release Health: track crash-free sessions
         )
         logger.info("[telemetry] Sentry initialized")
     except Exception as e:
@@ -87,6 +88,19 @@ def capture(event: str, properties: dict = None):
         posthog.capture(_device_id, event, props)
     except Exception as e:
         logger.debug(f"[telemetry] capture failed (non-fatal): {e}")
+
+def close():
+    """
+    Flush semua pending events dan tutup sesi Sentry dengan bersih.
+    Panggil sebelum app.quit() agar Release Health mencatat sesi sebagai 'healthy'.
+    """
+    if not _initialized:
+        return
+    try:
+        import sentry_sdk
+        sentry_sdk.flush(timeout=2)
+    except Exception as e:
+        logger.debug(f"[telemetry] flush failed (non-fatal): {e}")
 
 def set_user_context(extra: dict):
     """Tambah context ke Sentry untuk error report berikutnya."""
