@@ -61,11 +61,11 @@ def init(posthog_api_key: str, sentry_dsn: str, version: str):
     except Exception as e:
         logger.warning(f"[telemetry] Sentry init failed (non-fatal): {e}")
 
-    # Init PostHog
+    # Init PostHog (SDK v7+)
     try:
         import posthog
         posthog.api_key = posthog_api_key
-        posthog.host = "https://app.posthog.com"
+        posthog.host = "https://us.i.posthog.com"  # US ingestion endpoint (bukan app.posthog.com)
         posthog.disabled = not posthog_api_key  # disable jika key kosong
         logger.info("[telemetry] PostHog initialized")
     except Exception as e:
@@ -77,6 +77,7 @@ def capture(event: str, properties: dict = None):
     """
     Kirim custom event ke PostHog.
     Selalu sertakan app=vocalive dan version otomatis.
+    PostHog SDK v7+: capture(event, distinct_id=..., properties=...)
     """
     if not _initialized:
         return
@@ -85,7 +86,7 @@ def capture(event: str, properties: dict = None):
         props = {"app": "vocalive", "version": _app_version}
         if properties:
             props.update(properties)
-        posthog.capture(_device_id, event, props)
+        posthog.capture(event, distinct_id=_device_id, properties=props)
     except Exception as e:
         logger.debug(f"[telemetry] capture failed (non-fatal): {e}")
 
