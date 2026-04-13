@@ -47,6 +47,10 @@ python-dotenv
 Pillow
 pyparsing
 
+# Monitoring & Error Tracking
+posthog>=3.0.0
+sentry-sdk>=1.40.0
+
 # Tambahkan di requirements.txt
 ctranslate2>=3.15.0
 sentencepiece>=0.1.99

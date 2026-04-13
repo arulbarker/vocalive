@@ -144,6 +144,12 @@ a = Analysis(
         "keyboard", "psutil", "packaging",
         # TTS
         "gtts",
+        # Monitoring & Error Tracking
+        "posthog",
+        "sentry_sdk",
+        "sentry_sdk.integrations",
+        "sentry_sdk.integrations.stdlib",
+        "sentry_sdk.integrations.excepthook",
     ],
     hookspath=[],
     runtime_hooks=[],
