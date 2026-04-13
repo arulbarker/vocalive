@@ -454,17 +454,35 @@ def speak(text: str, language_code: str = "id-ID", voice_name: str = None, outpu
             # Use parameters directly without modifying engine instance
             # This ensures each call uses the specified voice without affecting other calls
             result = engine.speak(text, voice_name=voice_name, language_code=language_code)
-        
+
         # Call on_finished callback if provided
         if on_finished and callable(on_finished):
             try:
                 on_finished()
             except Exception as e:
                 logger.warning(f"on_finished callback failed: {e}")
-        
+
+        if result:
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("tts_played", {"voice": voice_name or "default"})
+            except Exception:
+                pass
+        else:
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("tts_failed", {"voice": voice_name or "default", "error": "engine_speak_failed"})
+            except Exception:
+                pass
+
         return result
     except Exception as e:
         logger.error(f"TTS speak function failed: {e}")
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("tts_failed", {"voice": voice_name or "default", "error": "exception_in_speak"})
+        except Exception:
+            pass
         return False
 
 # For backward compatibility
