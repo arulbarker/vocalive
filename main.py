@@ -50,9 +50,9 @@ if sys.platform == "win32":
 import traceback
 import warnings
 
-# Telemetry keys — isi sebelum build EXE production
-POSTHOG_PROJECT_KEY = os.environ.get("POSTHOG_PROJECT_KEY", "")
-SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+# Telemetry keys
+POSTHOG_PROJECT_KEY = os.environ.get("POSTHOG_PROJECT_KEY", "phc_uYwH9ByGUHwcPfnX4ThEUxePHMmycTRWictJoyTBnzSA")
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "https://36285212ea9b793a18450e93b1427fed@o4511211608211456.ingest.us.sentry.io/4511213909573632")
 
 # Filter out annoying Qt CSS warnings
 warnings.filterwarnings('ignore', message='.*Unknown property.*')
