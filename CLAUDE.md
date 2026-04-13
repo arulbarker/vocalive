@@ -250,6 +250,11 @@ telemetry.close()  # flush Sentry → session tercatat 'healthy' di Release Heal
 - `POSTHOG_PROJECT_KEY` = `phc_uYwH9ByGUHwcPfnX4ThEUxePHMmycTRWictJoyTBnzSA`
 - `SENTRY_DSN` = `https://61478c4ae40ad572269d7e6245405aae@o4511211608211456.ingest.us.sentry.io/4511213925367808`
 
+**PostHog SDK v7 — Breaking Changes:**
+- Host ingestion: `https://us.i.posthog.com` (bukan `app.posthog.com`)
+- `capture()` signature: `posthog.capture(event, distinct_id=..., properties=...)` (bukan positional args lama)
+- `close()` harus panggil `posthog.shutdown()` dulu sebelum `sentry_sdk.flush()` agar background thread selesai kirim
+
 **Events yang di-track:**
 
 | Event | File | Trigger |
