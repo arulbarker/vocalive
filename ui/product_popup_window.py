@@ -66,6 +66,10 @@ class ProductPopupWindow(QWidget):
         self._resize_start_geom: QRect | None = None
         self._is_playing = False
 
+        # Telemetry — scene info
+        self._tel_scene_id = 0
+        self._tel_scene_name = ""
+
         # ── Video label — render frame via GDI (ter-capture TikTok Live Studio) ──
         self._video_label = QLabel(self)
         self._video_label.setStyleSheet("background-color: black;")
@@ -289,6 +293,16 @@ class ProductPopupWindow(QWidget):
 
     def show_product(self, video_path: str):
         """Tampilkan video produk. HARUS dipanggil dari Qt main thread."""
+        # Telemetry — scene_triggered event
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("scene_triggered", {
+                "scene_id": getattr(self, '_tel_scene_id', 0),
+                "scene_name": getattr(self, '_tel_scene_name', ''),
+            })
+        except Exception:
+            pass
+
         if not os.path.exists(video_path):
             logger.warning(f"ProductPopupWindow: file tidak ditemukan: {video_path}")
             return
@@ -342,6 +356,15 @@ class ProductPopupWindow(QWidget):
         self.update()
 
     def _close_window(self):
+        # Telemetry — scene_dismissed event
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("scene_dismissed", {
+                "scene_id": getattr(self, '_tel_scene_id', 0),
+            })
+        except Exception:
+            pass
+
         self._stop_event.set()
         self._player.stop()
         self._is_playing = False
@@ -352,6 +375,15 @@ class ProductPopupWindow(QWidget):
         self.update()
 
     def closeEvent(self, event):
+        # Telemetry — scene_dismissed event
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("scene_dismissed", {
+                "scene_id": getattr(self, '_tel_scene_id', 0),
+            })
+        except Exception:
+            pass
+
         self._stop_event.set()
         self._player.stop()
         super().closeEvent(event)

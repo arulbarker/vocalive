@@ -1738,6 +1738,9 @@ class CohostTabBasicSimplified(QWidget):
                 else:
                     scene = self._psm_cache.get_scene_by_id(scene_id)
                     if scene and scene.get('video_path'):
+                        # Set telemetry scene info before showing product
+                        self._popup_window._tel_scene_id = scene_id
+                        self._popup_window._tel_scene_name = scene.get('name', '')
                         self._popup_window.show_product(scene['video_path'])
                         self.logger.info(f"[POPUP] Popup: scene_id={scene_id}, name={scene.get('name')}")
             except Exception as e:
