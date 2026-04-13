@@ -52,7 +52,7 @@ import warnings
 
 # Telemetry keys
 POSTHOG_PROJECT_KEY = os.environ.get("POSTHOG_PROJECT_KEY", "phc_uYwH9ByGUHwcPfnX4ThEUxePHMmycTRWictJoyTBnzSA")
-SENTRY_DSN = os.environ.get("SENTRY_DSN", "https://36285212ea9b793a18450e93b1427fed@o4511211608211456.ingest.us.sentry.io/4511213909573632")
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "https://61478c4ae40ad572269d7e6245405aae@o4511211608211456.ingest.us.sentry.io/4511213925367808")
 
 # Filter out annoying Qt CSS warnings
 warnings.filterwarnings('ignore', message='.*Unknown property.*')
