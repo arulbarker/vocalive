@@ -57,7 +57,13 @@ def init(posthog_api_key: str, sentry_dsn: str, version: str):
             attach_stacktrace=True,
             auto_session_tracking=True,  # Release Health: track crash-free sessions
         )
-        logger.info("[telemetry] Sentry initialized")
+        # Identify user di Sentry — sama dengan distinct_id PostHog untuk korelasi
+        sentry_sdk.set_user({"id": _device_id})
+        sentry_sdk.set_context("app", {
+            "app_name": "vocalive",
+            "app_version": version,
+        })
+        logger.info("[telemetry] Sentry initialized (user=%s)", _device_id)
     except Exception as e:
         logger.warning(f"[telemetry] Sentry init failed (non-fatal): {e}")
 
@@ -109,13 +115,18 @@ def close():
         logger.debug(f"[telemetry] sentry flush failed (non-fatal): {e}")
 
 def set_user_context(extra: dict):
-    """Tambah context ke Sentry untuk error report berikutnya."""
+    """Tambah context ke Sentry dan PostHog untuk identifikasi lebih detail."""
     if not _initialized:
         return
+    # Sentry: set_context (modern API, bukan configure_scope)
     try:
         import sentry_sdk
-        with sentry_sdk.configure_scope() as scope:
-            for key, value in extra.items():
-                scope.set_extra(key, value)
+        sentry_sdk.set_context("user_context", extra)
     except Exception as e:
-        logger.debug(f"[telemetry] set_user_context failed (non-fatal): {e}")
+        logger.debug(f"[telemetry] sentry set_context failed (non-fatal): {e}")
+    # PostHog: set user properties via $set event (SDK v7 tidak punya identify())
+    try:
+        import posthog
+        posthog.capture("$set", distinct_id=_device_id, properties={"$set": extra})
+    except Exception as e:
+        logger.debug(f"[telemetry] posthog $set failed (non-fatal): {e}")

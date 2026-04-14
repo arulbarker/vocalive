@@ -495,8 +495,9 @@ def main():
     logger.info("License validation completed successfully")
 
     # Init monitoring (PostHog + Sentry) — non-blocking, never crashes app
-    from modules_client.telemetry import init as telemetry_init, capture as telemetry_capture
+    from modules_client.telemetry import init as telemetry_init, capture as telemetry_capture, set_user_context
     telemetry_init(POSTHOG_PROJECT_KEY, SENTRY_DSN, _APP_VERSION)
+    set_user_context({"platform": "windows", "app_mode": APP_MODE})
     telemetry_capture("app_launched")
 
     # LAUNCH GUI APPLICATION
