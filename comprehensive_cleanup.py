@@ -159,12 +159,14 @@ class ComprehensiveCleanup:
         try:
             logger.debug("💾 Cleaning up cache systems...")
             
-            # Cleanup CacheManager
+            # Cleanup CacheManager (module removed — skip silently)
             try:
                 from modules_client.cache_manager import CacheManager
                 cache_manager = CacheManager()
                 cache_manager.cleanup()
                 logger.debug("✅ Cache manager cleaned")
+            except ImportError:
+                pass  # module tidak ada, skip
             except Exception as e:
                 self.cleanup_errors.append(f"Cache manager cleanup error: {e}")
             
