@@ -56,17 +56,22 @@ python main.py
 
 # Build production EXE + ZIP siap upload (output: dist/VocaLive-vX.X.X.zip)
 python build_production_exe_fixed.py
+
+# Verify telemetry (PostHog + Sentry) kirim ke server
+python vtest_telemetry.py
 ```
 
-Tidak ada test suite — testing manual via `python main.py`. Pastikan `config/settings.json` berisi API key yang valid.
+Tidak ada test suite formal — testing manual via `python main.py`. `vtest_telemetry.py` untuk verifikasi koneksi telemetry (25 checks). Pastikan `config/settings.json` berisi API key yang valid.
 
 ### Alur Rilis Versi Baru
 
-1. Update `VERSION` di `version.py` (satu-satunya tempat)
-2. Update tabel Version History di CLAUDE.md ini
-3. Jalankan `python build_production_exe_fixed.py`
-4. Upload `dist/VocaLive-vX.X.X.zip` ke GitHub Releases: `https://github.com/arulbarker/vocalive-release/releases` dengan tag `vX.X.X`
-5. Update `appscript.txt` bagian `VERSION_INFO["vocalive"]` → `latest`, `url` → deploy ulang ke Google Apps Script
+1. Buat branch baru dari `main` (misal `release/v1.0.14`)
+2. Update `VERSION` di `version.py` (satu-satunya tempat)
+3. Update tabel Version History di CLAUDE.md ini
+4. Jalankan `python build_production_exe_fixed.py`
+5. Upload `dist/VocaLive-vX.X.X.zip` ke GitHub Releases: `https://github.com/arulbarker/vocalive-release/releases` dengan tag `vX.X.X`
+6. Update `appscript.txt` bagian `VERSION_INFO["vocalive"]` → `latest`, `url` → deploy ulang ke Google Apps Script
+7. Merge branch ke `main`
 
 ---
 
@@ -76,13 +81,15 @@ Tidak ada test suite — testing manual via `python main.py`. Pastikan `config/s
 
 ```
 main.py
-  → setup_validator (cek settings.json ada — sheet.json & gcloud_tts_credentials.json sudah tidak dicek)
+  → setup_validator (cek settings.json ada)
   → LicenseManager.is_license_valid() → AppScript HTTP (email-based)
       → jika gagal → show LicenseDialog (ui/license_dialog.py)
   → telemetry.init(POSTHOG_PROJECT_KEY, SENTRY_DSN, VERSION)
+  → telemetry.set_user_context({"platform": "windows", "app_mode": APP_MODE})
   → telemetry.capture("app_launched")
   → QApplication + MainWindow (ui/main_window.py)
       → UpdateCheckThread (5 detik setelah startup)
+      → LicenseMonitor (re-check setiap 4 jam)
       → UnifiedCommentProcessor (filter pipeline)
       → Tab: CohostTabBasic, ConfigTab, ProductSceneTab, AnalyticsTab, UserManagementTab
   → [app exit] → telemetry.close()  # flush Sentry session sebagai 'healthy'
@@ -92,13 +99,20 @@ main.py
 
 ### Module Split
 
-| Direktori | Tanggung Jawab |
-|-----------|----------------|
+| Direktori / File | Tanggung Jawab |
+|------------------|----------------|
 | `modules_client/` | GUI process: config, AI calls, TTS wrapper, license, analytics, updater, telemetry |
 | `modules_server/` | TTS engine (Google Cloud REST + Gemini TTS + pygame playback) |
 | `listeners/` | **Dead code** — listener aktif ada di `cohost_tab_basic.py` sebagai QThread inline |
 | `ui/` | Semua tab PyQt6, design system di `theme.py` |
 | `thirdparty/pytchat_ng/` | Fork pytchat yang dimodifikasi — **jangan ganti dengan pytchat dari pip** |
+| `comprehensive_cleanup.py` | Cleanup resources saat app exit (pytchat, TTS, cache, storage) |
+| `sales_templates.py` | Template prompt AI untuk mode jualan |
+| `vtest_telemetry.py` | Verification test: cek koneksi PostHog + Sentry ke server (dev tool) |
+
+**Dead code modules** (ada di disk tapi tidak aktif):
+- `modules_client/chatgpt_ai.py` — provider lama, diganti Gemini/DeepSeek
+- `ui/developer_tab.py` — tab yang belum diwiring ke MainWindow
 
 `modules_client/tts_engine.py` adalah thin wrapper yang mendelegasikan ke `modules_server/tts_engine.py`.
 
@@ -232,6 +246,12 @@ Sistem popup video produk saat AI merespons terkait produk tertentu:
 ```python
 # Panggil di main.py setelah license valid:
 telemetry.init(POSTHOG_PROJECT_KEY, SENTRY_DSN, VERSION)
+# → Sentry: set_user(device_id) + set_context("app") otomatis saat init
+
+# Set user context (opsional, untuk enrichment):
+telemetry.set_user_context({"platform": "windows", "app_mode": APP_MODE})
+# → Sentry: set_context("user_context", extra)
+# → PostHog: capture("$set", properties={"$set": extra})
 
 # Kirim event custom:
 telemetry.capture("event_name", {"key": "value"})
@@ -245,6 +265,9 @@ telemetry.close()  # flush Sentry → session tercatat 'healthy' di Release Heal
 - Lazy import: `import posthog` / `import sentry_sdk` di dalam fungsi, bukan top-level
 - `distinct_id` PostHog = device_id dari `config/device_id.dat` (sama dengan license system)
 - `auto_session_tracking=True` di Sentry untuk Release Health (crash-free sessions %)
+- **Korelasi PostHog ↔ Sentry**: kedua service pakai `device_id` yang sama sebagai user identifier
+- `sentry_sdk.set_user({"id": device_id})` dipanggil saat init — setiap error ter-identifikasi per device
+- `set_user_context()` pakai API modern (`set_context`, bukan `configure_scope` deprecated)
 
 **Keys (di-hardcode di `main.py` sebagai default, bisa override via env var):**
 - `POSTHOG_PROJECT_KEY` = `phc_uYwH9ByGUHwcPfnX4ThEUxePHMmycTRWictJoyTBnzSA`
@@ -254,6 +277,7 @@ telemetry.close()  # flush Sentry → session tercatat 'healthy' di Release Heal
 - Host ingestion: `https://us.i.posthog.com` (bukan `app.posthog.com`)
 - `capture()` signature: `posthog.capture(event, distinct_id=..., properties=...)` (bukan positional args lama)
 - `close()` harus panggil `posthog.shutdown()` dulu sebelum `sentry_sdk.flush()` agar background thread selesai kirim
+- **Tidak ada `posthog.identify()`** — set user properties via `posthog.capture("$set", properties={"$set": {...}})`
 
 **Events yang di-track:**
 
@@ -297,6 +321,14 @@ Signal `ConfigTab.tts_key_type_changed(str)` → connect di `main_window.py` →
 - `config/settings.json` — user config (tidak di-commit). Dibuat dari `settings_default.json` saat pertama kali.
 - `config/settings_default.json` — template bersih tanpa API key, di-ship bersama EXE
 - `config/voices.json` — daftar suara: `gtts_standard`, `chirp3`, `gemini_flash`. Chirp3 HD tidak tersedia untuk `ms-MY`.
+- `config/product_scenes.json` — daftar produk + video path untuk popup scene
+- `config/cohost_seller_products.json` — daftar produk untuk context prompt AI
+- `config/user_lists.json` — blacklist/whitelist user TikTok
+- `config/viewer_memory.json` — memory viewer yang pernah chat
+- `config/live_state.json` — state sesi live terakhir
+- `config/device_id.dat` — device fingerprint (JSON, dibuat license_manager)
+- `config/database_maintenance.json` — jadwal maintenance cache/data
+- `config/last_cleanup.json` — timestamp cleanup terakhir
 - `modules_client/config_manager.py` — interface `cfg.get(key, default)` / `cfg.set(key, value)`
 
 ---
@@ -407,13 +439,7 @@ Dengan MCP aktif, bisa tanya langsung ke Claude Code:
 - *"Ada error baru di Sentry minggu ini?"* → Sentry MCP
 - *"Buat feature flag baru di PostHog"* → PostHog MCP
 
-**Web Monitoring Dashboard** (`D:/VIBE CODING VERSION/vocalive-monitor/`):
-- Next.js 16+ + TypeScript + Tailwind CSS + Vitest
-- `lib/posthog.ts` — `getDailyEventCounts()`, `getDailyActiveUsers()`
-- `lib/sentry.ts` — `getActiveIssues()`, `getTodayErrorCount()`
-- `lib/gemini.ts` — `generateDailyDigest()` via Gemini 2.0 Flash
-- `lib/apps-config.ts` — registry 4 aplikasi yang dipantau
-- `.env.local` — POSTHOG_PERSONAL_API_KEY, SENTRY_AUTH_TOKEN, dll
+**Monitoring**: Pantau langsung dari dashboard PostHog (https://us.posthog.com) dan Sentry (https://sentry.io). Tidak perlu dashboard custom — semua data events dan errors sudah terkirim ke server masing-masing.
 
 ---
 
@@ -426,7 +452,7 @@ Dengan MCP aktif, bisa tanya langsung ke Claude Code:
 
 ## Sensitive Files (Never Commit)
 
-`config/license.enc`, `config/device.hash`, `config/license_config.json`, `config/settings.json`, `config/user_lists.json`, `config/viewer_memory.json`, `config/live_state.json`, `.env`
+`config/license.enc`, `config/device.hash`, `config/device_id.dat`, `config/license_config.json`, `config/settings.json`, `config/user_lists.json`, `config/viewer_memory.json`, `config/live_state.json`, `config/analytics/`, `.env`, `vtest_output.txt`
 
 File legacy (masih ada di disk tapi tidak dipakai sistem baru): `config/sheet.json`, `config/gcloud_tts_credentials.json` — jangan commit, tapi juga tidak perlu dihapus.
 
@@ -474,8 +500,9 @@ YouTube di-disable bukan dihapus. Untuk re-enable:
 
 ## Git Workflow
 
+- **Default branch: `main`** (branch `master` dan `versi12-masih-force-close` sudah dihapus)
 - **SELALU** buat branch baru sebelum perubahan yang berarti. Format: `feat/`, `fix/`, `hotfix/`, `experiment/`
-- **JANGAN** coding langsung di `main` atau `master`
+- **JANGAN** coding langsung di `main`
 - Format commit wajib: `type: deskripsi (bahasa Indonesia)` — type valid: `feat fix refactor style docs chore security`
 - Setelah commit, **selalu push** ke remote branch yang sama
 - **JANGAN PERNAH** jalankan `git merge`, `git rebase main`, atau `git push --force` tanpa izin eksplisit
@@ -495,7 +522,7 @@ Format tanya: `"⚠️ Saya akan [tindakan]. Ini akan mempengaruhi [dampak]. Bol
 
 ## Larangan Keras
 
-- JANGAN merge ke main tanpa izin
+- JANGAN merge ke `main` tanpa izin
 - JANGAN hapus file tanpa izin
 - JANGAN commit credential/secret
 - JANGAN install dependency tanpa konfirmasi
