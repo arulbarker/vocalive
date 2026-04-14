@@ -1,6 +1,7 @@
 # modules_client/greeting_tts_cache.py - TTS Cache Manager untuk Custom Greeting System
 
 import os
+import sys
 import json
 import hashlib
 from pathlib import Path
@@ -8,12 +9,22 @@ from datetime import datetime, timedelta
 from modules_server.tts_engine import speak, get_tts_engine
 import shutil
 
+
+def _get_app_root() -> Path:
+    """Root folder app: direktori EXE (frozen) atau root project (dev)."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent
+
+
 class GreetingTTSCache:
     """Manage TTS cache for custom greeting system with hash-based filenames"""
-    
-    def __init__(self, cache_dir="greeting_cache"):
+
+    def __init__(self, cache_dir=None):
+        if cache_dir is None:
+            cache_dir = _get_app_root() / "greeting_cache"
         self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(exist_ok=True)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         # Cache metadata file
         self.metadata_file = self.cache_dir / "cache_metadata.json"
@@ -104,8 +115,8 @@ class GreetingTTSCache:
             extension = ".wav" if is_gemini else ".mp3"
 
             # Create temp directory to monitor for generated files
-            temp_dir = Path("temp")
-            temp_dir.mkdir(exist_ok=True)
+            temp_dir = _get_app_root() / "temp"
+            temp_dir.mkdir(parents=True, exist_ok=True)
 
             # Get list of existing temp files before generation
             before_files = set(temp_dir.glob("*.*"))

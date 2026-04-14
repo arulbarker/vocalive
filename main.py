@@ -50,6 +50,10 @@ if sys.platform == "win32":
 import traceback
 import warnings
 
+# Telemetry keys
+POSTHOG_PROJECT_KEY = os.environ.get("POSTHOG_PROJECT_KEY", "phc_uYwH9ByGUHwcPfnX4ThEUxePHMmycTRWictJoyTBnzSA")
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "https://61478c4ae40ad572269d7e6245405aae@o4511211608211456.ingest.us.sentry.io/4511213925367808")
+
 # Filter out annoying Qt CSS warnings
 warnings.filterwarnings('ignore', message='.*Unknown property.*')
 
@@ -298,10 +302,9 @@ def check_dependencies():
     required_modules = {
         'PyQt6': 'pip install PyQt6',
         'requests': 'pip install requests',
-        'sounddevice': 'pip install sounddevice',
-        'soundfile': 'pip install soundfile',
         'keyboard': 'pip install keyboard',
-        'pathlib': 'Built-in module'
+        'pygame': 'pip install pygame',
+        'cryptography': 'pip install cryptography',
     }
     
     missing_modules = []
@@ -490,7 +493,13 @@ def main():
         return 1
     
     logger.info("License validation completed successfully")
-    
+
+    # Init monitoring (PostHog + Sentry) — non-blocking, never crashes app
+    from modules_client.telemetry import init as telemetry_init, capture as telemetry_capture, set_user_context
+    telemetry_init(POSTHOG_PROJECT_KEY, SENTRY_DSN, _APP_VERSION)
+    set_user_context({"platform": "windows", "app_mode": APP_MODE})
+    telemetry_capture("app_launched")
+
     # LAUNCH GUI APPLICATION
     try:
         print("[GUI] Launching VocaLive GUI...")
@@ -611,6 +620,13 @@ def main():
             
             print("[GUI] VocaLive GUI closed")
             logger.info(f"GUI application closed with exit code: {exit_code}")
+
+            # Flush Sentry — tutup sesi Release Health dengan bersih
+            try:
+                from modules_client.telemetry import close as telemetry_close
+                telemetry_close()
+            except Exception:
+                pass
             
             # Force cleanup before exit
             try:

@@ -32,7 +32,7 @@ import time
 # ============================================================
 # KONFIGURASI — Update URL saat deploy AppScript baru
 # ============================================================
-APPSCRIPT_URL = "https://script.google.com/macros/s/PASTE_APPSCRIPT_DEPLOYMENT_URL_HERE/exec"
+APPSCRIPT_URL = "https://script.google.com/macros/s/AKfycbzPixa15u3SyndcKTcusIpxChqepUsgGfxTm1_nIaD1RHo-3TpLRbkHmesm-p2QkgWjEA/exec"
 APP_SECRET = "TKD-2025-s3cr3t-k3y-9xKm2pQr7nVw4L"
 PRODUCT_ID = "vocalive"
 REQUEST_TIMEOUT = 15  # detik
@@ -88,6 +88,21 @@ class LicenseManager:
     def _get_device_fingerprint(self) -> str:
         if self._device_id:
             return self._device_id
+
+        # Coba baca dari file — stabil antar sesi, tidak bergantung hardware yg bisa berubah
+        # (mis. MAC address randomized di Windows 11, VPN, dsb.)
+        stable_id_path = self.config_dir / "device_id.dat"
+        if stable_id_path.exists():
+            try:
+                with open(stable_id_path, 'r') as f:
+                    stored = json.load(f)
+                if stored.get("id"):
+                    self._device_id = stored["id"]
+                    return self._device_id
+            except Exception:
+                pass  # File rusak → generate ulang
+
+        # Compute dari hardware (pertama kali saja)
         try:
             system_info = []
             try:
@@ -128,12 +143,19 @@ class LicenseManager:
             system_info.append(f"OS:{platform.system()}_{platform.release()}")
             fingerprint_data = "|".join(system_info)
             self._device_id = hashlib.sha256(fingerprint_data.encode()).hexdigest()[:32]
-            return self._device_id
         except Exception as e:
             self.logger.error(f"Error generating device fingerprint: {e}")
             fallback = f"{platform.node()}_{uuid.getnode()}"
             self._device_id = hashlib.md5(fallback.encode()).hexdigest()
-            return self._device_id
+
+        # Simpan ke file agar ID stabil di sesi berikutnya
+        try:
+            with open(stable_id_path, 'w') as f:
+                json.dump({"id": self._device_id, "created": datetime.now().isoformat()}, f)
+        except Exception:
+            pass
+
+        return self._device_id
 
     # ------------------------------------------------------------------
     # Enkripsi lokal (hardware-locked, sama seperti versi lama)

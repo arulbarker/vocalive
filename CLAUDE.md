@@ -28,8 +28,17 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.2** | 2026-04-07 | Product popup: QVideoSink+QLabel, chroma key, drag/resize, toggle ON/OFF |
 | **v1.0.3** | 2026-04-07 | Email login via AppScript, auto-update system, voice selector + API key detection |
 | **v1.0.4** | 2026-04-08 | Greeting AI: 10 sapaan unik via Gemini tiap 2 jam, TTS cache, anti-spam TikTok |
+| **v1.0.5** | 2026-04-08 | Fix: DLL error setelah auto-update, login ulang setiap restart, Enter di login dialog |
+| **v1.0.6** | 2026-04-08 | Fix: auto-update gagal copy EXE — tambah delay 3s + retry 15x otomatis |
+| **v1.0.7** | 2026-04-08 | Fix: DLL error setelah auto-update — launch EXE baru dari direktori yang benar |
+| **v1.0.8** | 2026-04-08 | Fix: ganti start ke explorer untuk launch EXE baru (os.startfile equivalent) |
+| **v1.0.9** | 2026-04-08 | Fix FINAL: os.startfile untuk batch update (ShellExecute, zero inherited handles), revert runtime_tmpdir ke None |
+| **v1.0.10** | 2026-04-08 | Fix: Access Denied saat startup EXE — greeting_cache & config/analytics pakai path absolut |
+| **v1.0.11** | 2026-04-08 | Fix: DLL error setelah update — batch hapus _MEI* lama sebelum launch EXE baru |
+| **v1.0.12** | 2026-04-08 | Fix: hapus auto-launch dari batch — start "" menyebabkan DLL error PyInstaller |
+| **v1.0.13** | 2026-04-08 | Fix ROOT CAUSE: quit langsung (100ms) bukan 2.5s — _MEI cleanup sebelum batch start |
 
-**Versi saat ini: v1.0.4**
+**Versi saat ini: v1.0.13**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
@@ -70,10 +79,13 @@ main.py
   → setup_validator (cek settings.json ada — sheet.json & gcloud_tts_credentials.json sudah tidak dicek)
   → LicenseManager.is_license_valid() → AppScript HTTP (email-based)
       → jika gagal → show LicenseDialog (ui/license_dialog.py)
+  → telemetry.init(POSTHOG_PROJECT_KEY, SENTRY_DSN, VERSION)
+  → telemetry.capture("app_launched")
   → QApplication + MainWindow (ui/main_window.py)
       → UpdateCheckThread (5 detik setelah startup)
       → UnifiedCommentProcessor (filter pipeline)
       → Tab: CohostTabBasic, ConfigTab, ProductSceneTab, AnalyticsTab, UserManagementTab
+  → [app exit] → telemetry.close()  # flush Sentry session sebagai 'healthy'
 ```
 
 `main.py` harus **pertama kali** set UTF-8 encoding untuk stdout/stderr sebelum import apapun — kritis di mode EXE.
@@ -82,7 +94,7 @@ main.py
 
 | Direktori | Tanggung Jawab |
 |-----------|----------------|
-| `modules_client/` | GUI process: config, AI calls, TTS wrapper, license, analytics, updater |
+| `modules_client/` | GUI process: config, AI calls, TTS wrapper, license, analytics, updater, telemetry |
 | `modules_server/` | TTS engine (Google Cloud REST + Gemini TTS + pygame playback) |
 | `listeners/` | **Dead code** — listener aktif ada di `cohost_tab_basic.py` sebagai QThread inline |
 | `ui/` | Semua tab PyQt6, design system di `theme.py` |
@@ -177,23 +189,28 @@ MainWindow.__init__()
           → ada update → _on_update_found() → QMessageBox popup
               → user klik "Update Sekarang" → UpdateDialog (ui/update_dialog.py)
                   → DownloadThread → download ZIP dari GitHub
-                  → install_update() → batch script PID-based → app quit → batch copy EXE → relaunch
+                  → install_update() → os.startfile(bat) → app quit 100ms → batch copy EXE → relaunch
 ```
 
 - **`modules_client/updater.py`** — `check_for_update()`, `UpdateCheckThread`, `DownloadThread`, `install_update()`
 - **`ui/update_dialog.py`** — progress bar download, konfirmasi restart
 - Tombol **"🔄 Cek Update"** di main window untuk cek manual
 - Tombol **"⬆️ Update Tersedia!"** muncul di toolbar jika ada versi baru (orange, hidden by default)
-- Batch script pakai **PID-based wait** (`tasklist /FI "PID eq {pid}"`) — bukan nama proses — lebih reliable
+
+**Kritis — Auto-Update Timing:**
+- `install_update()` calls `os.startfile(bat_path)` → batch berjalan detached
+- `update_dialog.py` quit app setelah **100ms** (bukan delay panjang!) → PyInstaller cleanup `_MEI` selesai
+- Batch tunggu **5 detik** → `_MEI` sudah bersih → `taskkill` safety net → bersihkan `_MEI*` → copy EXE → `start ""`
+- **JANGAN tambah delay** di `QTimer.singleShot` — delay panjang menyebabkan `taskkill /f` membunuh paksa sebelum `_MEI` cleanup selesai → DLL error di EXE baru
 
 ### Version Management
 
 **`version.py`** adalah satu-satunya sumber kebenaran versi:
 
 ```python
-VERSION = "1.0.3"           # ← SATU-SATUNYA TEMPAT GANTI VERSI
-VERSION_WIN = "1.0.3.0"    # untuk EXE metadata Windows
-VERSION_TUPLE = (1, 0, 3, 0)
+VERSION = "1.0.13"          # ← SATU-SATUNYA TEMPAT GANTI VERSI
+VERSION_WIN = "1.0.13.0"   # untuk EXE metadata Windows
+VERSION_TUPLE = (1, 0, 13, 0)
 ```
 
 Files yang import dari `version.py`: `updater.py`, `ui/main_window.py`, `main.py`, `build_production_exe_fixed.py`. Jangan hardcode versi di tempat lain.
@@ -208,6 +225,51 @@ Sistem popup video produk saat AI merespons terkait produk tertentu:
 
 **`scene_id` BUKAN nomor keranjang TikTok** — hanya ID internal. Format daftar scene: `scene_id=N : nama` bukan `N. nama`. `scene_id = 0` = tidak tampilkan popup.
 
+### Telemetry System (PostHog + Sentry)
+
+**`modules_client/telemetry.py`** — never-crash wrapper untuk PostHog analytics + Sentry error tracking.
+
+```python
+# Panggil di main.py setelah license valid:
+telemetry.init(POSTHOG_PROJECT_KEY, SENTRY_DSN, VERSION)
+
+# Kirim event custom:
+telemetry.capture("event_name", {"key": "value"})
+
+# Panggil sebelum app.quit():
+telemetry.close()  # flush Sentry → session tercatat 'healthy' di Release Health
+```
+
+**Prinsip desain:**
+- Semua SDK calls dibungkus `try/except Exception` — telemetry **tidak boleh crash app**
+- Lazy import: `import posthog` / `import sentry_sdk` di dalam fungsi, bukan top-level
+- `distinct_id` PostHog = device_id dari `config/device_id.dat` (sama dengan license system)
+- `auto_session_tracking=True` di Sentry untuk Release Health (crash-free sessions %)
+
+**Keys (di-hardcode di `main.py` sebagai default, bisa override via env var):**
+- `POSTHOG_PROJECT_KEY` = `phc_uYwH9ByGUHwcPfnX4ThEUxePHMmycTRWictJoyTBnzSA`
+- `SENTRY_DSN` = `https://61478c4ae40ad572269d7e6245405aae@o4511211608211456.ingest.us.sentry.io/4511213925367808`
+
+**PostHog SDK v7 — Breaking Changes:**
+- Host ingestion: `https://us.i.posthog.com` (bukan `app.posthog.com`)
+- `capture()` signature: `posthog.capture(event, distinct_id=..., properties=...)` (bukan positional args lama)
+- `close()` harus panggil `posthog.shutdown()` dulu sebelum `sentry_sdk.flush()` agar background thread selesai kirim
+
+**Events yang di-track:**
+
+| Event | File | Trigger |
+|-------|------|---------|
+| `app_launched` | `main.py` | Setiap startup berhasil (setelah license valid) |
+| `tiktok_connected` | `cohost_tab_basic.py` | TikTok Live terhubung |
+| `cohost_reply_generated` | `cohost_tab_basic.py` | AI reply dihasilkan (props: `scene_id`, `scene_name`, `provider`) |
+| `tts_played` | `modules_server/tts_engine.py` | TTS berhasil diputar |
+| `tts_failed` | `modules_server/tts_engine.py` | TTS gagal |
+| `scene_triggered` | `ui/product_popup_window.py` | Popup produk ditampilkan (props: `scene_id`, `scene_name`) |
+| `scene_dismissed` | `ui/product_popup_window.py` | Popup produk ditutup |
+| `update_installed` | `modules_client/updater.py` | User install update baru |
+
+**Build:** `posthog`, `sentry_sdk`, `sentry_sdk.integrations`, `sentry_sdk.integrations.stdlib`, `sentry_sdk.integrations.excepthook` harus ada di `hiddenimports` PyInstaller.
+
 ### Greeting System
 
 1. **`config_tab.py`** — UI untuk mengisi 10 slot teks sapaan
@@ -215,6 +277,10 @@ Sistem popup video produk saat AI merespons terkait produk tertentu:
 3. **`sequential_greeting_manager.py`** — Timer-based playback, mode random
 
 Interval timer diatur di Cohost Tab (bukan Config Tab).
+
+**Path `greeting_cache/`**: selalu absolut — `Path(sys.executable).parent / "greeting_cache"` (frozen) atau `project_root / "greeting_cache"` (dev). Jangan pakai path relatif → Access Denied di EXE mode.
+
+**Path `config/analytics/`**: sama, pakai `_get_app_root()` di `analytics_manager.py`.
 
 ### TTS API Key Detection & Voice Filtering
 
@@ -288,7 +354,7 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 `check_dependencies()` di `main.py` dan `excludes` di spec file **harus sinkron**. Jika sebuah library ada di `excludes` PyInstaller, jangan masukkan ke `required_modules` di `check_dependencies()` — EXE akan silent exit sebelum window muncul karena `return 1` terjadi tanpa dialog apapun (`console=False`).
 
 Library yang saat ini di-exclude dari build: `whisper`, `torch`, `transformers`, `speech_recognition`, `customtkinter`.
-Library yang wajib ada di `hiddenimports`: seluruh `cryptography.hazmat.primitives.*` (dipakai `license_manager.py`), `pygame.mixer`, `keyboard`.
+Library yang wajib ada di `hiddenimports`: seluruh `cryptography.hazmat.primitives.*` (dipakai `license_manager.py`), `pygame.mixer`, `keyboard`, `posthog`, `sentry_sdk`, `sentry_sdk.integrations`, `sentry_sdk.integrations.stdlib`, `sentry_sdk.integrations.excepthook`.
 
 ### Silent Crash di EXE
 
@@ -322,6 +388,32 @@ Gunakan `setAutoFillBackground(False)` + posisi manual via `setGeometry()` tanpa
 
 **`QVideoSink` thread safety**: `videoFrameChanged` emit dari multimedia thread.
 Gunakan intermediate `pyqtSignal(QPixmap)` untuk pass frame ke main thread sebelum `setPixmap()`.
+
+---
+
+## Developer Tools — MCP Servers
+
+MCP (Model Context Protocol) server dikonfigurasi di `~/.claude/settings.json` untuk Claude Code.
+
+| Server | URL | Scope |
+|--------|-----|-------|
+| **Sentry** | `https://mcp.sentry.dev/mcp/arl-group` | Org `arl-group` (HTTP streamable) |
+| **PostHog** | `https://mcp.posthog.com/mcp` | OAuth, US region (HTTP streamable) |
+| **GitHub** | `npx @modelcontextprotocol/server-github` | PAT via env `GITHUB_PERSONAL_ACCESS_TOKEN` |
+| **Chrome DevTools** | `npx chrome-devtools-mcp --autoConnect` | Local browser debugging |
+
+Dengan MCP aktif, bisa tanya langsung ke Claude Code:
+- *"Berapa app_launched events hari ini?"* → PostHog MCP
+- *"Ada error baru di Sentry minggu ini?"* → Sentry MCP
+- *"Buat feature flag baru di PostHog"* → PostHog MCP
+
+**Web Monitoring Dashboard** (`D:/VIBE CODING VERSION/vocalive-monitor/`):
+- Next.js 16+ + TypeScript + Tailwind CSS + Vitest
+- `lib/posthog.ts` — `getDailyEventCounts()`, `getDailyActiveUsers()`
+- `lib/sentry.ts` — `getActiveIssues()`, `getTodayErrorCount()`
+- `lib/gemini.ts` — `generateDailyDigest()` via Gemini 2.0 Flash
+- `lib/apps-config.ts` — registry 4 aplikasi yang dipantau
+- `.env.local` — POSTHOG_PERSONAL_API_KEY, SENTRY_AUTH_TOKEN, dll
 
 ---
 

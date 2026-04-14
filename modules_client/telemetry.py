@@ -1,0 +1,132 @@
+"""
+telemetry.py — Wrapper PostHog + Sentry untuk VocaLive.
+Semua calls dibungkus try/except — telemetry failure tidak boleh crash app.
+Device ID dibaca dari config/device_id.dat (sama dengan license system).
+"""
+import os
+import sys
+import json
+import logging
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# --- Internal state ---
+_initialized = False
+_device_id = "anonymous"
+_app_version = "unknown"
+
+def _get_app_root() -> Path:
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent
+
+def _read_device_id() -> str:
+    """Baca device_id dari config/device_id.dat (dibuat oleh license_manager)."""
+    try:
+        device_id_path = _get_app_root() / "config" / "device_id.dat"
+        if device_id_path.exists():
+            data = json.loads(device_id_path.read_text(encoding="utf-8"))
+            return data.get("id", "anonymous")[:32]
+    except Exception:
+        pass
+    return "anonymous"
+
+def init(posthog_api_key: str, sentry_dsn: str, version: str):
+    """
+    Init PostHog dan Sentry. Panggil sekali di main.py setelah UTF-8 fix.
+    posthog_api_key: Project API Key (phc_xxx) dari PostHog
+    sentry_dsn: DSN dari Sentry project
+    version: VERSION string dari version.py
+    """
+    global _initialized, _device_id, _app_version
+
+    if _initialized:
+        return
+
+    _app_version = version
+    _device_id = _read_device_id()
+
+    # Init Sentry
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            release=f"vocalive@{version}",
+            traces_sample_rate=0.1,
+            attach_stacktrace=True,
+            auto_session_tracking=True,  # Release Health: track crash-free sessions
+        )
+        # Identify user di Sentry — sama dengan distinct_id PostHog untuk korelasi
+        sentry_sdk.set_user({"id": _device_id})
+        sentry_sdk.set_context("app", {
+            "app_name": "vocalive",
+            "app_version": version,
+        })
+        logger.info("[telemetry] Sentry initialized (user=%s)", _device_id)
+    except Exception as e:
+        logger.warning(f"[telemetry] Sentry init failed (non-fatal): {e}")
+
+    # Init PostHog (SDK v7+)
+    try:
+        import posthog
+        posthog.api_key = posthog_api_key
+        posthog.host = "https://us.i.posthog.com"  # US ingestion endpoint (bukan app.posthog.com)
+        posthog.disabled = not posthog_api_key  # disable jika key kosong
+        logger.info("[telemetry] PostHog initialized")
+    except Exception as e:
+        logger.warning(f"[telemetry] PostHog init failed (non-fatal): {e}")
+
+    _initialized = True
+
+def capture(event: str, properties: dict = None):
+    """
+    Kirim custom event ke PostHog.
+    Selalu sertakan app=vocalive dan version otomatis.
+    PostHog SDK v7+: capture(event, distinct_id=..., properties=...)
+    """
+    if not _initialized:
+        return
+    try:
+        import posthog
+        props = {"app": "vocalive", "version": _app_version}
+        if properties:
+            props.update(properties)
+        posthog.capture(event, distinct_id=_device_id, properties=props)
+    except Exception as e:
+        logger.debug(f"[telemetry] capture failed (non-fatal): {e}")
+
+def close():
+    """
+    Flush semua pending events dan tutup sesi Sentry dengan bersih.
+    Panggil sebelum app.quit() agar Release Health mencatat sesi sebagai 'healthy'.
+    """
+    if not _initialized:
+        return
+    try:
+        import posthog
+        posthog.shutdown()  # flush + tunggu background thread selesai kirim events
+    except Exception as e:
+        logger.debug(f"[telemetry] posthog shutdown failed (non-fatal): {e}")
+    try:
+        import sentry_sdk
+        sentry_sdk.flush(timeout=2)
+    except Exception as e:
+        logger.debug(f"[telemetry] sentry flush failed (non-fatal): {e}")
+
+def set_user_context(extra: dict):
+    """Tambah context ke Sentry dan PostHog untuk identifikasi lebih detail."""
+    if not _initialized:
+        return
+    # Sentry: set_context (modern API, bukan configure_scope)
+    try:
+        import sentry_sdk
+        sentry_sdk.set_context("user_context", extra)
+    except Exception as e:
+        logger.debug(f"[telemetry] sentry set_context failed (non-fatal): {e}")
+    # PostHog: set user properties via $set event (SDK v7 tidak punya identify())
+    try:
+        import posthog
+        posthog.capture("$set", distinct_id=_device_id, properties={"$set": extra})
+    except Exception as e:
+        logger.debug(f"[telemetry] posthog $set failed (non-fatal): {e}")

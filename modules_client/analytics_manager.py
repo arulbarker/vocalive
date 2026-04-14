@@ -6,11 +6,20 @@ Support: YouTube (pytchat) dan TikTok (TikTokLive)
 
 import json
 import os
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict, Counter
 import re
+
+
+def _get_app_root() -> Path:
+    """Root folder app: direktori EXE (frozen) atau root project (dev)."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent
+
 
 class LiveAnalyticsManager:
     """
@@ -23,8 +32,10 @@ class LiveAnalyticsManager:
     - Export ke CSV/Excel
     """
 
-    def __init__(self, data_dir="config/analytics"):
+    def __init__(self, data_dir=None):
         """Initialize analytics manager"""
+        if data_dir is None:
+            data_dir = _get_app_root() / "config" / "analytics"
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 

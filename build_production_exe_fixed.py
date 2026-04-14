@@ -127,8 +127,14 @@ a = Analysis(
         "websockets", "websockets.client", "websockets.server",
         "aiohttp", "aiohttp.client", "aiohttp.client_ws",
         "async_timeout", "multidict", "yarl",
-        # crypto (untuk license)
+        # crypto (untuk license) — HARUS lengkap sesuai license_manager.py
         "cryptography", "cryptography.fernet",
+        "cryptography.hazmat", "cryptography.hazmat.primitives",
+        "cryptography.hazmat.primitives.hashes",
+        "cryptography.hazmat.primitives.kdf",
+        "cryptography.hazmat.primitives.kdf.pbkdf2",
+        "cryptography.hazmat.backends",
+        "cryptography.hazmat.backends.default",
         # UI
         "PyQt6", "PyQt6.QtCore", "PyQt6.QtWidgets", "PyQt6.QtGui",
         "PyQt6.QtMultimedia", "PyQt6.QtMultimediaWidgets",
@@ -138,11 +144,17 @@ a = Analysis(
         "keyboard", "psutil", "packaging",
         # TTS
         "gtts",
+        # Monitoring & Error Tracking
+        "posthog",
+        "sentry_sdk",
+        "sentry_sdk.integrations",
+        "sentry_sdk.integrations.stdlib",
+        "sentry_sdk.integrations.excepthook",
     ],
     hookspath=[],
     runtime_hooks=[],
     excludes=["whisper", "torch", "transformers", "speech_recognition",
-              "customtkinter", "sounddevice", "soundfile"],
+              "customtkinter"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -216,20 +228,7 @@ def create_zip():
     shutil.copy2("dist/VocaLive.exe", pkg_dir / "VocaLive.exe")
     print("  ✓ VocaLive.exe")
 
-    # ── 2. Copy ffmpeg ───────────────────────────────────────────────
-    ffmpeg_bin_src = Path("thirdparty/ffmpeg/bin")
-    if ffmpeg_bin_src.exists():
-        ffmpeg_bin_dst = pkg_dir / "thirdparty" / "ffmpeg" / "bin"
-        ffmpeg_bin_dst.mkdir(parents=True)
-        for exe in ["ffmpeg.exe", "ffprobe.exe", "ffplay.exe"]:
-            src = ffmpeg_bin_src / exe
-            if src.exists():
-                shutil.copy2(src, ffmpeg_bin_dst / exe)
-        print("  ✓ thirdparty/ffmpeg/bin/")
-    else:
-        print("  ⚠ thirdparty/ffmpeg/bin/ tidak ditemukan — skip")
-
-    # ── 3. Config (template bersih saja) ────────────────────────────
+    # ── 2. Config (template bersih saja) ────────────────────────────
     cfg_dst = pkg_dir / "config"
     cfg_dst.mkdir()
 

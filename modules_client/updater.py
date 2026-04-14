@@ -199,77 +199,65 @@ def install_update(zip_path: str) -> bool:
             return True
 
         current_exe = sys.executable
-        current_pid = os.getpid()
+        exe_name    = Path(current_exe).name   # "VocaLive.exe"
 
-        bat_path = os.path.join(temp_dir, "do_update.bat")
+        # Taruh batch di folder yang sama dengan EXE (bukan temp dir)
+        # agar working dir batch = folder EXE saat di-startfile
+        bat_path = str(Path(current_exe).parent / "_vocalive_update.bat")
 
-        # Batch yang solid:
-        # - Tunggu berdasarkan PID (bukan nama file — lebih reliable)
-        # - Backup EXE lama sebelum replace
-        # - Self-delete setelah selesai
         bat_content = (
             "@echo off\n"
-            "title VocaLive Updater\n"
             "echo ================================\n"
             "echo  VocaLive Update Installer\n"
             "echo ================================\n"
             "echo.\n"
             "echo Menunggu aplikasi selesai...\n"
-            "echo.\n"
+            # Tunggu 5 detik — app quit langsung (100ms), PyInstaller cleanup _MEI ~1-2s.
+            # 5 detik memberi margin aman agar _MEI sudah bersih sebelum copy + start.
+            "timeout /t 5 /nobreak > nul\n"
+            # Force-kill sisa proses jika entah kenapa belum mati
+            f'taskkill /f /im "{exe_name}" > nul 2>&1\n'
+            "timeout /t 1 /nobreak > nul\n"
             "\n"
-            ":wait_pid\n"
-            f"tasklist /FI \"PID eq {current_pid}\" 2>NUL | find \"{current_pid}\" >NUL\n"
-            "if not errorlevel 1 (\n"
-            "    timeout /t 1 /nobreak >NUL\n"
-            "    goto wait_pid\n"
-            ")\n"
+            # Bersihkan _MEI* lama sebagai safety net (jika graceful cleanup gagal)
+            'for /d %%D in ("%TEMP%\\_MEI*") do rd /s /q "%%D" 2>nul\n'
             "\n"
             "echo Menginstall update...\n"
-            "\n"
-            ":: Backup EXE lama\n"
-            f"copy /Y \"{current_exe}\" \"{current_exe}.bak\" >NUL 2>&1\n"
-            "\n"
-            ":: Copy EXE baru\n"
-            f"copy /Y \"{new_exe}\" \"{current_exe}\"\n"
+            ":retry\n"
+            f'copy /y "{new_exe}" "{current_exe}" > nul 2>&1\n'
             "if errorlevel 1 (\n"
-            "    echo.\n"
-            "    echo GAGAL mengganti EXE!\n"
-            "    echo Kemungkinan penyebab:\n"
-            "    echo  1. File masih terkunci - tunggu beberapa detik lalu coba lagi\n"
-            "    echo  2. Tidak ada izin - jalankan sebagai Administrator\n"
-            "    echo.\n"
-            "    :: Restore backup\n"
-            f"    copy /Y \"{current_exe}.bak\" \"{current_exe}\" >NUL 2>&1\n"
-            "    pause\n"
-            "    exit /b 1\n"
+            "    timeout /t 2 /nobreak > nul\n"
+            "    goto retry\n"
             ")\n"
             "\n"
-            "echo.\n"
-            "echo Update berhasil! Meluncurkan VocaLive versi terbaru...\n"
-            "timeout /t 1 /nobreak >NUL\n"
-            f"start \"\" \"{current_exe}\"\n"
+            "echo Update berhasil! Meluncurkan VocaLive...\n"
+            f'start "" "{current_exe}"\n'
             "\n"
-            ":: Cleanup: hapus backup dan folder temp\n"
-            f"del \"{current_exe}.bak\" >NUL 2>&1\n"
-            f"rd /s /q \"{temp_dir}\" >NUL 2>&1\n"
-            "\n"
-            ":: Self-delete batch script\n"
-            "(goto) 2>NUL & del \"%~f0\"\n"
+            ":: Cleanup\n"
+            f'del /f /q "{new_exe}" > nul 2>&1\n'
+            f'rd /s /q "{temp_dir}" > nul 2>&1\n'
+            'del /f /q "%~f0"\n'
         )
 
         with open(bat_path, 'w', encoding='utf-8') as f:
             f.write(bat_content)
 
-        # Launch batch script dalam console terpisah
-        # CREATE_NEW_CONSOLE: user bisa lihat progress
-        # Tidak tunggu (Popen, bukan run)
-        subprocess.Popen(
-            ['cmd.exe', '/c', bat_path],
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-            close_fds=True
-        )
+        # KEY FIX: os.startfile = ShellExecute = detached total dari Python process.
+        # subprocess.Popen mewarisi file handle ke EXE → EXE tetap locked walau PID hilang.
+        # os.startfile tidak mewarisi handle apapun → copy langsung berhasil.
+        os.startfile(bat_path)
 
-        logger.info(f"Update installer diluncurkan (PID target: {current_pid})")
+        # Send PostHog event
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("update_installed", {
+                "old_version": CURRENT_VERSION,
+                "new_version": "unknown",
+            })
+        except Exception:
+            pass
+
+        logger.info("Update installer diluncurkan via os.startfile (detached)")
         return True
 
     except Exception as e:
