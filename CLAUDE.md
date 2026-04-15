@@ -37,8 +37,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.11** | 2026-04-08 | Fix: DLL error setelah update — batch hapus _MEI* lama sebelum launch EXE baru |
 | **v1.0.12** | 2026-04-08 | Fix: hapus auto-launch dari batch — start "" menyebabkan DLL error PyInstaller |
 | **v1.0.13** | 2026-04-08 | Fix ROOT CAUSE: quit langsung (100ms) bukan 2.5s — _MEI cleanup sebelum batch start |
+| **v1.0.14** | 2026-04-16 | Fix: listener hanya baca komentar LIVE (grace period 3s), sembunyikan Ukuran Popup |
 
-**Versi saat ini: v1.0.13**
+**Versi saat ini: v1.0.14**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 

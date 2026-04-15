@@ -418,6 +418,10 @@ class SimpleTikTokListener(QThread):
     viewerJoined = pyqtSignal(str, str)  # username, display_name
     logMessage = pyqtSignal(str, str)
     
+    # Grace period in seconds — ignore all comments during this window after connect.
+    # TikTokLive dumps recent chat history on connect; this filters them out.
+    CONNECT_GRACE_PERIOD = 3.0
+
     def __init__(self, username, parent=None):
         super().__init__(parent)
         self.username = username.replace("@", "").strip()
@@ -426,9 +430,15 @@ class SimpleTikTokListener(QThread):
         self.seen_messages = set()
         self.daemon = True
         self.start_timestamp = None  # Track when listener started
+        self._grace_period_over = False  # True after grace period ends
 
     def should_skip_comment(self, event_timestamp_ms, current_time):
         """Determine if a comment should be skipped based on timing.
+
+        After connecting, TikTokLive sends a batch of old comments (history dump).
+        We use a grace period to drop ALL comments that arrive in the first few
+        seconds after connect. After the grace period, only truly live comments
+        come through.
 
         Args:
             event_timestamp_ms: Event timestamp in milliseconds (None if unavailable)
@@ -440,12 +450,22 @@ class SimpleTikTokListener(QThread):
         if self.start_timestamp is None:
             return False
 
+        elapsed = current_time - self.start_timestamp
+
+        # During grace period — skip ALL comments (history dump)
+        if not self._grace_period_over:
+            if elapsed < self.CONNECT_GRACE_PERIOD:
+                return True
+            # Grace period just ended — mark it and accept from now on
+            self._grace_period_over = True
+
+        # After grace period — also filter by event timestamp if available
         if event_timestamp_ms:
             event_time = event_timestamp_ms / 1000.0
-            time_diff = event_time - self.start_timestamp
-            if time_diff < -0.5:
+            # Skip comments whose event timestamp is before we connected
+            if event_time < self.start_timestamp:
                 return True
-        # Komentar tanpa timestamp → langsung terima
+
         return False
 
     def run(self):
@@ -457,6 +477,7 @@ class SimpleTikTokListener(QThread):
             # Ini penting untuk restart aplikasi agar tidak block komentar lama
             self.seen_messages.clear()  # Clear duplicate tracking
             self.start_timestamp = None  # Reset connection timestamp
+            self._grace_period_over = False  # Reset grace period
             self.running = False  # Will be set to True after client creation
 
             self.logMessage.emit("INFO", f"[TikTok] State reset - ready for fresh connection")
@@ -477,8 +498,9 @@ class SimpleTikTokListener(QThread):
             async def on_connect(event):
                 import time
                 self.start_timestamp = time.time()  # Record connection time
+                self._grace_period_over = False  # Reset grace period on every connect
                 logger.info("[COHOST] TikTok connected: username=%s", self.username)
-                self.logMessage.emit("INFO", f"✅ Connected! Siap tangkap komentar @{self.username}")
+                self.logMessage.emit("INFO", f"✅ Connected! Menunggu {self.CONNECT_GRACE_PERIOD:.0f}s untuk skip history lama...")
                 try:
                     from modules_client.telemetry import capture as _tel_capture
                     from modules_client.config_manager import ConfigManager as _CM
@@ -496,9 +518,13 @@ class SimpleTikTokListener(QThread):
                     current_time = time.time()
 
                     # Filter old chat — delegasi ke method yang bisa di-unit-test
+                    was_grace = not self._grace_period_over
                     event_ts = event.timestamp if hasattr(event, 'timestamp') and event.timestamp else None
                     if self.should_skip_comment(event_ts, current_time):
                         return
+                    # Log when grace period just ended
+                    if was_grace and self._grace_period_over:
+                        self.logMessage.emit("INFO", "✅ Grace period selesai — mulai tangkap komentar LIVE")
 
                     # Extract author and message
                     author = event.user.nickname if safe_attr_check(event.user, 'nickname') else str(event.user.unique_id)
@@ -604,6 +630,7 @@ class SimpleTikTokListener(QThread):
         # Clear all state for fresh restart
         self.seen_messages.clear()
         self.start_timestamp = None
+        self._grace_period_over = False
         
         # Quit thread
         try:
