@@ -90,6 +90,42 @@ class VirtualCameraManager(QThread):
         return path
 
     # -----------------------------------------------------------------
+    # Config persistence
+    # -----------------------------------------------------------------
+
+    def save_config(self, path: str = None):
+        """Save playlist and settings to JSON."""
+        import json
+        if path is None:
+            from pathlib import Path
+            path = str(Path(__file__).parent.parent / "config" / "virtual_camera.json")
+        data = {
+            "playlist": self.playlist,
+            "play_mode": self.play_mode,
+        }
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error("[VCAM] Failed to save config: %s", e)
+
+    def load_config(self, path: str = None):
+        """Load playlist and settings from JSON."""
+        import json
+        if path is None:
+            from pathlib import Path
+            path = str(Path(__file__).parent.parent / "config" / "virtual_camera.json")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.set_playlist(data.get("playlist", []))
+            self.set_play_mode(data.get("play_mode", "sequential"))
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            logger.error("[VCAM] Failed to load config: %s", e)
+
+    # -----------------------------------------------------------------
     # Playback control
     # -----------------------------------------------------------------
 

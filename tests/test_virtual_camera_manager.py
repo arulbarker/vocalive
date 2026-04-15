@@ -304,3 +304,33 @@ class TestGetVideoInfo:
             result = manager._get_video_info("bad.mp4")
         assert result is None
         mock_cap.release.assert_called_once()
+
+
+# ===========================================================================
+# TestConfigPersistence
+# ===========================================================================
+
+class TestConfigPersistence:
+
+    def test_save_config(self, manager, tmp_path):
+        config_path = tmp_path / "virtual_camera.json"
+        manager.set_playlist(["a.mp4", "b.mp4"])
+        manager.set_play_mode("random")
+        manager.save_config(str(config_path))
+        import json
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+        assert data["playlist"] == ["a.mp4", "b.mp4"]
+        assert data["play_mode"] == "random"
+
+    def test_load_config(self, manager, tmp_path):
+        config_path = tmp_path / "virtual_camera.json"
+        import json
+        config_path.write_text(json.dumps({"playlist": ["x.mp4", "y.mp4"], "play_mode": "sequential"}), encoding="utf-8")
+        manager.load_config(str(config_path))
+        assert manager.playlist == ["x.mp4", "y.mp4"]
+        assert manager.play_mode == "sequential"
+
+    def test_load_missing_file(self, manager, tmp_path):
+        manager.load_config(str(tmp_path / "nonexistent.json"))
+        assert manager.playlist == []
+        assert manager.play_mode == "sequential"
