@@ -150,6 +150,9 @@ a = Analysis(
         "sentry_sdk.integrations",
         "sentry_sdk.integrations.stdlib",
         "sentry_sdk.integrations.excepthook",
+        # Virtual Camera
+        "pyvirtualcam",
+        "cv2",
     ],
     hookspath=[],
     runtime_hooks=[],
