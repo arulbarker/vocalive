@@ -2,17 +2,31 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 import logging
 
 logger = logging.getLogger('VocaLive')
 
+
+def _get_app_root() -> Path:
+    """Get application root directory — works both in dev and frozen EXE mode."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent
+
+
 class ConfigManager:
     """Configuration manager for local settings"""
-    
+
     def __init__(self, config_file: str = "config/settings.json"):
-        self.config_file = Path(config_file)
+        # Jika path absolut, pakai langsung. Jika relatif, resolve dari app root.
+        p = Path(config_file)
+        if p.is_absolute():
+            self.config_file = p
+        else:
+            self.config_file = _get_app_root() / config_file
         
 
     

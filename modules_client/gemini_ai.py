@@ -20,10 +20,12 @@ class GeminiAI:
     """Gemini AI API client (REST, no SDK required)"""
 
     def __init__(self):
-        self.api_key = config_manager.get("api_keys", {}).get("GEMINI_API_KEY", "")
         self.model = GEMINI_MODEL_PRIMARY  # akan di-downgrade ke fallback jika 403
-        if not self.api_key:
-            logger.warning("Gemini API key not found")
+
+    @property
+    def api_key(self) -> str:
+        """Read API key fresh setiap kali — tidak cache, agar selalu up-to-date."""
+        return config_manager.get("api_keys", {}).get("GEMINI_API_KEY", "")
 
     def generate_reply(
         self,

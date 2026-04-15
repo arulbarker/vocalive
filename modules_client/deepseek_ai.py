@@ -15,11 +15,12 @@ class DeepSeekAI:
     """DeepSeek AI API client"""
     
     def __init__(self):
-        self.api_key = config_manager.get_api_key("DEEPSEEK_API_KEY")
         self.base_url = "https://api.deepseek.com/v1"
-        
-        if not self.api_key:
-            logger.warning("DeepSeek API key not found")
+
+    @property
+    def api_key(self) -> Optional[str]:
+        """Read API key fresh setiap kali — tidak cache, agar selalu up-to-date."""
+        return config_manager.get_api_key("DEEPSEEK_API_KEY")
     
     def generate_reply(self, prompt: str, max_tokens: int = 150, fast_mode: bool = False, product_context: str = "") -> Optional[str]:
         """
