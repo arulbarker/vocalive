@@ -426,7 +426,28 @@ class SimpleTikTokListener(QThread):
         self.seen_messages = set()
         self.daemon = True
         self.start_timestamp = None  # Track when listener started
-    
+
+    def should_skip_comment(self, event_timestamp_ms, current_time):
+        """Determine if a comment should be skipped based on timing.
+
+        Args:
+            event_timestamp_ms: Event timestamp in milliseconds (None if unavailable)
+            current_time: Current time.time() value
+
+        Returns:
+            True if comment should be skipped (old chat), False if realtime
+        """
+        if self.start_timestamp is None:
+            return False
+
+        if event_timestamp_ms:
+            event_time = event_timestamp_ms / 1000.0
+            time_diff = event_time - self.start_timestamp
+            if time_diff < -0.5:
+                return True
+        # Komentar tanpa timestamp → langsung terima
+        return False
+
     def run(self):
         """Simplified TikTok listener"""
         try:
@@ -474,30 +495,9 @@ class SimpleTikTokListener(QThread):
                     import time
                     current_time = time.time()
 
-                    # CRITICAL FIX: HANYA terima komentar REALTIME (setelah connection)
-                    # TikTok API sering mengirim chat history saat connect
-                    # Solusi: SKIP semua komentar yang timestampnya SEBELUM connection time
-
-                    skip_old_comment = False
-
-                    if self.start_timestamp is not None:
-                        # Check timestamp if available
-                        if hasattr(event, 'timestamp') and event.timestamp:
-                            event_time = event.timestamp / 1000.0  # Convert ms to seconds
-
-                            # Filter komentar lama: hanya skip yang jelas-jelas OLD CHAT
-                            # Grace period 0.5 detik untuk toleransi clock skew minimal
-                            time_diff = event_time - self.start_timestamp
-
-                            if time_diff < -0.5:  # Event lebih dari 0.5 detik SEBELUM connection = OLD CHAT
-                                skip_old_comment = True
-                            # Komentar realtime atau near-realtime - terima
-                        else:
-                            # Tidak ada timestamp event - langsung terima
-                            # Komentar tanpa timestamp biasanya realtime dari TikTok API
-                            pass
-
-                    if skip_old_comment:
+                    # Filter old chat — delegasi ke method yang bisa di-unit-test
+                    event_ts = event.timestamp if hasattr(event, 'timestamp') and event.timestamp else None
+                    if self.should_skip_comment(event_ts, current_time):
                         return
 
                     # Extract author and message
