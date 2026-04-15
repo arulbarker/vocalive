@@ -230,8 +230,13 @@ def install_update(zip_path: str) -> bool:
             "    goto retry\n"
             ")\n"
             "\n"
-            "echo Update berhasil! Meluncurkan VocaLive...\n"
-            f'start "" "{current_exe}"\n'
+            "echo.\n"
+            "echo ================================\n"
+            "echo  Update berhasil!\n"
+            "echo  Silakan buka VocaLive secara manual.\n"
+            "echo ================================\n"
+            "echo.\n"
+            "timeout /t 3 /nobreak > nul\n"
             "\n"
             ":: Cleanup\n"
             f'del /f /q "{new_exe}" > nul 2>&1\n'
