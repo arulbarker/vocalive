@@ -14,13 +14,16 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 from datetime import datetime
 from pathlib import Path
+import logging
+
+logger = logging.getLogger('VocaLive.AnalyticsTab')
 
 try:
     from modules_client.analytics_manager import get_analytics_manager
     ANALYTICS_AVAILABLE = True
 except ImportError:
     ANALYTICS_AVAILABLE = False
-    print("[Analytics Tab] analytics_manager not available")
+    logger.warning("[AnalyticsTab] analytics_manager not available")
 
 try:
     from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
@@ -53,7 +56,7 @@ try:
     pg.setConfigOption('foreground', '#F0F6FF')   # TEXT_PRIMARY
 except ImportError:
     CHARTS_AVAILABLE = False
-    print("[Analytics Tab] pyqtgraph not available - charts disabled")
+    logger.warning("[AnalyticsTab] pyqtgraph not available - charts disabled")
 
 
 class AnalyticsTab(QWidget):

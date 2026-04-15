@@ -7,6 +7,9 @@ from datetime import datetime
 from enum import Enum
 
 from modules_client.config_manager import ConfigManager
+import logging
+
+logger = logging.getLogger("VocaLive.GreetingAI")
 
 REGEN_INTERVAL_SECONDS = 7200  # 2 jam, tidak bisa diubah user
 
@@ -62,7 +65,7 @@ class SequentialGreetingManager:
         # Status callback untuk update UI
         self.status_callback = None
 
-        print("[GREETING_AI] Manager initialized")
+        logger.info("[GREETING_AI] Manager initialized")
 
     # ─── Public API ───────────────────────────────────────────────
 
@@ -70,12 +73,12 @@ class SequentialGreetingManager:
         """Start Greeting AI — generate teks + prerender TTS, lalu mulai playback."""
         with self.thread_lock:
             if self.state != GreetingState.IDLE:
-                print("[GREETING_AI] Already running")
+                logger.info("[GREETING_AI] Already running")
                 return
 
             self.is_enabled = self.cfg.get("greeting_ai_enabled", False)
             if not self.is_enabled:
-                print("[GREETING_AI] Disabled in settings")
+                logger.info("[GREETING_AI] Disabled in settings")
                 return
 
             self.greeting_interval = self.cfg.get("sequential_greeting_interval", 180)
@@ -93,7 +96,7 @@ class SequentialGreetingManager:
             if self.state == GreetingState.IDLE:
                 return
 
-            print("[GREETING_AI] Stopping...")
+            logger.info("[GREETING_AI] Stopping...")
             self.should_stop = True
             self.state = GreetingState.IDLE
 
@@ -105,7 +108,7 @@ class SequentialGreetingManager:
             self.pending_resume_timer = None
 
         self._notify_status("idle", "Greeting AI tidak aktif")
-        print("[GREETING_AI] Stopped")
+        logger.info("[GREETING_AI] Stopped")
 
     def on_trigger_start(self):
         """Pause greeting saat trigger reply sedang diproses."""
@@ -116,7 +119,7 @@ class SequentialGreetingManager:
                 if self.pending_resume_timer:
                     self.pending_resume_timer.cancel()
                     self.pending_resume_timer = None
-                print("[GREETING_AI] Paused for trigger reply")
+                logger.info("[GREETING_AI] Paused for trigger reply")
 
     def on_trigger_complete(self):
         """Resume greeting setelah trigger reply selesai."""
@@ -128,13 +131,13 @@ class SequentialGreetingManager:
                     self.resume_delay, self._resume_after_trigger
                 )
                 self.pending_resume_timer.start()
-                print(f"[GREETING_AI] Trigger done, resume in {self.resume_delay}s")
+                logger.info(f"[GREETING_AI] Trigger done, resume in {self.resume_delay}s")
 
     def set_greeting_interval(self, seconds: float):
         """Update interval dari UI (Cohost Tab)."""
         self.greeting_interval = max(10, seconds)
         self.cfg.set("sequential_greeting_interval", self.greeting_interval)
-        print(f"[GREETING_AI] Interval set to {self.greeting_interval}s")
+        logger.info(f"[GREETING_AI] Interval set to {self.greeting_interval}s")
 
     def set_play_mode(self, mode: str):
         """Placeholder untuk backward compat — sistem ini selalu random."""
@@ -147,7 +150,7 @@ class SequentialGreetingManager:
         Tidak memulai playback timer.
         """
         if self.state not in (GreetingState.IDLE,):
-            print("[GREETING_AI] prepare_texts: sistem sedang berjalan, pakai force_regenerate")
+            logger.info("[GREETING_AI] prepare_texts: sistem sedang berjalan, pakai force_regenerate")
             return
         self._notify_status("preparing", "Sedang menyiapkan sapaan AI...")
         prep_thread = threading.Thread(target=self._prepare_texts_only, daemon=True)
@@ -155,7 +158,7 @@ class SequentialGreetingManager:
 
     def force_regenerate(self):
         """Manual trigger regenerasi dari tombol UI (bisa dipanggil kapan saja)."""
-        print("[GREETING_AI] Manual regenerate triggered")
+        logger.info("[GREETING_AI] Manual regenerate triggered")
         regen_thread = threading.Thread(target=self._regenerate, daemon=True)
         regen_thread.start()
 
@@ -181,9 +184,9 @@ class SequentialGreetingManager:
                 self.active_texts = texts
             self._save_last_updated()
             self._notify_status("active", f"Siap — {len(texts)} sapaan tersedia (belum live)")
-            print(f"[GREETING_AI] Texts prepared: {len(texts)} items (waiting for live start)")
+            logger.info(f"[GREETING_AI] Texts prepared: {len(texts)} items (waiting for live start)")
         except Exception as e:
-            print(f"[GREETING_AI] prepare_texts_only failed: {e}")
+            logger.error(f"[GREETING_AI] prepare_texts_only failed: {e}")
             self._notify_status("error", f"Gagal menyiapkan sapaan: {e}")
 
     def _prepare_and_start(self):
@@ -194,7 +197,7 @@ class SequentialGreetingManager:
                 already_prepared = len(self.active_texts) > 0
 
             if already_prepared:
-                print("[GREETING_AI] Using pre-prepared texts, skipping AI generation")
+                logger.info("[GREETING_AI] Using pre-prepared texts, skipping AI generation")
                 with self.texts_lock:
                     texts = self.active_texts
             else:
@@ -214,10 +217,10 @@ class SequentialGreetingManager:
             self._schedule_next_playback()
             self._schedule_next_regen()
 
-            print(f"[GREETING_AI] Started with {len(texts)} texts")
+            logger.info(f"[GREETING_AI] Started with {len(texts)} texts")
 
         except Exception as e:
-            print(f"[GREETING_AI] Prepare failed: {e}")
+            logger.error(f"[GREETING_AI] Prepare failed: {e}")
             import traceback
             traceback.print_exc()
             with self.thread_lock:
@@ -227,7 +230,7 @@ class SequentialGreetingManager:
     def _generate_texts(self) -> list:
         """Panggil AI generator, return list teks sapaan."""
         from modules_client.greeting_ai_generator import generate_greetings_with_ai
-        print("[GREETING_AI] Generating greeting texts via Gemini...")
+        logger.info("[GREETING_AI] Generating greeting texts via Gemini...")
         return generate_greetings_with_ai()
 
     def _get_voice_params(self) -> tuple:
@@ -260,7 +263,7 @@ class SequentialGreetingManager:
         self.playback_timer = threading.Timer(jittered, callback)
         self.playback_timer.daemon = True
         self.playback_timer.start()
-        print(f"[GREETING_AI] Next playback in {jittered:.1f}s")
+        logger.info(f"[GREETING_AI] Next playback in {jittered:.1f}s")
 
     def _play_random_greeting(self):
         """Pilih teks acak dan putar via cache (lazy render + simpan, hemat API)."""
@@ -270,7 +273,7 @@ class SequentialGreetingManager:
                 chosen_text = random.choice(self.active_texts)
 
         if not chosen_text:
-            print("[GREETING_AI] No active texts to play")
+            logger.info("[GREETING_AI] No active texts to play")
             self._schedule_next_playback()
             return
 
@@ -283,9 +286,9 @@ class SequentialGreetingManager:
                 voice_name=voice_name,
                 language_code=language_code
             )
-            print(f"[GREETING_AI] {'Played' if success else 'Failed'}: {chosen_text[:40]}...")
+            logger.error(f"[GREETING_AI] {'Played' if success else 'Failed'}: {chosen_text[:40]}...")
         except Exception as e:
-            print(f"[GREETING_AI] Playback error: {e}")
+            logger.error(f"[GREETING_AI] Playback error: {e}")
 
         if not self.should_stop and self.state == GreetingState.ACTIVE:
             self._schedule_next_playback()
@@ -298,7 +301,7 @@ class SequentialGreetingManager:
         self.regen_timer = threading.Timer(REGEN_INTERVAL_SECONDS, self._regenerate)
         self.regen_timer.daemon = True
         self.regen_timer.start()
-        print(f"[GREETING_AI] Next regen in {REGEN_INTERVAL_SECONDS / 3600:.1f}h")
+        logger.info(f"[GREETING_AI] Next regen in {REGEN_INTERVAL_SECONDS / 3600:.1f}h")
 
     def _regenerate(self):
         """
@@ -309,7 +312,7 @@ class SequentialGreetingManager:
         if self.should_stop:
             return
 
-        print("[GREETING_AI] Starting regeneration...")
+        logger.info("[GREETING_AI] Starting regeneration...")
         self._notify_status("regenerating", "Memperbarui sapaan AI...")
 
         try:
@@ -323,17 +326,17 @@ class SequentialGreetingManager:
                 from modules_client.greeting_tts_cache import get_greeting_cache
                 get_greeting_cache().cleanup_greeting_audio()
             except Exception as ce:
-                print(f"[GREETING_AI] Cache cleanup error (non-fatal): {ce}")
+                logger.error(f"[GREETING_AI] Cache cleanup error (non-fatal): {ce}")
 
             with self.texts_lock:
                 self.active_texts = new_texts
 
             self._save_last_updated()
             self._notify_status("active", f"Aktif — {len(new_texts)} sapaan diperbarui")
-            print(f"[GREETING_AI] Regeneration done — {len(new_texts)} new texts loaded")
+            logger.info(f"[GREETING_AI] Regeneration done — {len(new_texts)} new texts loaded")
 
         except Exception as e:
-            print(f"[GREETING_AI] Regeneration failed: {e}")
+            logger.error(f"[GREETING_AI] Regeneration failed: {e}")
             self._notify_status("active", "Aktif — pakai sapaan sebelumnya")
 
         if not self.should_stop:
@@ -344,7 +347,7 @@ class SequentialGreetingManager:
         with self.thread_lock:
             if self.state == GreetingState.WAITING_RESUME and not self.should_stop:
                 self.state = GreetingState.ACTIVE
-                print("[GREETING_AI] Resumed after trigger")
+                logger.info("[GREETING_AI] Resumed after trigger")
                 self._schedule_next_playback()
 
     def _save_last_updated(self):
@@ -356,7 +359,7 @@ class SequentialGreetingManager:
             try:
                 self.status_callback(state, message)
             except Exception as e:
-                print(f"[GREETING_AI] Status callback error: {e}")
+                logger.error(f"[GREETING_AI] Status callback error: {e}")
 
 
 # Global instance

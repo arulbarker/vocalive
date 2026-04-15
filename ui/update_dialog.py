@@ -7,6 +7,7 @@ Dialog download & install update dengan progress bar.
 import os
 import sys
 import tempfile
+import logging
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer
@@ -15,6 +16,8 @@ from PyQt6.QtWidgets import (
     QProgressBar, QTextEdit, QFrame, QApplication
 )
 from PyQt6.QtGui import QFont
+
+logger = logging.getLogger('VocaLive.UpdateDialog')
 
 try:
     from modules_client.updater import DownloadThread, install_update, CURRENT_VERSION

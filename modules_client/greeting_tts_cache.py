@@ -8,6 +8,9 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from modules_server.tts_engine import speak, get_tts_engine
 import shutil
+import logging
+
+logger = logging.getLogger("VocaLive.GreetingCache")
 
 
 def _get_app_root() -> Path:
@@ -37,7 +40,7 @@ class GreetingTTSCache:
                 with open(self.metadata_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception as e:
-                print(f"[TTS_CACHE] Error loading metadata: {e}")
+                logger.error(f"[TTS_CACHE] Error loading metadata: {e}")
                 return {}
         return {}
     
@@ -47,7 +50,7 @@ class GreetingTTSCache:
             with open(self.metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(self.metadata, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"[TTS_CACHE] Error saving metadata: {e}")
+            logger.error(f"[TTS_CACHE] Error saving metadata: {e}")
     
     def _generate_hash(self, text, voice_name, language_code):
         """Generate hash for unique filename"""
@@ -81,10 +84,10 @@ class GreetingTTSCache:
                     self.metadata[hash_key]["play_count"] = self.metadata[hash_key].get("play_count", 0) + 1
                     self._save_metadata()
 
-                    print(f"[TTS_CACHE] ✅ Cache HIT - Using cached file: {filename}")
+                    logger.info(f"[TTS_CACHE] ✅ Cache HIT - Using cached file: {filename}")
                     return str(file_path)
 
-        print(f"[TTS_CACHE] ❌ Cache MISS - Need to generate TTS")
+        logger.info(f"[TTS_CACHE] ❌ Cache MISS - Need to generate TTS")
         return None
     
     def generate_and_save_tts(self, text, voice_name, language_code, force_regenerate=False):
@@ -99,10 +102,10 @@ class GreetingTTSCache:
         if not force_regenerate:
             cached_file = self.get_cached_file(text, voice_name, language_code)
             if cached_file:
-                print(f"[TTS_CACHE] File already cached: {cached_file}")
+                logger.info(f"[TTS_CACHE] File already cached: {cached_file}")
                 return cached_file
 
-        print(f"[TTS_CACHE] 🔄 Generating NEW TTS (will save to cache): {text[:50]}...")
+        logger.info(f"[TTS_CACHE] 🔄 Generating NEW TTS (will save to cache): {text[:50]}...")
 
         try:
             # Import TTS engine
@@ -152,7 +155,7 @@ class GreetingTTSCache:
                     shutil.copy2(str(audio_file), str(cache_path))
                     file_size = cache_path.stat().st_size
 
-                    print(f"[TTS_CACHE] ✅ Saved to cache: {cache_filename} ({file_size} bytes)")
+                    logger.info(f"[TTS_CACHE] ✅ Saved to cache: {cache_filename} ({file_size} bytes)")
 
                     # Save metadata
                     self.metadata[hash_key] = {
@@ -171,14 +174,14 @@ class GreetingTTSCache:
 
                     return str(cache_path)
                 else:
-                    print(f"[TTS_CACHE] ⚠️ TTS generated but audio file not found")
+                    logger.info(f"[TTS_CACHE] ⚠️ TTS generated but audio file not found")
                     return None
             else:
-                print(f"[TTS_CACHE] ❌ Failed to generate TTS")
+                logger.error(f"[TTS_CACHE] ❌ Failed to generate TTS")
                 return None
 
         except Exception as e:
-            print(f"[TTS_CACHE] ❌ Error generating and saving TTS: {e}")
+            logger.error(f"[TTS_CACHE] ❌ Error generating and saving TTS: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -201,7 +204,7 @@ class GreetingTTSCache:
 
         if cached_file:
             # CACHE HIT - Play from file (NO API CALL!)
-            print(f"[TTS_CACHE] 💰 API SAVED! Playing from cache (no API call)")
+            logger.info(f"[TTS_CACHE] 💰 API SAVED! Playing from cache (no API call)")
 
             try:
                 # Get TTS engine to play the cached file
@@ -220,44 +223,44 @@ class GreetingTTSCache:
                         self.metadata[hash_key]["api_calls_saved"] = self.metadata[hash_key].get("api_calls_saved", 0) + 1
                         self._save_metadata()
 
-                    print(f"[TTS_CACHE] ✅ Played from cache successfully (Total API calls saved: {self.metadata[hash_key].get('api_calls_saved', 0)})")
+                    logger.info(f"[TTS_CACHE] ✅ Played from cache successfully (Total API calls saved: {self.metadata[hash_key].get('api_calls_saved', 0)})")
 
                     # Execute callback if provided
                     if on_finished and callable(on_finished):
                         try:
                             on_finished()
                         except Exception as cb_error:
-                            print(f"[TTS_CACHE] Callback error: {cb_error}")
+                            logger.error(f"[TTS_CACHE] Callback error: {cb_error}")
 
                     return True
                 else:
-                    print(f"[TTS_CACHE] ⚠️ Failed to play cached file, will regenerate")
+                    logger.error(f"[TTS_CACHE] ⚠️ Failed to play cached file, will regenerate")
                     # Fall through to regeneration
 
             except Exception as e:
-                print(f"[TTS_CACHE] ⚠️ Error playing cached file: {e}, will regenerate")
+                logger.error(f"[TTS_CACHE] ⚠️ Error playing cached file: {e}, will regenerate")
                 import traceback
                 traceback.print_exc()
                 # Fall through to regeneration
 
         # CACHE MISS - Generate new TTS and save to cache
-        print(f"[TTS_CACHE] 💸 API CALL - Generating NEW TTS and saving to cache")
+        logger.info(f"[TTS_CACHE] 💸 API CALL - Generating NEW TTS and saving to cache")
 
         cached_path = self.generate_and_save_tts(text, voice_name, language_code)
 
         if cached_path:
-            print(f"[TTS_CACHE] ✅ Generated and cached successfully")
+            logger.info(f"[TTS_CACHE] ✅ Generated and cached successfully")
 
             # Execute callback if provided
             if on_finished and callable(on_finished):
                 try:
                     on_finished()
                 except Exception as cb_error:
-                    print(f"[TTS_CACHE] Callback error: {cb_error}")
+                    logger.error(f"[TTS_CACHE] Callback error: {cb_error}")
 
             return True
         else:
-            print(f"[TTS_CACHE] ❌ Failed to generate and cache TTS")
+            logger.error(f"[TTS_CACHE] ❌ Failed to generate and cache TTS")
             return False
 
     # Keep old method for backward compatibility
@@ -286,23 +289,23 @@ class GreetingTTSCache:
                         
                         if file_path.exists():
                             file_path.unlink()
-                            print(f"[TTS_CACHE] Cleaned old file: {filename}")
+                            logger.info(f"[TTS_CACHE] Cleaned old file: {filename}")
                         
                         del self.metadata[hash_key]
                         cleaned_count += 1
                         
                 except (ValueError, KeyError) as e:
-                    print(f"[TTS_CACHE] Error processing metadata entry: {e}")
+                    logger.error(f"[TTS_CACHE] Error processing metadata entry: {e}")
                     # Remove corrupted metadata entry
                     del self.metadata[hash_key]
                     cleaned_count += 1
             
             if cleaned_count > 0:
                 self._save_metadata()
-                print(f"[TTS_CACHE] Cleaned {cleaned_count} old cache files")
+                logger.info(f"[TTS_CACHE] Cleaned {cleaned_count} old cache files")
             
         except Exception as e:
-            print(f"[TTS_CACHE] Error during cleanup: {e}")
+            logger.error(f"[TTS_CACHE] Error during cleanup: {e}")
     
     def play_greeting_with_cache(self, text: str, voice_name: str, language_code: str) -> bool:
         """
@@ -323,15 +326,15 @@ class GreetingTTSCache:
         cache_path = self.cache_dir / f"greeting_{hash_key}{ext}"
 
         if not cache_path.exists():
-            print(f"[TTS_CACHE] Cache MISS — generate: {text[:40]}...")
+            logger.info(f"[TTS_CACHE] Cache MISS — generate: {text[:40]}...")
             ok = self._generate_audio_to_file(text, clean_voice, language_code, cache_path)
             if not ok:
                 # Fallback: speak() langsung (1 API call, tidak di-cache)
-                print("[TTS_CACHE] generate gagal, fallback ke speak()")
+                logger.info("[TTS_CACHE] generate gagal, fallback ke speak()")
                 from modules_server.tts_engine import speak
                 return speak(text=text, voice_name=voice_name, language_code=language_code)
         else:
-            print(f"[TTS_CACHE] Cache HIT — {cache_path.name}")
+            logger.info(f"[TTS_CACHE] Cache HIT — {cache_path.name}")
 
         from modules_server.tts_engine import get_tts_engine
         get_tts_engine()._play_audio_file(str(cache_path))
@@ -347,7 +350,7 @@ class GreetingTTSCache:
             engine = get_tts_engine()
             api_key = engine.google_api_key
             if not api_key:
-                print("[TTS_CACHE] Tidak ada API key — skip generate")
+                logger.warning("[TTS_CACHE] Tidak ada API key — skip generate")
                 return False
 
             if clean_voice.startswith("Gemini-"):
@@ -399,11 +402,11 @@ class GreetingTTSCache:
                 audio_bytes = base64.b64decode(resp.json()["audioContent"])
                 cache_path.write_bytes(audio_bytes)
 
-            print(f"[TTS_CACHE] ✅ Audio disimpan: {cache_path.name} ({cache_path.stat().st_size} bytes)")
+            logger.info(f"[TTS_CACHE] ✅ Audio disimpan: {cache_path.name} ({cache_path.stat().st_size} bytes)")
             return True
 
         except Exception as e:
-            print(f"[TTS_CACHE] ❌ Generate audio gagal: {e}")
+            logger.info(f"[TTS_CACHE] ❌ Generate audio gagal: {e}")
             try:
                 if cache_path.exists():
                     cache_path.unlink()
@@ -420,9 +423,9 @@ class GreetingTTSCache:
                     f.unlink()
                     deleted += 1
                 except Exception as e:
-                    print(f"[TTS_CACHE] Gagal hapus {f.name}: {e}")
+                    logger.info(f"[TTS_CACHE] Gagal hapus {f.name}: {e}")
         if deleted:
-            print(f"[TTS_CACHE] Cleaned {deleted} file greeting audio lama")
+            logger.info(f"[TTS_CACHE] Cleaned {deleted} file greeting audio lama")
 
     def prerender_batch(self, texts: list, voice_name: str, language_code: str, batch_id: str) -> list:
         """
@@ -450,13 +453,13 @@ class GreetingTTSCache:
                 if cached and Path(cached).exists():
                     shutil.copy2(cached, str(target_path))
                     successful_files.append(str(target_path))
-                    print(f"[TTS_CACHE] Batch render {i+1}/{len(texts)}: {target_filename}")
+                    logger.info(f"[TTS_CACHE] Batch render {i+1}/{len(texts)}: {target_filename}")
                 else:
-                    print(f"[TTS_CACHE] Slot {i+1} gagal di-render, skip")
+                    logger.warning(f"[TTS_CACHE] Slot {i+1} gagal di-render, skip")
             except Exception as e:
-                print(f"[TTS_CACHE] Slot {i+1} error: {e}, skip")
+                logger.error(f"[TTS_CACHE] Slot {i+1} error: {e}, skip")
 
-        print(f"[TTS_CACHE] Batch '{batch_id}': {len(successful_files)}/{len(texts)} slot berhasil")
+        logger.info(f"[TTS_CACHE] Batch '{batch_id}': {len(successful_files)}/{len(texts)} slot berhasil")
         return successful_files
 
     def swap_batch(self, old_batch_id: str, new_files: list) -> list:
@@ -466,11 +469,11 @@ class GreetingTTSCache:
         Return new_files yang dipakai. Return [] jika new_files kosong.
         """
         if not new_files:
-            print(f"[TTS_CACHE] swap_batch aborted — new_files kosong, batch lama dipertahankan")
+            logger.info(f"[TTS_CACHE] swap_batch aborted — new_files kosong, batch lama dipertahankan")
             return []
         if old_batch_id:
             self.cleanup_batch(old_batch_id)
-        print(f"[TTS_CACHE] Atomic swap selesai — {len(new_files)} file aktif")
+        logger.info(f"[TTS_CACHE] Atomic swap selesai — {len(new_files)} file aktif")
         return new_files
 
     def cleanup_batch(self, batch_id: str) -> None:
@@ -482,9 +485,9 @@ class GreetingTTSCache:
                 f.unlink()
                 deleted += 1
             except Exception as e:
-                print(f"[TTS_CACHE] Gagal hapus {f.name}: {e}")
+                logger.info(f"[TTS_CACHE] Gagal hapus {f.name}: {e}")
         if deleted:
-            print(f"[TTS_CACHE] Cleaned {deleted} file batch '{batch_id}'")
+            logger.info(f"[TTS_CACHE] Cleaned {deleted} file batch '{batch_id}'")
 
     def get_files_for_batch(self, batch_id: str) -> list:
         """Return list path file yang ada untuk batch_id ini."""
@@ -517,7 +520,7 @@ class GreetingTTSCache:
             }
             
         except Exception as e:
-            print(f"[TTS_CACHE] Error getting stats: {e}")
+            logger.error(f"[TTS_CACHE] Error getting stats: {e}")
             return {
                 "total_files": 0,
                 "total_size_mb": 0,
