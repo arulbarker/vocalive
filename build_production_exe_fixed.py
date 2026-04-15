@@ -92,36 +92,17 @@ from pathlib import Path
 
 block_cipher = None
 
-# Kumpulkan file pytchat_ng
-pytchat_datas = []
-pytchat_path = Path("thirdparty/pytchat_ng")
-if pytchat_path.exists():
-    for f in pytchat_path.rglob("*"):
-        if f.is_file() and f.suffix not in (".pyc", ".pyo"):
-            rel = f.relative_to("thirdparty/pytchat_ng")
-            pytchat_datas.append((str(f), f"pytchat/{rel.parent}"))
-
 a = Analysis(
     ["main.py"],
-    pathex=[".", "thirdparty", "thirdparty/pytchat_ng"],
+    pathex=["."],
     binaries=[],
     datas=[
         ("config/settings_default.json", "config"),
         ("config/voices.json",           "config"),
         ("config/packages.json",         "config"),
-        ("ui",             "ui"),
-        ("modules_client", "modules_client"),
-        ("modules_server", "modules_server"),
-        ("listeners",      "listeners"),
         ("icon.ico",       "."),
-        ("version.py",     "."),
-    ] + pytchat_datas,
+    ],
     hiddenimports=[
-        # pytchat
-        "pytchat", "pytchat.core", "pytchat.core.pytchat",
-        "pytchat.config", "pytchat.parser", "pytchat.parser.live",
-        "pytchat.processors", "pytchat.processors.default",
-        "pytchat.exceptions", "pytchat.paramgen", "pytchat.paramgen.liveparam",
         # network
         "requests", "urllib3", "certifi",
         "websockets", "websockets.client", "websockets.server",
@@ -150,13 +131,14 @@ a = Analysis(
         "sentry_sdk.integrations",
         "sentry_sdk.integrations.stdlib",
         "sentry_sdk.integrations.excepthook",
-        # Virtual Camera
-        "pyvirtualcam",
-        "cv2",
+        # TikTok Live
+        "TikTokLive", "TikTokLive.client", "TikTokLive.events",
+        "betterproto",
     ],
     hookspath=[],
     runtime_hooks=[],
     excludes=[
+        # Dead code / tidak dipakai VocaLive
         "whisper", "torch", "transformers", "speech_recognition",
         "customtkinter", "tensorflow", "tensorboard", "keras",
         "nltk", "scipy", "numpy", "pandas", "matplotlib",
@@ -164,12 +146,45 @@ a = Analysis(
         "langchain", "langchain_community", "langchain_core",
         "openai", "anthropic", "chromadb", "faiss",
         "pyqtgraph", "IPython", "jupyter", "notebook",
+        # thirdparty dead code (Wav2Lip, dwpose, dll)
+        "cv2", "opencv", "onnxruntime", "onnx", "triton",
+        "pyvirtualcam", "OpenGL",
+        # pytchat (dead code — app pakai TikTokLive)
+        "pytchat",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
+
+# ── Post-Analysis cleanup: hapus library besar yang lolos dari excludes ──
+# PyInstaller hooks kadang pull transitive deps meski sudah di-exclude.
+_BLOAT_PATTERNS = (
+    "torch", "cuda", "cublas", "cudnn", "nvrtc", "nvinfer", "nvidia",
+    "triton", "caffe2",
+    "cv2", "opencv",
+    "OpenGL", "opengl",
+    "onnx", "onnxruntime",
+    "transformers", "tokenizers", "huggingface",
+    "langchain", "langchain_community", "langchain_core",
+    "sentence_transformers", "sklearn", "scikit",
+    "scipy", "numpy",  # numpy optional (virtual_camera try/except)
+    "pandas", "matplotlib",
+    "tensorflow", "tensorboard", "keras",
+    "Wav2Lip", "dwpose", "sd-vae",
+    "pyqtgraph",
+    "pytchat",
+    "pyvirtualcam",
+)
+
+def _is_bloat(name):
+    name_lower = name.lower()
+    return any(p.lower() in name_lower for p in _BLOAT_PATTERNS)
+
+a.binaries = [b for b in a.binaries if not _is_bloat(b[0])]
+a.datas    = [d for d in a.datas    if not _is_bloat(d[0])]
+a.pure     = [p for p in a.pure     if not _is_bloat(p[0])]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
