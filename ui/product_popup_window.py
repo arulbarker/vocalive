@@ -66,6 +66,9 @@ class ProductPopupWindow(QWidget):
         self._resize_start_geom: QRect | None = None
         self._is_playing = False
 
+        # Capture mode: window di belakang tapi tetap ter-capture oleh TikTok LS
+        self._capture_mode = False
+
         # Telemetry — scene info
         self._tel_scene_id = 0
         self._tel_scene_name = ""
@@ -320,7 +323,11 @@ class ProductPopupWindow(QWidget):
 
         self._player.stop()
         self._player.setSource(QUrl.fromLocalFile(os.path.abspath(video_path)))
+
         self.show()
+        # Capture mode: turunkan ke belakang setelah show
+        if self._capture_mode:
+            self._lower_window()
         self._player.play()
         self._start_tts_watcher()
 
@@ -390,3 +397,71 @@ class ProductPopupWindow(QWidget):
 
     def resize_popup(self, width: int, height: int):
         self.resize(width, min(height, 1080))
+
+    # ── Capture Mode: di belakang window lain tapi tetap ter-capture ─────
+
+    # Window flags untuk masing-masing mode
+    _FLAGS_PREVIEW = (
+        Qt.WindowType.FramelessWindowHint |
+        Qt.WindowType.WindowStaysOnTopHint |
+        Qt.WindowType.Tool
+    )
+    _FLAGS_CAPTURE = (
+        Qt.WindowType.FramelessWindowHint |
+        Qt.WindowType.Tool
+    )
+
+    @property
+    def capture_mode(self) -> bool:
+        return self._capture_mode
+
+    def _lower_window(self):
+        """Turunkan window ke paling bawah Z-order via Win32 API."""
+        try:
+            import ctypes
+            HWND_BOTTOM = 1
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOACTIVATE = 0x0010
+            hwnd = int(self.winId())
+            ctypes.windll.user32.SetWindowPos(
+                hwnd, HWND_BOTTOM, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            )
+        except Exception as e:
+            logger.warning("[POPUP] Win32 SetWindowPos failed: %s", e)
+
+    def enter_capture_mode(self):
+        """Hapus WindowStaysOnTopHint dan turunkan ke belakang semua window.
+        Window tetap on-screen (DWM render frame) → TikTok LS WGC bisa capture.
+        User tidak terganggu karena window tertutup app lain."""
+        if self._capture_mode:
+            return
+        self._capture_mode = True
+        self._title_bar.hide()
+
+        # Ganti flags: hapus StaysOnTop → window bisa turun ke belakang
+        visible = self.isVisible()
+        self.setWindowFlags(self._FLAGS_CAPTURE)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        if visible:
+            self.show()  # setWindowFlags hide window, perlu show ulang
+        else:
+            self.show()
+        self._lower_window()
+        logger.info("[POPUP] Capture mode ON — window di belakang, tetap ter-capture")
+
+    def enter_preview_mode(self):
+        """Kembalikan WindowStaysOnTopHint — window naik ke depan untuk setup."""
+        if not self._capture_mode:
+            return
+        self._capture_mode = False
+        self._title_bar.show()
+
+        # Ganti flags: tambah StaysOnTop kembali
+        self.setWindowFlags(self._FLAGS_PREVIEW)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.show()
+        self.raise_()
+        self.update()
+        logger.info("[POPUP] Preview mode ON — window di depan untuk setup")

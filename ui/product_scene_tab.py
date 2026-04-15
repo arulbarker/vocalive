@@ -170,8 +170,14 @@ class ProductSceneTab(QWidget):
         self.btn_test.clicked.connect(self._test_selected)
 
         self.btn_preview = QPushButton("Preview Window")
-        self.btn_preview.setStyleSheet(btn_ghost())
-        self.btn_preview.clicked.connect(self._open_preview)
+        self.btn_preview.setFixedWidth(150)
+        self.btn_preview.clicked.connect(self._toggle_preview)
+        self._refresh_preview_btn()
+
+        self.btn_capture_mode = QPushButton("Capture Mode")
+        self.btn_capture_mode.setFixedWidth(140)
+        self.btn_capture_mode.clicked.connect(self._toggle_capture_mode)
+        self._refresh_capture_mode_btn()
 
         # Toggle ON/OFF fitur product popup
         self.btn_toggle = QPushButton()
@@ -182,6 +188,7 @@ class ProductSceneTab(QWidget):
         toolbar.addWidget(self.btn_remove)
         toolbar.addWidget(self.btn_test)
         toolbar.addWidget(self.btn_preview)
+        toolbar.addWidget(self.btn_capture_mode)
         toolbar.addStretch()
         toolbar.addWidget(self.btn_toggle)
         layout.addLayout(toolbar)
@@ -340,12 +347,62 @@ class ProductSceneTab(QWidget):
         self._popup_window.show_product(scene["video_path"])
 
     @pyqtSlot()
-    def _open_preview(self):
-        """Buka popup window dalam mode preview — bisa dipanggil berkali-kali."""
+    def _toggle_preview(self):
+        """Toggle preview window: klik buka, klik lagi tutup."""
         if self._popup_window is None:
             QMessageBox.warning(self, "Error", "Popup window belum diinisialisasi.")
             return
-        self._popup_window.show_preview()
+        if self._popup_window.isVisible() and not self._popup_window.capture_mode:
+            # Sedang tampil → tutup
+            self._popup_window.hide()
+        else:
+            # Jika sedang capture mode, kembalikan ke preview dulu
+            if self._popup_window.capture_mode:
+                self._popup_window.enter_preview_mode()
+                self._refresh_capture_mode_btn()
+            self._popup_window.show_preview()
+        self._refresh_preview_btn()
+
+    def _refresh_preview_btn(self):
+        """Update warna tombol preview: hijau saat aktif, ghost saat mati."""
+        is_open = (self._popup_window is not None
+                   and self._popup_window.isVisible()
+                   and not self._popup_window.capture_mode)
+        if is_open:
+            self.btn_preview.setText("Preview Window ON")
+            self.btn_preview.setStyleSheet(btn_success("font-size: 12px; font-weight: 700;"))
+        else:
+            self.btn_preview.setText("Preview Window")
+            self.btn_preview.setStyleSheet(btn_ghost("font-size: 12px;"))
+
+    @pyqtSlot()
+    def _toggle_capture_mode(self):
+        """Toggle antara Capture Mode (offscreen) dan Preview Mode (onscreen)."""
+        if self._popup_window is None:
+            QMessageBox.warning(self, "Error", "Popup window belum diinisialisasi.")
+            return
+        if self._popup_window.capture_mode:
+            self._popup_window.enter_preview_mode()
+        else:
+            # Pastikan window sudah pernah di-show dulu agar posisi tersimpan
+            if not self._popup_window.isVisible():
+                self._popup_window.show_preview()
+            self._popup_window.enter_capture_mode()
+        self._refresh_capture_mode_btn()
+
+    def _refresh_capture_mode_btn(self):
+        """Update tampilan tombol capture mode sesuai state."""
+        if self._popup_window is not None and self._popup_window.capture_mode:
+            self.btn_capture_mode.setText("Capture Mode ON")
+            self.btn_capture_mode.setStyleSheet(
+                f"QPushButton {{ background-color: {PRIMARY}; color: white; "
+                f"border: none; border-radius: 6px; padding: 8px 12px; "
+                f"font-size: 12px; font-weight: 700; }}"
+                f"QPushButton:hover {{ background-color: #1D4ED8; }}"
+            )
+        else:
+            self.btn_capture_mode.setText("Capture Mode")
+            self.btn_capture_mode.setStyleSheet(btn_ghost("font-size: 12px;"))
 
     def _refresh_toggle_btn(self):
         """Update tampilan tombol toggle sesuai state enabled."""
