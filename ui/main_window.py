@@ -233,9 +233,10 @@ except ImportError as e:
     PRODUCT_SCENE_TAB_AVAILABLE = False
     logger.warning(f"ProductSceneTab not available: {e}")
 
-# Import VirtualCameraTab
+# Import VirtualCameraTab + Manager
 try:
     from ui.virtual_camera_tab import VirtualCameraTab
+    from modules_client.virtual_camera_manager import VirtualCameraManager
     VIRTUAL_CAMERA_TAB_AVAILABLE = True
     logger.info("VirtualCameraTab imported successfully")
 except ImportError as e:
@@ -890,7 +891,10 @@ class MainWindow(QMainWindow):
         # Add Virtual Camera tab
         if VIRTUAL_CAMERA_TAB_AVAILABLE:
             try:
-                self.virtual_camera_tab = VirtualCameraTab()
+                self.virtual_camera_manager = VirtualCameraManager()
+                self.virtual_camera_manager.load_config()
+                self.virtual_camera_tab = VirtualCameraTab(manager=self.virtual_camera_manager)
+                self.virtual_camera_tab._refresh_table()
                 self.main_tabs.addTab(self.virtual_camera_tab, "Virtual Camera")
                 logger.info("Virtual Camera tab added successfully")
             except Exception as e:
