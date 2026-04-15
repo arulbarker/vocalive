@@ -1,10 +1,12 @@
 """Tests untuk modules_client/config_manager.py."""
 
 import json
+import sys
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 
-from modules_client.config_manager import ConfigManager
+from modules_client.config_manager import ConfigManager, _get_app_root
 
 pytestmark = pytest.mark.integration
 
@@ -113,3 +115,44 @@ def test_load_settings_malformed_json(tmp_path):
     settings = cm.load_settings()
 
     assert settings == {}
+
+
+# ---------------------------------------------------------------------------
+# 10. test_get_app_root_dev_mode
+# ---------------------------------------------------------------------------
+def test_get_app_root_dev_mode():
+    """_get_app_root() di dev mode harus return parent dari modules_client/."""
+    root = _get_app_root()
+    assert (root / "modules_client").exists()
+
+
+# ---------------------------------------------------------------------------
+# 11. test_get_app_root_frozen_mode
+# ---------------------------------------------------------------------------
+def test_get_app_root_frozen_mode(tmp_path):
+    """_get_app_root() di frozen (EXE) mode harus return parent dari executable."""
+    fake_exe = tmp_path / "VocaLive.exe"
+    fake_exe.touch()
+    with patch.object(sys, 'frozen', True, create=True), \
+         patch.object(sys, 'executable', str(fake_exe)):
+        root = _get_app_root()
+        assert root == tmp_path
+
+
+# ---------------------------------------------------------------------------
+# 12. test_config_manager_resolves_relative_path
+# ---------------------------------------------------------------------------
+def test_config_manager_resolves_relative_path():
+    """ConfigManager dengan path relatif harus resolve ke path absolut."""
+    cm = ConfigManager("config/settings.json")
+    assert cm.config_file.is_absolute()
+
+
+# ---------------------------------------------------------------------------
+# 13. test_config_manager_keeps_absolute_path
+# ---------------------------------------------------------------------------
+def test_config_manager_keeps_absolute_path(tmp_path):
+    """ConfigManager dengan path absolut harus pakai langsung tanpa resolve."""
+    abs_path = tmp_path / "my_settings.json"
+    cm = ConfigManager(str(abs_path))
+    assert cm.config_file == abs_path
