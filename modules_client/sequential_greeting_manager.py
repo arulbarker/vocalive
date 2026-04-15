@@ -284,6 +284,11 @@ class SequentialGreetingManager:
                 language_code=language_code
             )
             print(f"[GREETING_AI] {'Played' if success else 'Failed'}: {chosen_text[:40]}...")
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("greeting_played", {"success": success, "mode": self.play_mode.value if hasattr(self.play_mode, 'value') else str(self.play_mode)})
+            except Exception:
+                pass
         except Exception as e:
             print(f"[GREETING_AI] Playback error: {e}")
 

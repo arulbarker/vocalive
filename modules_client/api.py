@@ -275,16 +275,31 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
             if reply and len(reply.strip()) > 0:
                 logger.info("[API] generate_reply: reply_len=%d, elapsed=%.2fs", len(reply), time.time() - start_time)
                 print(f"[API] Gemini success: {len(reply)} chars")
+                try:
+                    from modules_client.telemetry import capture as _tel_capture
+                    _tel_capture("ai_reply_success", {"provider": "gemini", "reply_len": len(reply)})
+                except Exception:
+                    pass
                 return reply
             else:
                 error_msg = "ERROR: Gemini API tidak memberikan respons. Periksa API key atau coba lagi."
                 print(f"[API] {error_msg}")
+                try:
+                    from modules_client.telemetry import capture as _tel_capture
+                    _tel_capture("ai_reply_failed", {"provider": "gemini", "reason": "empty_response"})
+                except Exception:
+                    pass
                 return error_msg
 
         except Exception as e:
             logger.error("[API] generate_reply error: %s", str(e))
             error_msg = f"ERROR Gemini: {str(e)}. Periksa API key Gemini Anda di Settings."
             print(f"[API] {error_msg}")
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("ai_reply_failed", {"provider": "gemini", "reason": str(e)[:100]})
+            except Exception:
+                pass
             return error_msg
 
     elif ai_provider == "deepseek":
@@ -311,16 +326,31 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
             if reply and len(reply.strip()) > 0:
                 logger.info("[API] generate_reply: reply_len=%d, elapsed=%.2fs", len(reply), time.time() - start_time)
                 print(f"[API] DeepSeek success: {len(reply)} chars")
+                try:
+                    from modules_client.telemetry import capture as _tel_capture
+                    _tel_capture("ai_reply_success", {"provider": "deepseek", "reply_len": len(reply)})
+                except Exception:
+                    pass
                 return reply
             else:
                 error_msg = "ERROR: DeepSeek API tidak memberikan respons. Periksa API key dan koneksi internet, atau coba lagi nanti."
                 print(f"[API] {error_msg}")
+                try:
+                    from modules_client.telemetry import capture as _tel_capture
+                    _tel_capture("ai_reply_failed", {"provider": "deepseek", "reason": "empty_response"})
+                except Exception:
+                    pass
                 return error_msg
 
         except Exception as e:
             logger.error("[API] generate_reply error: %s", str(e))
             error_msg = f"ERROR DeepSeek: {str(e)}. Periksa API key dan koneksi internet."
             print(f"[API] {error_msg}")
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("ai_reply_failed", {"provider": "deepseek", "reason": str(e)[:100]})
+            except Exception:
+                pass
             return error_msg
     
     else:

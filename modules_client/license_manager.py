@@ -277,10 +277,20 @@ class LicenseManager:
                 if new_exp:
                     self._update_cached_expiry(new_exp)
                 self.logger.info("check_session_online: session valid for %s", masked_email)
+                try:
+                    from modules_client.telemetry import capture as _tel_capture
+                    _tel_capture("license_checked", {"status": "valid", "method": "online"})
+                except Exception:
+                    pass
                 return True, "Sesi valid"
             else:
                 msg = result.get("message", "Sesi tidak valid.")
                 self.logger.warning("check_session_online: session invalid for %s — %s", masked_email, msg)
+                try:
+                    from modules_client.telemetry import capture as _tel_capture
+                    _tel_capture("license_checked", {"status": "invalid", "method": "online"})
+                except Exception:
+                    pass
                 return False, msg
         except Exception as e:
             self.logger.error("check_session_online: unexpected error for %s — %s", masked_email, e)
