@@ -9,7 +9,7 @@ import time
 from typing import Optional
 from modules_client.config_manager import config_manager
 
-logger = logging.getLogger('VocaLive')
+logger = logging.getLogger('VocaLive.Gemini')
 
 GEMINI_MODEL_PRIMARY  = "gemini-3.1-flash-lite-preview"   # $0.25/$1.50 per 1M tokens
 GEMINI_MODEL_FALLBACK = "gemini-flash-lite-latest"         # $0.10/$0.40 — alias paling murah
@@ -36,6 +36,7 @@ class GeminiAI:
             logger.error("Gemini API key not available")
             return None
 
+        logger.info("[GEMINI] Request: model=%s, prompt_len=%d, max_tokens=%d, fast_mode=%s", self.model, len(prompt), max_tokens, fast_mode)
         max_retries = 1 if fast_mode else 3
         base_delay = 0.5 if fast_mode else 1.0
 
@@ -89,10 +90,12 @@ class GeminiAI:
                 if resp.status_code == 200:
                     data = resp.json()
                     reply = data["candidates"][0]["content"]["parts"][0]["text"]
+                    logger.info("[GEMINI] Response: status=%d, reply_len=%d", resp.status_code, len(reply))
                     logger.debug(f"Gemini reply ({self.model}): {len(reply)} chars")
                     return reply.strip()
                 elif resp.status_code == 403:
                     error_detail = resp.text[:400]
+                    logger.warning("[GEMINI] Error: model=%s, status=%d", self.model, resp.status_code)
                     logger.warning(f"Gemini 403 ({self.model}): {error_detail}")
                     if self.model == GEMINI_MODEL_PRIMARY:
                         logger.warning(f"Auto-downgrade ke '{GEMINI_MODEL_FALLBACK}'")
@@ -102,8 +105,10 @@ class GeminiAI:
                         logger.error("Gemini 403 bahkan pada fallback model. Periksa API key.")
                         return None
                 elif resp.status_code == 429:
+                    logger.warning("[GEMINI] Error: model=%s, status=%d", self.model, resp.status_code)
                     logger.warning(f"Gemini rate limit, attempt {attempt + 1}")
                 else:
+                    logger.warning("[GEMINI] Error: model=%s, status=%d", self.model, resp.status_code)
                     logger.error(f"Gemini API error: {resp.status_code} — {resp.text[:300]}")
 
             except requests.exceptions.Timeout:

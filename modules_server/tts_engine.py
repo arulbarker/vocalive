@@ -185,6 +185,7 @@ class TTSEngine:
             pygame.mixer.music.stop()
             pygame.mixer.music.unload()
             pygame.mixer.music.load(file_path)
+            logger.info("[TTS] playback: started %s", file_path)
             pygame.mixer.music.play()
 
             # Wait for playback to complete
@@ -193,6 +194,7 @@ class TTSEngine:
 
             # Unload after playback so the file can be deleted
             pygame.mixer.music.unload()
+            logger.info("[TTS] playback: finished")
 
         except Exception as e:
             logger.error(f"Failed to play audio file: {e}")
@@ -222,6 +224,7 @@ class TTSEngine:
         }
         try:
             resp = _requests.post(url, json=payload, timeout=20)
+            logger.info("[TTS] gemini_tts: status=%d", resp.status_code)
             resp.raise_for_status()
             data = resp.json()
             inline = data["candidates"][0]["content"]["parts"][0]["inlineData"]
@@ -274,6 +277,7 @@ class TTSEngine:
         }
         try:
             resp = _requests.post(url, json=payload, timeout=15)
+            logger.info("[TTS] cloud_tts: status=%d", resp.status_code)
             if not resp.ok:
                 err = resp.json() if resp.headers.get("content-type","").startswith("application/json") else resp.text
                 msg = err.get("error", {}).get("message", str(err)) if isinstance(err, dict) else str(err)[:300]
@@ -311,6 +315,7 @@ class TTSEngine:
         current_lang = language_code or self.language_code
 
         logger.info(f"TTS started: {text[:50]}{'...' if len(text) > 50 else ''} (voice={current_voice}, lang={current_lang})")
+        logger.info("[TTS] routing: voice=%s → backend=%s", current_voice, "gemini" if current_voice.startswith("Gemini-") else "cloud_api")
 
         # --- Gemini Flash TTS path ---
         if self.google_api_key and current_voice.startswith("Gemini-"):
@@ -407,7 +412,7 @@ class TTSEngine:
             return True
         
         # Fallback to pyttsx3
-        logger.warning("Google TTS failed, falling back to pyttsx3")
+        logger.warning("[TTS] fallback: Google TTS gagal, menggunakan pyttsx3")
         if self.speak_pyttsx3(text):
             return True
         
@@ -445,6 +450,7 @@ def reinitialize_tts_engine() -> bool:
 
 def speak(text: str, language_code: str = "id-ID", voice_name: str = None, output_device=None, on_finished=None, force_google_tts: bool = False) -> bool:
     """Main speak function - entry point for TTS with compatibility parameters"""
+    logger.info("[TTS] speak: text_len=%d, voice=%s", len(text), voice_name)
     try:
         engine = get_tts_engine()
 

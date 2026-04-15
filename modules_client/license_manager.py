@@ -222,6 +222,9 @@ class LicenseManager:
         if not email or "@" not in email:
             return False, "Format email tidak valid", {}
 
+        masked_email = email[:3] + "***" if len(email) >= 3 else "***"
+        self.logger.info("validate_license_online: login attempt for %s", masked_email)
+
         device_token = self._get_device_fingerprint()
         result = self._call_appscript({
             "action": "login",
@@ -230,6 +233,7 @@ class LicenseManager:
         })
 
         if result is None:
+            self.logger.warning("validate_license_online: server unreachable for %s", masked_email)
             return False, "Tidak bisa terhubung ke server lisensi. Periksa koneksi internet.", {}
 
         if result.get("status") == "SUKSES":
@@ -239,11 +243,11 @@ class LicenseManager:
                 "expired_date": result.get("expired_date", ""),
                 "maxDevices": result.get("maxDevices", 1),
             }
-            self.logger.info(f"Login sukses: {email}")
+            self.logger.info("validate_license_online: login sukses for %s", masked_email)
             return True, "Login berhasil!", data
         else:
             msg = result.get("message", "Login gagal.")
-            self.logger.warning(f"Login gagal [{email}]: {msg}")
+            self.logger.warning("validate_license_online: login gagal for %s — %s", masked_email, msg)
             return False, msg, {}
 
     def check_session_online(self, email: str) -> Tuple[bool, str]:
@@ -251,26 +255,36 @@ class LicenseManager:
         Cek session aktif via AppScript (action=cek).
         Dipakai oleh license_monitor untuk validasi berkala.
         """
-        device_token = self._get_device_fingerprint()
-        result = self._call_appscript({
-            "action": "cek",
-            "email": email,
-            "token": device_token,
-        })
+        masked_email = email[:3] + "***" if len(email) >= 3 else "***"
+        self.logger.info("check_session_online: checking session for %s", masked_email)
 
-        if result is None:
-            # Network error — jangan paksa logout, biarkan offline cache berlaku
+        try:
+            device_token = self._get_device_fingerprint()
+            result = self._call_appscript({
+                "action": "cek",
+                "email": email,
+                "token": device_token,
+            })
+
+            if result is None:
+                # Network error — jangan paksa logout, biarkan offline cache berlaku
+                self.logger.warning("check_session_online: network error for %s — using offline cache", masked_email)
+                return True, "Offline — menggunakan cache lokal"
+
+            if result.get("status") == "VALID":
+                # Update expired_date di cache lokal jika server kirim yang baru
+                new_exp = result.get("expired_date")
+                if new_exp:
+                    self._update_cached_expiry(new_exp)
+                self.logger.info("check_session_online: session valid for %s", masked_email)
+                return True, "Sesi valid"
+            else:
+                msg = result.get("message", "Sesi tidak valid.")
+                self.logger.warning("check_session_online: session invalid for %s — %s", masked_email, msg)
+                return False, msg
+        except Exception as e:
+            self.logger.error("check_session_online: unexpected error for %s — %s", masked_email, e)
             return True, "Offline — menggunakan cache lokal"
-
-        if result.get("status") == "VALID":
-            # Update expired_date di cache lokal jika server kirim yang baru
-            new_exp = result.get("expired_date")
-            if new_exp:
-                self._update_cached_expiry(new_exp)
-            return True, "Sesi valid"
-        else:
-            msg = result.get("message", "Sesi tidak valid.")
-            return False, msg
 
     def logout_online(self, email: str) -> bool:
         """Kirim logout ke AppScript."""
@@ -353,9 +367,11 @@ class LicenseManager:
         Cek apakah sesi lokal valid.
         force_online_check=True → cek tambahan ke AppScript.
         """
+        self.logger.info("is_license_valid: entry — force_online_check=%s", force_online_check)
         try:
             session = self.load_license_data()
             if not session:
+                self.logger.info("is_license_valid: result=FAIL — no session data found")
                 return False, "Belum login. Silakan masukkan email pembelian."
 
             # Cek expired_date lokal
@@ -371,6 +387,7 @@ class LicenseManager:
                     else:
                         exp_date = None
                     if exp_date and datetime.now() > exp_date:
+                        self.logger.info("is_license_valid: result=FAIL — expired on %s", expired_str)
                         self.clear_license_data()
                         return False, f"Masa aktif berlangganan habis pada {expired_str}. Silakan perpanjang."
                 except Exception:
@@ -382,14 +399,16 @@ class LicenseManager:
                 if email:
                     is_valid, message = self.check_session_online(email)
                     if not is_valid:
-                        self.logger.warning(f"Online session check gagal: {message}")
+                        self.logger.warning("is_license_valid: online check failed — %s", message)
                         self.clear_license_data()
+                        self.logger.info("is_license_valid: result=FAIL — online check rejected session")
                         return False, message
 
+            self.logger.info("is_license_valid: result=OK — license valid")
             return True, "Lisensi valid"
 
         except Exception as e:
-            self.logger.error(f"License check error: {e}")
+            self.logger.error("is_license_valid: exception — %s", e)
             return False, f"Error: {str(e)}"
 
     def clear_license_data(self) -> bool:

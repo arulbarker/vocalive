@@ -9,7 +9,7 @@ import time
 from typing import Optional, Dict, Any
 from modules_client.config_manager import config_manager
 
-logger = logging.getLogger('VocaLive')
+logger = logging.getLogger('VocaLive.DeepSeek')
 
 class DeepSeekAI:
     """DeepSeek AI API client"""
@@ -35,6 +35,7 @@ class DeepSeekAI:
             logger.error("DeepSeek API key not available")
             return None
 
+        logger.info("[DEEPSEEK] Request: model=%s, prompt_len=%d, max_tokens=%d, fast_mode=%s", "deepseek-chat", len(prompt), max_tokens, fast_mode)
         # PERFORMANCE: Reduce retries in fast mode
         max_retries = 1 if fast_mode else 3
         base_delay = 0.5 if fast_mode else 1.0
@@ -113,15 +114,18 @@ class DeepSeekAI:
                 if response.status_code == 200:
                     result = response.json()
                     reply = result["choices"][0]["message"]["content"]
+                    logger.info("[DEEPSEEK] Response: status=%d, reply_len=%d", response.status_code, len(reply))
                     logger.debug(f"DeepSeek reply generated: {len(reply)} chars (attempt {attempt + 1})")
                     return reply
                 elif response.status_code == 429:  # Rate limit
+                    logger.warning("[DEEPSEEK] Error: model=%s, status=%d", "deepseek-chat", response.status_code)
                     logger.warning(f"DeepSeek rate limit hit, attempt {attempt + 1}")
                     if attempt < max_retries - 1:
                         delay = base_delay * (2 ** attempt)  # Exponential backoff
                         time.sleep(delay)
                         continue
                 else:
+                    logger.warning("[DEEPSEEK] Error: model=%s, status=%d", "deepseek-chat", response.status_code)
                     logger.error(f"DeepSeek API error: {response.status_code} - {response.text}")
                     if attempt < max_retries - 1:
                         delay = base_delay * (2 ** attempt)

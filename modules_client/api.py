@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('VocaLive.API')
 
 # Load environment variables
 load_dotenv()
@@ -243,14 +243,16 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
     Returns:
         AI generated reply string, or clear error message if failed
     """
+    start_time = time.time()
     print(f"[API] generate_reply called with prompt length: {len(prompt)}")
     if fast_mode:
         print(f"[API] ⚡ FAST MODE enabled - aggressive timeout for quick response")
-    
+
     # Get AI provider from config
     from modules_client.config_manager import ConfigManager
     cfg = ConfigManager()
     ai_provider = cfg.get("ai_provider", "deepseek").lower()
+    logger.info("[API] generate_reply: provider=%s, prompt_len=%d, fast_mode=%s", ai_provider, len(prompt), fast_mode)
     print(f"[API] Using ONLY configured provider: {ai_provider} (NO FALLBACK)")
     
     # Use ONLY the configured AI provider - NO FALLBACK
@@ -271,6 +273,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
             reply = gemini_generate(prompt, max_tokens=(max_tokens or 150), fast_mode=fast_mode)
 
             if reply and len(reply.strip()) > 0:
+                logger.info("[API] generate_reply: reply_len=%d, elapsed=%.2fs", len(reply), time.time() - start_time)
                 print(f"[API] Gemini success: {len(reply)} chars")
                 return reply
             else:
@@ -279,6 +282,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
                 return error_msg
 
         except Exception as e:
+            logger.error("[API] generate_reply error: %s", str(e))
             error_msg = f"ERROR Gemini: {str(e)}. Periksa API key Gemini Anda di Settings."
             print(f"[API] {error_msg}")
             return error_msg
@@ -305,6 +309,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
             reply = deepseek_generate(prompt, max_tokens=max_tokens)
 
             if reply and len(reply.strip()) > 0:
+                logger.info("[API] generate_reply: reply_len=%d, elapsed=%.2fs", len(reply), time.time() - start_time)
                 print(f"[API] DeepSeek success: {len(reply)} chars")
                 return reply
             else:
@@ -313,6 +318,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
                 return error_msg
 
         except Exception as e:
+            logger.error("[API] generate_reply error: %s", str(e))
             error_msg = f"ERROR DeepSeek: {str(e)}. Periksa API key dan koneksi internet."
             print(f"[API] {error_msg}")
             return error_msg
@@ -337,6 +343,7 @@ def generate_reply_with_scene(prompt: str, fast_mode: bool = False) -> tuple[str
 
     psm = ProductSceneManager()
     product_context = psm.build_product_context()
+    logger.info("[API] generate_reply_with_scene: prompt_len=%d, scene_id=%d", len(prompt), 0)
 
     if not product_context:
         # Tidak ada produk terdaftar — gunakan reply biasa

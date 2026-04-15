@@ -61,7 +61,30 @@ python build_production_exe_fixed.py
 python vtest_telemetry.py
 ```
 
-Tidak ada test suite formal — testing manual via `python main.py`. `vtest_telemetry.py` untuk verifikasi koneksi telemetry (25 checks). Pastikan `config/settings.json` berisi API key yang valid.
+### Testing
+
+```bash
+# Run semua test (WAJIB sebelum commit)
+python -m pytest tests/ -v --tb=short
+
+# Run satu test file
+python -m pytest tests/test_version.py -v
+
+# Run satu test function
+python -m pytest tests/test_analytics_manager.py::TestKeywordExtraction::test_product_keywords -v
+
+# Run dengan coverage report
+python -m pytest tests/ --cov=modules_client --cov=modules_server --cov-report=term-missing
+
+# Verify telemetry (PostHog + Sentry) kirim ke server
+python vtest_telemetry.py
+```
+
+**WAJIB: Setiap perubahan file harus diikuti `python -m pytest tests/ -v --tb=short`.** Jika ada test FAIL, fix dulu sebelum lanjut. Jangan commit jika ada test gagal.
+
+Test suite: 107 tests di 14 files (`tests/`). Tier 1 = pure logic (version, templates, theme, logger), Tier 2 = mocked I/O (config, user_list, product_scene, analytics, greeting, updater, validator), Tier 3 = mocked SDK (telemetry, TTS, API).
+
+Pastikan `config/settings.json` berisi API key yang valid untuk development.
 
 ### Alur Rilis Versi Baru
 

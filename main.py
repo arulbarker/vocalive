@@ -168,6 +168,7 @@ if LICENSE_SYSTEM_AVAILABLE:
 else:
     logger.warning("License system: DISABLED")
 logger.info("=" * 60)
+logger.info("[STARTUP] VocaLive v%s starting", _APP_VERSION)
 
 # ========== FORCE PRODUCTION MODE ==========
 def detect_application_mode():
@@ -471,7 +472,9 @@ def main():
 
     # ========== LICENSE VALIDATION ==========
     print("[LICENSE] Validating application license...")
-    if not validate_application_license():
+    _license_is_valid = validate_application_license()
+    logger.info("[STARTUP] License valid: %s", _license_is_valid)
+    if not _license_is_valid:
         logger.critical("License validation failed - application cannot start")
         print("[LICENSE] ❌ Application cannot start without valid license")
         
@@ -497,6 +500,7 @@ def main():
     # Init monitoring (PostHog + Sentry) — non-blocking, never crashes app
     from modules_client.telemetry import init as telemetry_init, capture as telemetry_capture, set_user_context
     telemetry_init(POSTHOG_PROJECT_KEY, SENTRY_DSN, _APP_VERSION)
+    logger.info("[STARTUP] Telemetry initialized")
     set_user_context({"platform": "windows", "app_mode": APP_MODE})
     telemetry_capture("app_launched")
 
@@ -571,6 +575,7 @@ def main():
 
         # Create main window
         main_window = MainWindow()
+        logger.info("[STARTUP] MainWindow created, entering event loop")
 
         # CRITICAL: Start real-time license monitoring
         if LICENSE_SYSTEM_AVAILABLE:
@@ -620,6 +625,7 @@ def main():
             
             print("[GUI] VocaLive GUI closed")
             logger.info(f"GUI application closed with exit code: {exit_code}")
+            logger.info("[SHUTDOWN] App closing")
 
             # Flush Sentry — tutup sesi Release Health dengan bersih
             try:

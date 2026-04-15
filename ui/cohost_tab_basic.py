@@ -8,8 +8,11 @@ import threading
 import json
 import re
 import traceback
+import logging
 from datetime import datetime, timedelta
 from collections import deque, defaultdict
+
+logger = logging.getLogger('VocaLive.Cohost')
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -453,6 +456,7 @@ class SimpleTikTokListener(QThread):
             async def on_connect(event):
                 import time
                 self.start_timestamp = time.time()  # Record connection time
+                logger.info("[COHOST] TikTok connected: username=%s", self.username)
                 self.logMessage.emit("INFO", f"✅ Connected to TikTok Live: @{self.username}")
                 self.logMessage.emit("INFO", f"🎬 Ready to receive comments! Connection timestamp: {self.start_timestamp:.2f}")
                 self.logMessage.emit("INFO", f"📝 Comment filtering: Will process real-time comments immediately")
@@ -536,6 +540,7 @@ class SimpleTikTokListener(QThread):
                         self.logMessage.emit("DEBUG", f"[TikTok] Cleaned up duplicate tracking (kept newest 100)")
 
                     # Log and emit new comment
+                    logger.debug("[COHOST] Comment received: user=%s, msg_len=%d", author, len(message))
                     self.logMessage.emit("INFO", f"[TikTok Comment] {author}: {message[:50]}")
                     self.newComment.emit(author, message)
 
@@ -1606,11 +1611,13 @@ class CohostTabBasicSimplified(QWidget):
         """Add comment to reply queue — VIP user bypass cooldown sepenuhnya"""
         # Toxic filter (berlaku untuk semua, termasuk VIP)
         if self.is_toxic(message):
+            logger.debug("[COHOST] Filtered out: user=%s, reason=%s", author, "toxic")
             self.log_message("WARN", f"Toxic content from {author}, ignored")
             return
 
         # Spam filter — VIP bypass
         if not is_vip and self.is_spam(author, message):
+            logger.debug("[COHOST] Filtered out: user=%s, reason=%s", author, "spam")
             self.log_message("WARN", f"Spam from {author}, ignored")
             return
 
@@ -1620,8 +1627,10 @@ class CohostTabBasicSimplified(QWidget):
         if not is_vip and viewer_cooldown_seconds > 0:
             if author in self.viewer_cooldowns:
                 if now - self.viewer_cooldowns[author] < viewer_cooldown_seconds:
+                    logger.debug("[COHOST] Filtered out: user=%s, reason=%s", author, "cooldown")
                     return
 
+        logger.debug("[COHOST] Filter passed: user=%s", author)
         self.viewer_cooldowns[author] = now
         self.reply_queue.append((author, message, now))
         label = "⭐ VIP" if is_vip else author
@@ -1716,6 +1725,7 @@ class CohostTabBasicSimplified(QWidget):
             return
 
         clean_reply = self.clean_ai_response(reply)
+        logger.info("[COHOST] Reply generated: user=%s, reply_len=%d, scene_id=%d", author, len(clean_reply), scene_id)
 
         # Tampilkan balasan di log
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -1776,6 +1786,7 @@ class CohostTabBasicSimplified(QWidget):
             self._tts_thread = TTSThread(text, voice_model, language_code)
             self._tts_thread.finished.connect(self._on_tts_finished)
             self._tts_thread.start()
+            logger.info("[COHOST] TTS queued: reply_len=%d", len(text))
             self.log_message("TTS", f"Speaking: {voice_model}")
 
         except Exception as e:
