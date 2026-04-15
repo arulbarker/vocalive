@@ -233,6 +233,15 @@ except ImportError as e:
     PRODUCT_SCENE_TAB_AVAILABLE = False
     logger.warning(f"ProductSceneTab not available: {e}")
 
+# Import VirtualCameraTab
+try:
+    from ui.virtual_camera_tab import VirtualCameraTab
+    VIRTUAL_CAMERA_TAB_AVAILABLE = True
+    logger.info("VirtualCameraTab imported successfully")
+except ImportError as e:
+    VIRTUAL_CAMERA_TAB_AVAILABLE = False
+    logger.warning(f"VirtualCameraTab not available: {e}")
+
 # Import Auto Updater
 try:
     from modules_client.updater import check_for_update
@@ -877,6 +886,20 @@ class MainWindow(QMainWindow):
                 layout.addWidget(QLabel(f"Error loading Product Scene Tab: {e}"))
                 placeholder.setLayout(layout)
                 self.main_tabs.addTab(placeholder, "🎬 Product Scene (Error)")
+
+        # Add Virtual Camera tab
+        if VIRTUAL_CAMERA_TAB_AVAILABLE:
+            try:
+                self.virtual_camera_tab = VirtualCameraTab()
+                self.main_tabs.addTab(self.virtual_camera_tab, "Virtual Camera")
+                logger.info("Virtual Camera tab added successfully")
+            except Exception as e:
+                logger.error(f"Failed to create Virtual Camera tab: {e}")
+                placeholder = QWidget()
+                layout = QVBoxLayout()
+                layout.addWidget(QLabel(f"Error loading Virtual Camera Tab: {e}"))
+                placeholder.setLayout(layout)
+                self.main_tabs.addTab(placeholder, "Virtual Camera (Error)")
 
         # DISABLED: Old direct connection system - causes double processing
         # Using unified processor system instead to prevent duplicate replies
