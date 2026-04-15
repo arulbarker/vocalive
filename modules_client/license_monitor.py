@@ -10,6 +10,9 @@ import threading
 from datetime import datetime
 from PyQt6.QtCore import QTimer, QObject, pyqtSignal
 from modules_client.license_manager import LicenseManager
+import logging
+
+logger = logging.getLogger("VocaLive.LicenseMonitor")
 
 class LicenseMonitor(QObject):
     """Real-time license monitor untuk aplikasi"""
@@ -29,14 +32,14 @@ class LicenseMonitor(QObject):
         self.check_interval = 120 * 60 * 1000  # 2 hours in milliseconds (API friendly)
         self.warning_days = 7  # Warn when less than 7 days remaining
 
-        print("[LICENSE_MONITOR] Initialized")
+        logger.info("[LICENSE_MONITOR] Initialized")
 
     def start_monitoring(self):
         """Start real-time license monitoring"""
         if self.monitoring:
             return
 
-        print("[LICENSE_MONITOR] Starting license monitoring...")
+        logger.info("[LICENSE_MONITOR] Starting license monitoring...")
         self.monitoring = True
 
         # Initial check
@@ -44,27 +47,27 @@ class LicenseMonitor(QObject):
 
         # Start periodic checks
         self.timer.start(self.check_interval)
-        print(f"[LICENSE_MONITOR] Monitoring started (check every {self.check_interval/1000/60:.1f} minutes)")
+        logger.info(f"[LICENSE_MONITOR] Monitoring started (check every {self.check_interval/1000/60:.1f} minutes)")
 
     def stop_monitoring(self):
         """Stop license monitoring"""
         if not self.monitoring:
             return
 
-        print("[LICENSE_MONITOR] Stopping license monitoring...")
+        logger.info("[LICENSE_MONITOR] Stopping license monitoring...")
         self.monitoring = False
         self.timer.stop()
 
     def check_license_status(self):
         """Check license status with real-time validation"""
         try:
-            print(f"[LICENSE_MONITOR] Checking license status at {datetime.now().strftime('%H:%M:%S')}")
+            logger.debug(f"[LICENSE_MONITOR] Checking license status at {datetime.now().strftime('%H:%M:%S')}")
 
             # Cek session via AppScript (action=cek)
             is_valid, message = self.license_manager.is_license_valid(force_online_check=True)
 
             if not is_valid:
-                print(f"[LICENSE_MONITOR] ❌ License invalid: {message}")
+                logger.error(f"[LICENSE_MONITOR] ❌ License invalid: {message}")
                 self.license_invalid.emit(message)
                 self.stop_monitoring()
                 return
@@ -75,20 +78,20 @@ class LicenseMonitor(QObject):
                 days_remaining = license_info['days_remaining']
 
                 if days_remaining > 0 and days_remaining <= self.warning_days:
-                    print(f"[LICENSE_MONITOR] ⚠️ License expires in {days_remaining} days")
+                    logger.warning(f"[LICENSE_MONITOR] ⚠️ License expires in {days_remaining} days")
                     self.license_warning.emit(f"License expires in {days_remaining} days", days_remaining)
                 elif days_remaining == 0:
-                    print(f"[LICENSE_MONITOR] ⚠️ License expires today!")
+                    logger.info(f"[LICENSE_MONITOR] ⚠️ License expires today!")
                     self.license_warning.emit("License expires today!", 0)
                 elif license_info.get('is_unlimited', False):
-                    print(f"[LICENSE_MONITOR] ✅ Unlimited license")
+                    logger.info(f"[LICENSE_MONITOR] ✅ Unlimited license")
                 else:
-                    print(f"[LICENSE_MONITOR] ✅ License valid ({days_remaining} days remaining)")
+                    logger.info(f"[LICENSE_MONITOR] ✅ License valid ({days_remaining} days remaining)")
             else:
-                print(f"[LICENSE_MONITOR] ✅ License valid")
+                logger.info(f"[LICENSE_MONITOR] ✅ License valid")
 
         except Exception as e:
-            print(f"[LICENSE_MONITOR] Error checking license: {e}")
+            logger.error(f"[LICENSE_MONITOR] Error checking license: {e}")
             # Don't emit invalid signal on network errors
 
 class LicenseEnforcer:
@@ -97,7 +100,7 @@ class LicenseEnforcer:
     @staticmethod
     def force_close_application(reason="License invalid"):
         """Force close application immediately"""
-        print(f"[LICENSE_ENFORCER] FORCE CLOSING APPLICATION: {reason}")
+        logger.error(f"[LICENSE_ENFORCER] FORCE CLOSING APPLICATION: {reason}")
 
         try:
             # Show message to user
@@ -113,7 +116,7 @@ class LicenseEnforcer:
                 msg.setStandardButtons(QMessageBox.StandardButton.Ok)
                 msg.exec()
         except Exception as e:
-            print(f"[LICENSE_ENFORCER] Error showing message: {e}")
+            logger.error(f"[LICENSE_ENFORCER] Error showing message: {e}")
 
         # Force terminate
         try:
@@ -127,7 +130,7 @@ class LicenseEnforcer:
 
         # Nuclear option - force exit
         import os
-        print("[LICENSE_ENFORCER] Terminating process...")
+        logger.info("[LICENSE_ENFORCER] Terminating process...")
         os._exit(1)
 
 def create_license_monitor(main_window=None):
@@ -140,7 +143,7 @@ def create_license_monitor(main_window=None):
     )
 
     monitor.license_warning.connect(
-        lambda message, days: print(f"[LICENSE_WARNING] {message}")
+        lambda message, days: logger.warning(f"[LICENSE_WARNING] {message}")
     )
 
     return monitor
@@ -163,7 +166,7 @@ class BackgroundLicenseChecker:
         self.running = True
         self.thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.thread.start()
-        print(f"[BACKGROUND_CHECKER] Started (check every {self.check_interval/60:.1f} minutes)")
+        logger.info(f"[BACKGROUND_CHECKER] Started (check every {self.check_interval/60:.1f} minutes)")
 
     def stop(self):
         """Stop background checking"""
@@ -179,25 +182,25 @@ class BackgroundLicenseChecker:
                 is_valid, message = self.license_manager.is_license_valid(force_online_check=True)
 
                 if not is_valid:
-                    print(f"[BACKGROUND_CHECKER] License invalid: {message}")
+                    logger.error(f"[BACKGROUND_CHECKER] License invalid: {message}")
                     # Force exit if running as background service
                     if __name__ == "__main__":
-                        print("[BACKGROUND_CHECKER] Terminating background service")
+                        logger.info("[BACKGROUND_CHECKER] Terminating background service")
                         sys.exit(1)
                     return
                 else:
-                    print(f"[BACKGROUND_CHECKER] License valid")
+                    logger.info(f"[BACKGROUND_CHECKER] License valid")
 
                 # Wait for next check
                 time.sleep(self.check_interval)
 
             except Exception as e:
-                print(f"[BACKGROUND_CHECKER] Error: {e}")
+                logger.error(f"[BACKGROUND_CHECKER] Error: {e}")
                 time.sleep(60)  # Wait 1 minute on error
 
 if __name__ == "__main__":
-    print("VocaLive - License Monitor (Background Mode)")
-    print("=" * 50)
+    logger.info("VocaLive - License Monitor (Background Mode)")
+    logger.info("=" * 50)
 
     # Run as background service
     checker = BackgroundLicenseChecker(check_interval=7200)  # 2 hours
@@ -210,5 +213,5 @@ if __name__ == "__main__":
             time.sleep(1)
 
     except KeyboardInterrupt:
-        print("\n[SHUTDOWN] License monitor stopped")
+        logger.info("\n[SHUTDOWN] License monitor stopped")
         checker.stop()

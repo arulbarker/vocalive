@@ -12,6 +12,9 @@ from datetime import datetime
 from pathlib import Path
 from collections import defaultdict, Counter
 import re
+import logging
+
+logger = logging.getLogger("VocaLive.Analytics")
 
 
 def _get_app_root() -> Path:
@@ -92,7 +95,7 @@ class LiveAnalyticsManager:
                 with open(self.sessions_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception as e:
-                print(f"[Analytics] Error loading sessions: {e}")
+                logger.error(f"[Analytics] Error loading sessions: {e}")
                 return []
         return []
 
@@ -102,7 +105,7 @@ class LiveAnalyticsManager:
             with open(self.sessions_file, 'w', encoding='utf-8') as f:
                 json.dump(self.sessions, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[Analytics] Error saving sessions: {e}")
+            logger.error(f"[Analytics] Error saving sessions: {e}")
 
     def start_session(self, platform="youtube"):
         """Start new analytics session"""
@@ -144,7 +147,7 @@ class LiveAnalyticsManager:
             # Add timeline event
             self._add_timeline_event("session_start", f"Live started on {platform}")
 
-            print(f"[Analytics] Session started: {session_id}")
+            logger.info(f"[Analytics] Session started: {session_id}")
             return session_id
 
     def end_session(self):
@@ -168,7 +171,7 @@ class LiveAnalyticsManager:
             # Save to file
             self._save_sessions()
 
-            print(f"[Analytics] Session ended: {self.current_session['session_id']}")
+            logger.info(f"[Analytics] Session ended: {self.current_session['session_id']}")
             return True
 
     def _prepare_session_for_save(self):
@@ -447,7 +450,7 @@ class LiveAnalyticsManager:
         with self._lock:
             self.sessions = []
             self._save_sessions()
-            print("[Analytics] All data cleared")
+            logger.info("[Analytics] All data cleared")
             return True
 
     def export_to_csv(self, session_id=None, export_path=None):

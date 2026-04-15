@@ -7,6 +7,7 @@ User login dengan email pembelian (Lynk.id / Whop).
 import sys
 import os
 import time
+import logging
 from typing import Optional, Tuple
 
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect
@@ -15,6 +16,8 @@ from PyQt6.QtWidgets import (
     QProgressBar, QTextEdit, QFrame, QApplication, QGraphicsDropShadowEffect
 )
 from PyQt6.QtGui import QFont, QColor
+
+logger = logging.getLogger('VocaLive.LicenseDialog')
 
 try:
     from modules_client.license_manager import LicenseManager
@@ -382,4 +385,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     ok, email = show_license_dialog()
-    print(f"Result: {ok}, email: {email}")
+    logger.info("[LicenseDialog] Result: ok=%s, email=%s", ok, email[:3] + "***" if email else "")

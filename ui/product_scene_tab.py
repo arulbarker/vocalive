@@ -4,6 +4,7 @@ User mendaftarkan nama produk + file video MP4 lokal.
 """
 
 import os
+import logging
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
@@ -31,6 +32,8 @@ except ImportError:
     def btn_secondary(e=""): return f"QPushButton {{ background-color: transparent; color: {PRIMARY}; border: 1px solid {PRIMARY}; border-radius: 6px; padding: 7px 16px; font-weight: 600; {e} }}"
     def label_title(s=16): return f"font-size: {s}pt; font-weight: 700; color: {PRIMARY}; background: transparent;"
     def label_subtitle(s=11): return f"font-size: {s}px; color: {TEXT_MUTED}; background: transparent;"
+
+logger = logging.getLogger('VocaLive.ProductSceneTab')
 
 from modules_client.product_scene_manager import ProductSceneManager
 
