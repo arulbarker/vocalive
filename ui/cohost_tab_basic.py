@@ -457,9 +457,7 @@ class SimpleTikTokListener(QThread):
                 import time
                 self.start_timestamp = time.time()  # Record connection time
                 logger.info("[COHOST] TikTok connected: username=%s", self.username)
-                self.logMessage.emit("INFO", f"✅ Connected to TikTok Live: @{self.username}")
-                self.logMessage.emit("INFO", f"🎬 Ready to receive comments! Connection timestamp: {self.start_timestamp:.2f}")
-                self.logMessage.emit("INFO", f"📝 Comment filtering: Will process real-time comments immediately")
+                self.logMessage.emit("INFO", f"✅ Connected! Siap tangkap komentar @{self.username}")
                 try:
                     from modules_client.telemetry import capture as _tel_capture
                     from modules_client.config_manager import ConfigManager as _CM
@@ -487,24 +485,17 @@ class SimpleTikTokListener(QThread):
                         if hasattr(event, 'timestamp') and event.timestamp:
                             event_time = event.timestamp / 1000.0  # Convert ms to seconds
 
-                            # STRICT FILTER: Hanya terima komentar SETELAH connection
-                            # Grace period hanya 2 detik untuk toleransi clock skew minimal
+                            # Filter komentar lama: hanya skip yang jelas-jelas OLD CHAT
+                            # Grace period 0.5 detik untuk toleransi clock skew minimal
                             time_diff = event_time - self.start_timestamp
 
-                            if time_diff < -2:  # Event lebih dari 2 detik SEBELUM connection = OLD CHAT
+                            if time_diff < -0.5:  # Event lebih dari 0.5 detik SEBELUM connection = OLD CHAT
                                 skip_old_comment = True
-                                # Don't log old comments to reduce noise
-                            # Komentar realtime - terima
+                            # Komentar realtime atau near-realtime - terima
                         else:
-                            # Tidak ada timestamp event - fallback ke current_time vs start_timestamp
-                            # Skip komentar dalam 1 detik pertama setelah connection (likely old)
-                            time_since_connect = current_time - self.start_timestamp
-                            if time_since_connect < 1.0:
-                                # Very early comment without timestamp - likely old
-                                skip_old_comment = True
-                            else:
-                                # Normal comment without timestamp, accept it
-                                self.logMessage.emit("DEBUG", f"[TikTok] ✅ Processing comment (no timestamp)")
+                            # Tidak ada timestamp event - langsung terima
+                            # Komentar tanpa timestamp biasanya realtime dari TikTok API
+                            pass
 
                     if skip_old_comment:
                         return
@@ -1448,18 +1439,13 @@ class CohostTabBasicSimplified(QWidget):
             self.listener_thread.wait(500)  # Wait up to 500ms for cleanup
             self.listener_thread = None
 
-        # Stop TikTok listener - proper cleanup for restart support
+        # Stop TikTok listener - fast cleanup for quick restart
         if self.tiktok_listener_thread:
             self.tiktok_listener_thread.stop()
             self.tiktok_listener_thread.terminate()
-            # Wait for thread to actually stop before we can restart
-            if not self.tiktok_listener_thread.wait(1000):  # Wait up to 1 second
-                self.log_message("WARNING", "TikTok listener taking time to stop...")
+            # Brief wait — thread sudah di-terminate, tidak perlu lama
+            self.tiktok_listener_thread.wait(300)  # 300ms cukup untuk cleanup
             self.tiktok_listener_thread = None
-            
-            # Small delay to ensure TikTok API is ready for new connection
-            import time
-            time.sleep(0.3)  # 300ms delay for API cleanup
 
         # Process Qt events to ensure cleanup is complete
         from PyQt6.QtWidgets import QApplication
