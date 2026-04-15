@@ -1427,6 +1427,13 @@ class CohostTabBasicSimplified(QWidget):
             # Update status indicator
             self.update_status_indicator(True)
 
+            # Telemetry: listener started
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("listener_started", {"platform": "tiktok", "username": username})
+            except Exception:
+                pass
+
             # Start queue processing
             self.cooldown_timer.start(2000)  # Process every 2 seconds
 
@@ -1438,6 +1445,13 @@ class CohostTabBasicSimplified(QWidget):
     
     def stop(self):
         """Stop all processes - with proper TikTok cleanup for restart support"""
+        # Telemetry: listener stopped
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("listener_stopped", {})
+        except Exception:
+            pass
+
         # Stop timer
         self.cooldown_timer.stop()
 

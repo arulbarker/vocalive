@@ -83,8 +83,13 @@ class UserListManager:
         self.blacklist.add(username)
         self._save_lists()
         logger.info(f"Added to blacklist: {username}")
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("user_list_updated", {"action": "blacklist_add"})
+        except Exception:
+            pass
         return True
-    
+
     def remove_from_blacklist(self, username: str) -> bool:
         """Remove user from blacklist"""
         username = username.lower().strip()
@@ -92,6 +97,11 @@ class UserListManager:
             self.blacklist.discard(username)
             self._save_lists()
             logger.info(f"Removed from blacklist: {username}")
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("user_list_updated", {"action": "blacklist_remove"})
+            except Exception:
+                pass
             return True
         return False
     
@@ -116,8 +126,13 @@ class UserListManager:
         self.whitelist.add(username)
         self._save_lists()
         logger.info(f"Added to whitelist (VIP): {username}")
+        try:
+            from modules_client.telemetry import capture as _tel_capture
+            _tel_capture("user_list_updated", {"action": "whitelist_add"})
+        except Exception:
+            pass
         return True
-    
+
     def remove_from_whitelist(self, username: str) -> bool:
         """Remove user from whitelist"""
         username = username.lower().strip()
@@ -125,6 +140,11 @@ class UserListManager:
             self.whitelist.discard(username)
             self._save_lists()
             logger.info(f"Removed from whitelist: {username}")
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("user_list_updated", {"action": "whitelist_remove"})
+            except Exception:
+                pass
             return True
         return False
     

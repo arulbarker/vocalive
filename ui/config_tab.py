@@ -1537,6 +1537,13 @@ class ConfigTab(QWidget):
                 except Exception as ai_reinit_error:
                     logger.error(f"[CONFIG] Failed to reinitialize AI: {ai_reinit_error}")
 
+            # Telemetry: config saved
+            try:
+                from modules_client.telemetry import capture as _tel_capture
+                _tel_capture("config_saved", {"provider": provider, "tts_voice": tts_voice if 'tts_voice' in dir() else ""})
+            except Exception:
+                pass
+
             # Show success message
             QMessageBox.information(
                 self,
