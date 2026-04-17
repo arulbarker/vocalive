@@ -36,8 +36,16 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
         from PyQt6.QtWidgets import QMessageBox
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Critical)
-        msg.setWindowTitle("VocaLive - Error Recovery")
-        msg.setText("An unexpected error occurred, but the application will continue running.")
+        # i18n module mungkin belum ter-init saat exception dini → fallback manual
+        try:
+            from modules_client.i18n import t as _t
+            title = _t("main.error.recovery_title")
+            body = _t("main.error.recovery_text")
+        except Exception:
+            title = "VocaLive - Error Recovery"
+            body = "An unexpected error occurred, but the application will continue running."
+        msg.setWindowTitle(title)
+        msg.setText(body)
         msg.setDetailedText(f"Error: {exc_value}\n\nThe error has been logged for debugging.")
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
@@ -63,6 +71,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from modules_client.i18n import t
 
 
 class UpdateCheckThread(QThread):
@@ -525,7 +535,7 @@ class MainWindow(QMainWindow):
         logger.info(f"VocaLive v{_VER} — Gold Seller Edition")
 
         # Setup window properties
-        self.setWindowTitle(f"VocaLive v{_VER}")
+        self.setWindowTitle(t("main.window.title", version=_VER))
         self.resize(1100, 750)
         self.setMinimumSize(900, 620)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -584,7 +594,7 @@ class MainWindow(QMainWindow):
             return  # sedang cek, skip
 
         self.check_update_btn.setEnabled(False)
-        self.check_update_btn.setText("🔄 Mengecek...")
+        self.check_update_btn.setText(t("main.btn.checking_update"))
 
         thread = UpdateCheckThread()
         thread.update_available.connect(self._on_update_found)
@@ -597,17 +607,17 @@ class MainWindow(QMainWindow):
     def _on_no_update(self, latest_version: str):
         """Callback: sudah versi terbaru."""
         self.check_update_btn.setEnabled(True)
-        self.check_update_btn.setText("🔄 Cek Update")
+        self.check_update_btn.setText(t("main.btn.check_update"))
         from modules_client.updater import CURRENT_VERSION
         self.status_bar.showMessage(
-            f"✅ VocaLive v{CURRENT_VERSION} sudah versi terbaru!", 4000
+            t("main.status.up_to_date", version=CURRENT_VERSION), 4000
         )
 
     def _on_update_check_error(self, msg: str):
         """Callback: gagal cek update."""
         self.check_update_btn.setEnabled(True)
-        self.check_update_btn.setText("🔄 Cek Update")
-        self.status_bar.showMessage(f"⚠️ Gagal cek update: {msg[:60]}", 5000)
+        self.check_update_btn.setText(t("main.btn.check_update"))
+        self.status_bar.showMessage(t("main.status.check_failed", error=msg[:60]), 5000)
         logger.warning(f"Update check error: {msg}")
 
     def _on_update_found(self, info: dict):
@@ -617,10 +627,10 @@ class MainWindow(QMainWindow):
 
         # Reset tombol cek jika manual check
         self.check_update_btn.setEnabled(True)
-        self.check_update_btn.setText("🔄 Cek Update")
+        self.check_update_btn.setText(t("main.btn.check_update"))
 
         # Tampilkan tombol kuning di status bar
-        self.update_btn.setText(f"⬆️ v{latest} Tersedia!")
+        self.update_btn.setText(t("main.btn.update_available_version", version=latest))
         self.update_btn.show()
         logger.info(f"Update tersedia: v{latest}")
 
@@ -630,19 +640,21 @@ class MainWindow(QMainWindow):
         notes_preview = "\n".join(notes.split("\n")[:4]) if notes else "-"
 
         msg = QMessageBox(self)
-        msg.setWindowTitle("VocaLive — Update Tersedia!")
+        msg.setWindowTitle(t("main.update.popup.title"))
         msg.setIcon(QMessageBox.Icon.Information)
         msg.setText(
-            f"<b>Versi baru VocaLive tersedia!</b><br><br>"
-            f"Versi kamu: <b>v{CURRENT_VERSION}</b><br>"
-            f"Versi terbaru: <b>v{latest}</b><br><br>"
-            f"<b>Yang baru:</b><br>{notes_preview.replace(chr(10), '<br>')}"
+            t(
+                "main.update.popup.body",
+                current=CURRENT_VERSION,
+                latest=latest,
+                notes=notes_preview.replace(chr(10), "<br>"),
+            )
         )
         msg.setStandardButtons(
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        msg.button(QMessageBox.StandardButton.Yes).setText("Update Sekarang")
-        msg.button(QMessageBox.StandardButton.No).setText("Nanti Saja")
+        msg.button(QMessageBox.StandardButton.Yes).setText(t("main.update.popup.update_now"))
+        msg.button(QMessageBox.StandardButton.No).setText(t("main.update.popup.later"))
         msg.setDefaultButton(QMessageBox.StandardButton.Yes)
 
         if msg.exec() == QMessageBox.StandardButton.Yes:
@@ -731,7 +743,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
 
         # API status label
-        self.api_status_label = QLabel("● Ready")
+        self.api_status_label = QLabel(t("main.status.ready"))
         self.api_status_label.setStyleSheet(
             f"color: {SUCCESS}; font-size: 11px; font-weight: 600; padding: 0 4px;"
         )
@@ -746,7 +758,7 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(version_label)
 
         # Tombol "Cek Update" manual
-        self.check_update_btn = QPushButton("🔄 Cek Update")
+        self.check_update_btn = QPushButton(t("main.btn.check_update"))
         self.check_update_btn.setFixedHeight(22)
         self.check_update_btn.setStyleSheet("""
             QPushButton {
@@ -766,7 +778,7 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(self.check_update_btn)
 
         # Tombol update tersedia — hidden sampai ada versi baru
-        self.update_btn = QPushButton("⬆️ Update Tersedia!")
+        self.update_btn = QPushButton(t("main.btn.update_available"))
         self.update_btn.setFixedHeight(22)
         self.update_btn.setStyleSheet("""
             QPushButton {
@@ -815,7 +827,7 @@ class MainWindow(QMainWindow):
         if COHOST_AVAILABLE:
             try:
                 self.cohost_tab = CohostTabBasic()
-                self.main_tabs.addTab(self.cohost_tab, "Cohost Basic")
+                self.main_tabs.addTab(self.cohost_tab, t("main.tab.cohost"))
                 logger.info("Cohost Basic tab added successfully")
 
                 # Wire popup window ke cohost tab
@@ -826,15 +838,15 @@ class MainWindow(QMainWindow):
                 logger.error(f"Failed to create Cohost Basic tab: {e}")
                 placeholder = QWidget()
                 layout = QVBoxLayout()
-                layout.addWidget(QLabel(f"Error loading Cohost Basic: {e}"))
+                layout.addWidget(QLabel(t("main.tab.load_error", tab="Cohost Basic", error=str(e))))
                 placeholder.setLayout(layout)
-                self.main_tabs.addTab(placeholder, "Cohost Basic (Error)")
+                self.main_tabs.addTab(placeholder, t("main.tab.cohost_error"))
 
         # Add Config tab
         if CONFIG_AVAILABLE:
             try:
                 self.config_tab = ConfigTab()
-                self.main_tabs.addTab(self.config_tab, "Konfigurasi")
+                self.main_tabs.addTab(self.config_tab, t("main.tab.config"))
                 logger.info("Config tab added successfully")
 
                 # Saat key type terdeteksi di Config tab → refresh voice list di Cohost tab
@@ -860,37 +872,37 @@ class MainWindow(QMainWindow):
                 logger.error(f"Failed to create Config tab: {e}")
                 placeholder = QWidget()
                 layout = QVBoxLayout()
-                layout.addWidget(QLabel(f"Error loading Config: {e}"))
+                layout.addWidget(QLabel(t("main.tab.load_error", tab="Config", error=str(e))))
                 placeholder.setLayout(layout)
-                self.main_tabs.addTab(placeholder, "Konfigurasi (Error)")
+                self.main_tabs.addTab(placeholder, t("main.tab.config_error"))
 
         # Add Analytics tab
         try:
             from ui.analytics_tab import AnalyticsTab
             self.analytics_tab = AnalyticsTab()
-            self.main_tabs.addTab(self.analytics_tab, "📊 Analytics")
+            self.main_tabs.addTab(self.analytics_tab, t("main.tab.analytics"))
             logger.info("Analytics tab added successfully")
         except Exception as e:
             logger.error(f"Failed to create Analytics tab: {e}")
             placeholder = QWidget()
             layout = QVBoxLayout()
-            layout.addWidget(QLabel(f"Error loading Analytics Tab: {e}"))
+            layout.addWidget(QLabel(t("main.tab.load_error", tab="Analytics", error=str(e))))
             placeholder.setLayout(layout)
-            self.main_tabs.addTab(placeholder, "📊 Analytics (Error)")
+            self.main_tabs.addTab(placeholder, t("main.tab.analytics_error"))
 
         # Add User Management tab
         try:
             from ui.user_management_tab import UserManagementTab
             self.user_management_tab = UserManagementTab()
-            self.main_tabs.addTab(self.user_management_tab, "👥 User Management")
+            self.main_tabs.addTab(self.user_management_tab, t("main.tab.users"))
             logger.info("User Management tab added successfully")
         except Exception as e:
             logger.error(f"Failed to create User Management tab: {e}")
             placeholder = QWidget()
             layout = QVBoxLayout()
-            layout.addWidget(QLabel(f"Error loading User Management Tab: {e}"))
+            layout.addWidget(QLabel(t("main.tab.load_error", tab="User Management", error=str(e))))
             placeholder.setLayout(layout)
-            self.main_tabs.addTab(placeholder, "👥 User Management (Error)")
+            self.main_tabs.addTab(placeholder, t("main.tab.users_error"))
 
 
         # Virtual Audio tab removed - user requested removal
@@ -899,15 +911,15 @@ class MainWindow(QMainWindow):
         if PRODUCT_SCENE_TAB_AVAILABLE:
             try:
                 self.product_scene_tab = ProductSceneTab(popup_window=self.product_popup)
-                self.main_tabs.addTab(self.product_scene_tab, "🎬 Product Scene")
+                self.main_tabs.addTab(self.product_scene_tab, t("main.tab.product"))
                 logger.info("Product Scene tab added successfully")
             except Exception as e:
                 logger.error(f"Failed to create Product Scene tab: {e}")
                 placeholder = QWidget()
                 layout = QVBoxLayout()
-                layout.addWidget(QLabel(f"Error loading Product Scene Tab: {e}"))
+                layout.addWidget(QLabel(t("main.tab.load_error", tab="Product Scene", error=str(e))))
                 placeholder.setLayout(layout)
-                self.main_tabs.addTab(placeholder, "🎬 Product Scene (Error)")
+                self.main_tabs.addTab(placeholder, t("main.tab.product_error"))
 
         # Add Virtual Camera tab
         if VIRTUAL_CAMERA_TAB_AVAILABLE:
@@ -916,15 +928,15 @@ class MainWindow(QMainWindow):
                 self.virtual_camera_manager.load_config()
                 self.virtual_camera_tab = VirtualCameraTab(manager=self.virtual_camera_manager)
                 self.virtual_camera_tab._refresh_table()
-                self.main_tabs.addTab(self.virtual_camera_tab, "Virtual Camera")
+                self.main_tabs.addTab(self.virtual_camera_tab, t("main.tab.camera"))
                 logger.info("Virtual Camera tab added successfully")
             except Exception as e:
                 logger.error(f"Failed to create Virtual Camera tab: {e}")
                 placeholder = QWidget()
                 layout = QVBoxLayout()
-                layout.addWidget(QLabel(f"Error loading Virtual Camera Tab: {e}"))
+                layout.addWidget(QLabel(t("main.tab.load_error", tab="Virtual Camera", error=str(e))))
                 placeholder.setLayout(layout)
-                self.main_tabs.addTab(placeholder, "Virtual Camera (Error)")
+                self.main_tabs.addTab(placeholder, t("main.tab.camera_error"))
 
         # DISABLED: Old direct connection system - causes double processing
         # Using unified processor system instead to prevent duplicate replies
