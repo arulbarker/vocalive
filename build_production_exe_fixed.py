@@ -101,6 +101,9 @@ a = Analysis(
         ("config/voices.json",           "config"),
         ("config/packages.json",         "config"),
         ("icon.ico",       "."),
+        # i18n translation files — WAJIB include untuk bilingual support
+        ("i18n/id.json", "i18n"),
+        ("i18n/en.json", "i18n"),
     ],
     hiddenimports=[
         # network
