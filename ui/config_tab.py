@@ -38,7 +38,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from modules_client import i18n
 from modules_client.config_manager import ConfigManager
+from modules_client.i18n import t
 from sales_templates import get_template
 
 try:
@@ -298,6 +300,21 @@ class ConfigTab(QWidget):
         lang_note.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lang_note.setStyleSheet(f"color: {PRIMARY}; font-size: 12px; margin-bottom: 20px; font-style: italic; background-color: {BG_ELEVATED}; padding: 8px; border-radius: 5px;")
         layout.addWidget(lang_note)
+
+        # ===== UI Language (bilingual UI support) =====
+        ui_lang_layout = QHBoxLayout()
+        ui_lang_label = QLabel(t("config.label.ui_language"))
+        ui_lang_label.setMinimumWidth(220)
+        ui_lang_layout.addWidget(ui_lang_label)
+
+        self.ui_lang_combo = QComboBox()
+        self.ui_lang_combo.addItem("Bahasa Indonesia", "id")
+        self.ui_lang_combo.addItem("English", "en")
+        self.ui_lang_combo.setCurrentIndex(0 if i18n.current_language() == "id" else 1)
+        self.ui_lang_combo.currentIndexChanged.connect(self.on_ui_language_changed)
+        ui_lang_layout.addWidget(self.ui_lang_combo)
+        ui_lang_layout.addStretch()
+        layout.addLayout(ui_lang_layout)
 
         # AI Provider Section
         self.create_ai_provider_section(layout)
@@ -1002,6 +1019,18 @@ class ConfigTab(QWidget):
         button_layout.addWidget(test_all_btn)
 
         layout.addLayout(button_layout)
+
+    def on_ui_language_changed(self, idx):
+        """Handle perubahan UI language — save ke config + tampilkan restart prompt."""
+        new_lang = self.ui_lang_combo.itemData(idx)
+        if new_lang == i18n.current_language():
+            return
+        i18n.set_language(new_lang)
+        QMessageBox.information(
+            self,
+            t("common.info"),
+            t("config.info.restart_required"),
+        )
 
     def on_provider_changed(self, provider):
         """Handle provider selection change"""

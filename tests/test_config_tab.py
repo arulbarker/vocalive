@@ -207,3 +207,36 @@ class TestCloseEvent:
 
         mock_thread.quit.assert_not_called()
         event.accept.assert_called_once()
+
+
+class TestUILanguageCombo:
+    """Test UI language switcher di Config Tab."""
+
+    def test_ui_lang_combo_exists(self, qtbot, mocker):
+        mocker.patch("modules_client.i18n.current_language", return_value="id")
+        mocker.patch("modules_client.config_manager.ConfigManager")
+        from ui.config_tab import ConfigTab
+        tab = ConfigTab()
+        qtbot.addWidget(tab)
+        assert hasattr(tab, "ui_lang_combo")
+        assert tab.ui_lang_combo.count() == 2
+
+    def test_ui_lang_combo_reflects_current_language(self, qtbot, mocker):
+        mocker.patch("modules_client.i18n.current_language", return_value="en")
+        mocker.patch("modules_client.config_manager.ConfigManager")
+        from ui.config_tab import ConfigTab
+        tab = ConfigTab()
+        qtbot.addWidget(tab)
+        assert tab.ui_lang_combo.itemData(tab.ui_lang_combo.currentIndex()) == "en"
+
+    def test_ui_lang_change_calls_set_language(self, qtbot, mocker):
+        mocker.patch("modules_client.i18n.current_language", return_value="id")
+        mocker.patch("modules_client.config_manager.ConfigManager")
+        set_lang = mocker.patch("modules_client.i18n.set_language")
+        mocker.patch("ui.config_tab.QMessageBox.information")
+        from ui.config_tab import ConfigTab
+        tab = ConfigTab()
+        qtbot.addWidget(tab)
+        # Switch ke index EN
+        tab.ui_lang_combo.setCurrentIndex(1)
+        set_lang.assert_called_once_with("en")

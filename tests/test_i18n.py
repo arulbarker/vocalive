@@ -1,5 +1,7 @@
 """Tests untuk modules_client/i18n.py - translation manager."""
 import locale
+import re
+from pathlib import Path
 
 import pytest
 
@@ -233,3 +235,73 @@ class TestInit:
         i18n.set_language("en")
 
         assert saved.get("ui_language") == "en"
+
+
+class TestKeyCoverage:
+    """Pastikan semua key yang dipakai di source ada di JSON, dan sebaliknya."""
+
+    PROJECT_ROOT = Path(__file__).parent.parent
+    KEY_PATTERN = re.compile(r"""\bt\(\s*["']([a-zA-Z_][\w.]*)["']""")
+
+    def _scan_keys_used(self) -> set[str]:
+        """Scan semua .py di ui/ dan modules_client/ untuk pemanggilan t("key")."""
+        used = set()
+        for folder in ["ui", "modules_client"]:
+            for pyfile in (self.PROJECT_ROOT / folder).glob("*.py"):
+                try:
+                    content = pyfile.read_text(encoding="utf-8")
+                except Exception:
+                    continue
+                used.update(self.KEY_PATTERN.findall(content))
+        # Scan sales_templates.py juga (file root-level)
+        st = self.PROJECT_ROOT / "sales_templates.py"
+        if st.exists():
+            used.update(self.KEY_PATTERN.findall(st.read_text(encoding="utf-8")))
+        return used
+
+    def _load_json_keys(self, filename: str) -> set[str]:
+        import json
+        path = self.PROJECT_ROOT / "i18n" / filename
+        return set(json.loads(path.read_text(encoding="utf-8")).keys())
+
+    def test_all_used_keys_exist_in_id_json(self):
+        used = self._scan_keys_used()
+        id_keys = self._load_json_keys("id.json")
+        missing = used - id_keys
+        assert not missing, f"Keys dipakai di source tapi hilang di id.json: {sorted(missing)}"
+
+    def test_all_used_keys_exist_in_en_json(self):
+        used = self._scan_keys_used()
+        en_keys = self._load_json_keys("en.json")
+        missing = used - en_keys
+        assert not missing, f"Keys dipakai di source tapi hilang di en.json: {sorted(missing)}"
+
+    def test_id_and_en_have_identical_keys(self):
+        """Kedua locale file wajib punya key yang sama persis."""
+        id_keys = self._load_json_keys("id.json")
+        en_keys = self._load_json_keys("en.json")
+        only_id = id_keys - en_keys
+        only_en = en_keys - id_keys
+        assert not only_id and not only_en, (
+            f"Key mismatch:\n"
+            f"  Only in id.json: {sorted(only_id)}\n"
+            f"  Only in en.json: {sorted(only_en)}"
+        )
+
+    def test_placeholders_consistent_between_locales(self):
+        """Kalau 'err.x' di id pakai {seconds}, di en juga HARUS pakai {seconds}."""
+        import json
+        id_data = json.loads((self.PROJECT_ROOT / "i18n" / "id.json").read_text(encoding="utf-8"))
+        en_data = json.loads((self.PROJECT_ROOT / "i18n" / "en.json").read_text(encoding="utf-8"))
+        placeholder_re = re.compile(r"\{(\w+)\}")
+        mismatches = []
+        for key in id_data:
+            if key not in en_data:
+                continue
+            id_ph = set(placeholder_re.findall(id_data[key]))
+            en_ph = set(placeholder_re.findall(en_data[key]))
+            if id_ph != en_ph:
+                mismatches.append((key, id_ph, en_ph))
+        assert not mismatches, f"Placeholder mismatch:\n" + "\n".join(
+            f"  {k}: id={sorted(i)}, en={sorted(e)}" for k, i, e in mismatches
+        )

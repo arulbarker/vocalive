@@ -1,3 +1,24 @@
 {
-  "common.ok": "OK"
+  "common.ok": "OK",
+  "common.cancel": "Cancel",
+  "common.yes": "Yes",
+  "common.no": "No",
+  "common.apply": "Apply",
+  "common.save": "Save",
+  "common.delete": "Delete",
+  "common.close": "Close",
+  "common.error": "Error",
+  "common.warning": "Warning",
+  "common.info": "Info",
+  "common.loading": "Loading...",
+  "common.success": "Success",
+  "common.confirm": "Confirm",
+  "common.add": "Add",
+  "common.edit": "Edit",
+  "common.refresh": "Refresh",
+  "common.back": "Back",
+  "common.next": "Next",
+  "common.browse": "Browse",
+  "config.label.ui_language": "UI Language / Bahasa Antarmuka:",
+  "config.info.restart_required": "UI language will apply after restarting the application."
 }

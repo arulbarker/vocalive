@@ -1,3 +1,24 @@
 {
-  "common.ok": "OK"
+  "common.ok": "OK",
+  "common.cancel": "Batal",
+  "common.yes": "Ya",
+  "common.no": "Tidak",
+  "common.apply": "Terapkan",
+  "common.save": "Simpan",
+  "common.delete": "Hapus",
+  "common.close": "Tutup",
+  "common.error": "Error",
+  "common.warning": "Peringatan",
+  "common.info": "Informasi",
+  "common.loading": "Memuat...",
+  "common.success": "Berhasil",
+  "common.confirm": "Konfirmasi",
+  "common.add": "Tambah",
+  "common.edit": "Ubah",
+  "common.refresh": "Refresh",
+  "common.back": "Kembali",
+  "common.next": "Lanjut",
+  "common.browse": "Pilih File",
+  "config.label.ui_language": "UI Language / Bahasa Antarmuka:",
+  "config.info.restart_required": "Bahasa UI akan diterapkan setelah aplikasi di-restart."
 }
