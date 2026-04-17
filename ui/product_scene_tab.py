@@ -256,9 +256,10 @@ class ProductSceneTab(QWidget):
         info.setStyleSheet(f"color: {WARNING}; font-size: 11px;")
         size_layout.addWidget(info)
 
-        layout.addWidget(size_frame)
+        # Hidden — ukuran popup pakai original video, user resize manual via drag
+        size_frame.setVisible(False)
 
-        # Load current size
+        # Load current size (still used as initial default by ProductPopupWindow)
         w, h = self._psm.get_popup_size()
         self.spin_width.blockSignals(True)
         self.spin_height.blockSignals(True)

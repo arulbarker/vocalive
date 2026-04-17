@@ -222,12 +222,13 @@ class UpdateDialog(QDialog):
         self.progress_bar.setValue(100)
         ok = install_update(zip_path)
         if ok:
-            self.progress_label.setText("✅ Update berhasil! Aplikasi akan restart otomatis.")
+            self.progress_label.setText(
+                "✅ Update berhasil!\n"
+                "Aplikasi akan ditutup. Silakan buka kembali VocaLive secara manual."
+            )
             self.progress_label.setStyleSheet(f"color: {C_SUCCESS}; font-weight: bold;")
-            # Quit SEGERA (100ms) — sama persis dengan TikDance.
-            # Delay panjang menyebabkan taskkill membunuh app paksa → _MEI tidak di-cleanup
-            # → new EXE reuse _MEI lama yang corrupt → DLL error.
-            QTimer.singleShot(100, self._quit_for_update)
+            # Beri waktu user membaca pesan sebelum quit
+            QTimer.singleShot(3000, self._quit_for_update)
         else:
             self._set_status("Gagal install. Coba jalankan sebagai Administrator.", error=True)
             self.btn_later.setEnabled(True)

@@ -37,8 +37,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.11** | 2026-04-08 | Fix: DLL error setelah update — batch hapus _MEI* lama sebelum launch EXE baru |
 | **v1.0.12** | 2026-04-08 | Fix: hapus auto-launch dari batch — start "" menyebabkan DLL error PyInstaller |
 | **v1.0.13** | 2026-04-08 | Fix ROOT CAUSE: quit langsung (100ms) bukan 2.5s — _MEI cleanup sebelum batch start |
+| **v1.0.14** | 2026-04-16 | Fix: listener hanya baca komentar LIVE (grace period 3s), sembunyikan Ukuran Popup |
 
-**Versi saat ini: v1.0.13**
+**Versi saat ini: v1.0.14**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
@@ -82,19 +83,101 @@ python vtest_telemetry.py
 
 **WAJIB: Setiap perubahan file harus diikuti `python -m pytest tests/ -v --tb=short`.** Jika ada test FAIL, fix dulu sebelum lanjut. Jangan commit jika ada test gagal.
 
-Test suite: 107 tests di 14 files (`tests/`). Tier 1 = pure logic (version, templates, theme, logger), Tier 2 = mocked I/O (config, user_list, product_scene, analytics, greeting, updater, validator), Tier 3 = mocked SDK (telemetry, TTS, API).
+Test suite: 153 tests di 16 files (`tests/`). Tier 1 = pure logic (version, templates, theme, logger), Tier 2 = mocked I/O (config, user_list, product_scene, analytics, greeting, updater, validator, tiktok_listener), Tier 3 = mocked SDK (telemetry, TTS, API).
 
 Pastikan `config/settings.json` berisi API key yang valid untuk development.
+
+### Dev Tooling: Lint, Format, Pre-commit
+
+Setelah clone repo pertama kali, install dev tooling:
+
+```bash
+pip install -r requirements-dev.txt
+pre-commit install       # aktifkan pre-commit hooks di .git/hooks
+```
+
+Perintah harian:
+
+```bash
+# Cek linting (tanpa fix)
+ruff check .
+
+# Auto-fix yang aman + format
+ruff check --fix .
+ruff format .
+
+# Jalankan semua pre-commit hooks manual
+pre-commit run --all-files
+```
+
+Konfig ruff ada di `pyproject.toml` — mulai dari rule conservative (E/F/I/W). Folder `thirdparty/`, `dwpose/`, `sd-vae-ft-mse/` di-exclude karena dead code / vendored.
+
+CI pipeline: `.github/workflows/test.yml` (pytest di Windows) + `lint.yml` (ruff di Ubuntu). Push ke branch `main`/`release/**`/`feat/**`/`fix/**`/`chore/**` akan auto-trigger.
+
+### Manual QA Checklist — Smoke Test Sebelum Rilis
+
+**WAJIB** dijalankan sebelum tag release baru. Test otomatis tidak mencakup interaksi real dengan TikTok/driver/Windows — checklist ini bridge gap tersebut.
+
+#### 🧪 Startup & License
+- [ ] EXE jalan di Windows 10 (VM atau PC terpisah) tanpa dialog error
+- [ ] EXE jalan di Windows 11
+- [ ] First-time login: email valid → dashboard muncul
+- [ ] Restart app: session cache valid, tidak minta login ulang
+- [ ] Offline mode: cache <24 jam → app tetap bisa buka (grace period)
+
+#### 🎙️ TTS
+- [ ] Preview Gemini TTS (voice prefix `Gemini-*`) bunyi tanpa error
+- [ ] Preview Google Cloud TTS (Chirp3/Standard) bunyi
+- [ ] Tombol 🔍 Deteksi API Key → hasil sesuai (gemini/cloud/all)
+- [ ] Voice dropdown filter sesuai `tts_key_type`
+
+#### 📡 TikTok Live
+- [ ] Konek ke akun TikTok yang sedang live → status hijau
+- [ ] Komentar realtime masuk (bukan history) setelah grace period 3s
+- [ ] Blacklist user: pesan ter-block
+- [ ] Whitelist user: bypass cooldown
+- [ ] Toxic word: pesan ter-block
+- [ ] Cohost reply AI + TTS berfungsi
+
+#### 🛍️ Product Popup
+- [ ] AI reply dengan `scene_id > 0` → popup video muncul
+- [ ] Popup ter-capture di OBS/TikTok Live Studio (tidak hitam, chroma key hijau)
+- [ ] Drag, resize, toggle ON/OFF berfungsi
+
+#### 🎬 Virtual Camera
+- [ ] Deteksi backend: OBS atau UnityCapture muncul di status
+- [ ] Panel warning muncul kalau driver tidak terdeteksi
+- [ ] Playlist video: tambah, hapus, play sequential/random
+
+#### 🔄 Auto-Update
+- [ ] Tombol 🔄 Cek Update: bandingkan dengan AppScript
+- [ ] Update tersedia: download ZIP sukses
+- [ ] Install: batch script jalan, `_MEI*` dibersihkan, copy EXE sukses
+- [ ] **Buka EXE baru MANUAL** (bukan auto-launch) → jalan tanpa DLL error
+
+#### 📊 Telemetry
+- [ ] `app_launched` muncul di PostHog dashboard
+- [ ] Error test (misal disconnect TikTok) muncul di Sentry
+- [ ] Device ID konsisten antara restart
+
+#### 📦 Build Output
+- [ ] `dist/VocaLive-vX.X.X.zip` size ~236MB (tidak >500MB)
+- [ ] EXE tidak dianggap virus oleh Windows Defender
+- [ ] Tidak ada folder `torch`, `nvidia`, `cuda`, `OpenGL` di dist
+
+Catat hasil di GitHub Release notes. Kalau ada yang fail, **jangan rilis** — fix dulu atau dokumentasikan sebagai known issue.
 
 ### Alur Rilis Versi Baru
 
 1. Buat branch baru dari `main` (misal `release/v1.0.14`)
 2. Update `VERSION` di `version.py` (satu-satunya tempat)
 3. Update tabel Version History di CLAUDE.md ini
-4. Jalankan `python build_production_exe_fixed.py`
-5. Upload `dist/VocaLive-vX.X.X.zip` ke GitHub Releases: `https://github.com/arulbarker/vocalive-release/releases` dengan tag `vX.X.X`
-6. Update `appscript.txt` bagian `VERSION_INFO["vocalive"]` → `latest`, `url` → deploy ulang ke Google Apps Script
-7. Merge branch ke `main`
+4. Pastikan CI hijau: pytest + ruff lint pass di GitHub Actions
+5. Jalankan `python build_production_exe_fixed.py`
+6. **Jalankan Manual QA Checklist di atas** — kalau ada yang fail, stop rilis
+7. Upload `dist/VocaLive-vX.X.X.zip` ke GitHub Releases: `https://github.com/arulbarker/vocalive-release/releases` dengan tag `vX.X.X`
+8. Update `appscript.txt` bagian `VERSION_INFO["vocalive"]` → `latest`, `url` → deploy ulang ke Google Apps Script
+9. Merge branch ke `main`
 
 ---
 
@@ -226,28 +309,30 @@ MainWindow.__init__()
           → ada update → _on_update_found() → QMessageBox popup
               → user klik "Update Sekarang" → UpdateDialog (ui/update_dialog.py)
                   → DownloadThread → download ZIP dari GitHub
-                  → install_update() → os.startfile(bat) → app quit 100ms → batch copy EXE → relaunch
+                  → install_update() → os.startfile(bat) → app quit 3s → batch copy EXE
+                  → user buka VocaLive.exe MANUAL
 ```
 
 - **`modules_client/updater.py`** — `check_for_update()`, `UpdateCheckThread`, `DownloadThread`, `install_update()`
-- **`ui/update_dialog.py`** — progress bar download, konfirmasi restart
+- **`ui/update_dialog.py`** — progress bar download, pesan "buka manual", quit setelah 3 detik
 - Tombol **"🔄 Cek Update"** di main window untuk cek manual
 - Tombol **"⬆️ Update Tersedia!"** muncul di toolbar jika ada versi baru (orange, hidden by default)
 
-**Kritis — Auto-Update Timing:**
-- `install_update()` calls `os.startfile(bat_path)` → batch berjalan detached
-- `update_dialog.py` quit app setelah **100ms** (bukan delay panjang!) → PyInstaller cleanup `_MEI` selesai
-- Batch tunggu **5 detik** → `_MEI` sudah bersih → `taskkill` safety net → bersihkan `_MEI*` → copy EXE → `start ""`
-- **JANGAN tambah delay** di `QTimer.singleShot` — delay panjang menyebabkan `taskkill /f` membunuh paksa sebelum `_MEI` cleanup selesai → DLL error di EXE baru
+**Kritis — Auto-Update: TIDAK ADA auto-launch:**
+- Batch script **TIDAK** menjalankan `start "" VocaLive.exe` — menyebabkan DLL error (`_MEI` belum bersih)
+- Setelah update, user diminta **buka manual** VocaLive.exe
+- `update_dialog.py` quit app setelah **3 detik** (beri waktu user baca pesan)
+- Batch tunggu **5 detik** → `taskkill` safety net → bersihkan `_MEI*` → copy EXE → selesai
+- **JANGAN tambahkan kembali auto-launch** (`start ""`) di batch — DLL error pada beberapa perangkat
 
 ### Version Management
 
 **`version.py`** adalah satu-satunya sumber kebenaran versi:
 
 ```python
-VERSION = "1.0.13"          # ← SATU-SATUNYA TEMPAT GANTI VERSI
-VERSION_WIN = "1.0.13.0"   # untuk EXE metadata Windows
-VERSION_TUPLE = (1, 0, 13, 0)
+VERSION = "1.0.14"          # ← SATU-SATUNYA TEMPAT GANTI VERSI
+VERSION_WIN = "1.0.14.0"   # untuk EXE metadata Windows
+VERSION_TUPLE = (1, 0, 14, 0)
 ```
 
 Files yang import dari `version.py`: `updater.py`, `ui/main_window.py`, `main.py`, `build_production_exe_fixed.py`. Jangan hardcode versi di tempat lain.
@@ -408,8 +493,16 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 
 `check_dependencies()` di `main.py` dan `excludes` di spec file **harus sinkron**. Jika sebuah library ada di `excludes` PyInstaller, jangan masukkan ke `required_modules` di `check_dependencies()` — EXE akan silent exit sebelum window muncul karena `return 1` terjadi tanpa dialog apapun (`console=False`).
 
-Library yang saat ini di-exclude dari build: `whisper`, `torch`, `transformers`, `speech_recognition`, `customtkinter`.
-Library yang wajib ada di `hiddenimports`: seluruh `cryptography.hazmat.primitives.*` (dipakai `license_manager.py`), `pygame.mixer`, `keyboard`, `posthog`, `sentry_sdk`, `sentry_sdk.integrations`, `sentry_sdk.integrations.stdlib`, `sentry_sdk.integrations.excepthook`.
+Build script punya **dua lapis filter** untuk menjaga ukuran EXE kecil (~236MB):
+
+1. **`excludes`** — mencegah PyInstaller trace import: `torch`, `transformers`, `tensorflow`, `scipy`, `numpy`, `cv2`, `OpenGL`, `langchain`, `sklearn`, `pyqtgraph`, `pytchat`, `pyvirtualcam`, dll.
+2. **Post-Analysis bloat filter** (`_is_bloat()`) — menghapus binary/data/pure yang lolos dari excludes via transitive deps. Pattern: `torch`, `cuda`, `nvidia`, `OpenGL`, `cv2`, `onnx`, `transformers`, `langchain`, `Wav2Lip`, `dwpose`, dll.
+
+Library yang wajib ada di `hiddenimports`: `cryptography.hazmat.primitives.*` (license), `pygame.mixer`, `keyboard`, `posthog`, `sentry_sdk.*`, `TikTokLive`, `betterproto`.
+
+**Jangan tambah ke `datas`** folder source code (`ui/`, `modules_client/`, dll) — PyInstaller sudah collect `.py` via Analysis. Menambah folder ke `datas` menyebabkan duplikasi dan size bloat.
+
+**Jangan tambah `thirdparty` ke `pathex`** — folder `thirdparty/` berisi dead code (Wav2Lip, dwpose) yang menarik torch/OpenGL/CUDA ke bundle.
 
 ### Silent Crash di EXE
 
