@@ -97,3 +97,139 @@ class TestTranslation:
         from modules_client import i18n
         monkeypatch.setattr(i18n, "_current_lang", "en")
         assert i18n.current_language() == "en"
+
+
+class TestInit:
+    """Test inisialisasi i18n — load JSON, migrasi, persistence."""
+
+    def test_init_fresh_install_saves_detected_locale(self, tmp_path, monkeypatch):
+        """Fresh install Windows en-US → detect 'en' + save ke config."""
+        import json
+
+        from modules_client import i18n
+
+        # Mock config path ke tmp
+        fake_settings = tmp_path / "settings.json"
+        fake_settings.write_text('{"platform": "TikTok"}', encoding="utf-8")
+
+        # Mock ConfigManager yang dipakai i18n
+        saved = {}
+        class FakeCfg:
+            def get(self, key, default=None):
+                return json.loads(fake_settings.read_text()).get(key, default)
+            def set(self, key, value):
+                data = json.loads(fake_settings.read_text())
+                data[key] = value
+                fake_settings.write_text(json.dumps(data), encoding="utf-8")
+                saved[key] = value
+                return True
+
+        monkeypatch.setattr(i18n, "_get_config_manager", lambda: FakeCfg())
+        monkeypatch.setattr(i18n, "_detect_os_locale", lambda: "en")
+        monkeypatch.setattr(i18n, "_load_json_file", lambda lang: {"common.ok": "OK"})
+
+        i18n.init(fresh_install=True)
+
+        assert saved.get("ui_language") == "en"
+        assert i18n.current_language() == "en"
+
+    def test_init_existing_user_forces_id_migration(self, tmp_path, monkeypatch):
+        """User existing (field ui_language belum ada) → force 'id', TIDAK deteksi OS."""
+        import json
+
+        from modules_client import i18n
+
+        fake_settings = tmp_path / "settings.json"
+        fake_settings.write_text('{"platform": "TikTok"}', encoding="utf-8")
+
+        saved = {}
+        class FakeCfg:
+            def get(self, key, default=None):
+                return json.loads(fake_settings.read_text()).get(key, default)
+            def set(self, key, value):
+                data = json.loads(fake_settings.read_text())
+                data[key] = value
+                fake_settings.write_text(json.dumps(data), encoding="utf-8")
+                saved[key] = value
+                return True
+
+        # Monkeypatch detect_os_locale yang SEHARUSNYA tidak dipanggil
+        detect_called = []
+        def never_call():
+            detect_called.append(True)
+            return "en"
+        monkeypatch.setattr(i18n, "_get_config_manager", lambda: FakeCfg())
+        monkeypatch.setattr(i18n, "_detect_os_locale", never_call)
+        monkeypatch.setattr(i18n, "_load_json_file", lambda lang: {"common.ok": "OK"})
+
+        i18n.init(fresh_install=False)
+
+        assert saved.get("ui_language") == "id"
+        assert not detect_called, "detect_os_locale should NOT be called for existing user"
+        assert i18n.current_language() == "id"
+
+    def test_init_respects_existing_ui_language(self, tmp_path, monkeypatch):
+        """User sudah punya ui_language='en' → pakai nilai existing, tidak override."""
+        import json
+
+        from modules_client import i18n
+
+        fake_settings = tmp_path / "settings.json"
+        fake_settings.write_text('{"ui_language": "en"}', encoding="utf-8")
+
+        class FakeCfg:
+            def get(self, key, default=None):
+                return json.loads(fake_settings.read_text()).get(key, default)
+            def set(self, key, value):
+                pass  # should not be called
+
+        monkeypatch.setattr(i18n, "_get_config_manager", lambda: FakeCfg())
+        monkeypatch.setattr(i18n, "_load_json_file", lambda lang: {"common.ok": "OK"})
+
+        i18n.init(fresh_install=False)
+
+        assert i18n.current_language() == "en"
+
+    def test_init_invalid_value_falls_back_to_id(self, tmp_path, monkeypatch):
+        """ui_language='fr' (invalid) → log warning + fallback 'id'."""
+        import json
+
+        from modules_client import i18n
+
+        fake_settings = tmp_path / "settings.json"
+        fake_settings.write_text('{"ui_language": "fr"}', encoding="utf-8")
+
+        class FakeCfg:
+            def get(self, key, default=None):
+                return json.loads(fake_settings.read_text()).get(key, default)
+            def set(self, key, value):
+                pass
+
+        monkeypatch.setattr(i18n, "_get_config_manager", lambda: FakeCfg())
+        monkeypatch.setattr(i18n, "_load_json_file", lambda lang: {"common.ok": "OK"})
+
+        i18n.init(fresh_install=False)
+
+        assert i18n.current_language() == "id"
+
+    def test_set_language_persists(self, tmp_path, monkeypatch):
+        import json
+
+        from modules_client import i18n
+
+        fake_settings = tmp_path / "settings.json"
+        fake_settings.write_text('{"ui_language": "id"}', encoding="utf-8")
+
+        saved = {}
+        class FakeCfg:
+            def get(self, key, default=None):
+                return json.loads(fake_settings.read_text()).get(key, default)
+            def set(self, key, value):
+                saved[key] = value
+                return True
+
+        monkeypatch.setattr(i18n, "_get_config_manager", lambda: FakeCfg())
+
+        i18n.set_language("en")
+
+        assert saved.get("ui_language") == "en"
