@@ -83,7 +83,15 @@ python vtest_telemetry.py
 
 **WAJIB: Setiap perubahan file harus diikuti `python -m pytest tests/ -v --tb=short`.** Jika ada test FAIL, fix dulu sebelum lanjut. Jangan commit jika ada test gagal.
 
-Test suite: 153 tests di 16 files (`tests/`). Tier 1 = pure logic (version, templates, theme, logger), Tier 2 = mocked I/O (config, user_list, product_scene, analytics, greeting, updater, validator, tiktok_listener), Tier 3 = mocked SDK (telemetry, TTS, API).
+Test suite: **213 tests di 20 files** (`tests/`). Empat tier:
+- **Tier 1** = pure logic (version, templates, theme, logger) — tidak butuh external
+- **Tier 2** = mocked I/O (config, user_list, product_scene, analytics, greeting, updater, validator, tiktok_listener, virtual_camera_manager)
+- **Tier 3** = mocked SDK (telemetry, TTS, API routing dengan isolation ConfigManager patch)
+- **Tier 4** = UI widget tests via `pytest-qt` (virtual_camera_tab, license_dialog, config_tab) — 57 tests total
+
+**Pattern mocking penting untuk `test_api_routing.py`**: ConfigManager di-import lokal di dalam fungsi, patch harus ke `modules_client.config_manager.ConfigManager` (bukan `modules_client.api.ConfigManager`) agar efektif.
+
+**Pattern untuk UI test**: gunakan `qtbot.addWidget()` fixture + `MagicMock` untuk manager/dependencies. Untuk check widget visibility di headless mode, pakai `.isHidden()` bukan `.isVisible()` (return False kalau parent belum shown).
 
 Pastikan `config/settings.json` berisi API key yang valid untuk development.
 
@@ -112,7 +120,11 @@ pre-commit run --all-files
 
 Konfig ruff ada di `pyproject.toml` — mulai dari rule conservative (E/F/I/W). Folder `thirdparty/`, `dwpose/`, `sd-vae-ft-mse/` di-exclude karena dead code / vendored.
 
+**Baseline ruff saat ini** (post cleanup merge): ~107 issue tersisa, mostly E702 (multiple statements, theme.py fallback pattern) dan 17 F401 availability-check patterns (`try: import X`). Sudah ≥92% clean dari baseline awal 1369.
+
 CI pipeline: `.github/workflows/test.yml` (pytest di Windows) + `lint.yml` (ruff di Ubuntu). Push ke branch `main`/`release/**`/`feat/**`/`fix/**`/`chore/**` akan auto-trigger.
+
+**`lint.yml` saat ini set `continue-on-error: true`** — informational only, bukan gating. Setelah baseline 0, remove flag ini supaya lint benar-benar block merge.
 
 ### Manual QA Checklist — Smoke Test Sebelum Rilis
 
