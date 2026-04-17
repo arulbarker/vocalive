@@ -3,6 +3,7 @@
   "paket": "basic",
   "ai_provider": "gemini",
   "output_language": "Indonesia",
+  "ui_language": "id",
   "debug_mode": false,
   "tiktok_nickname": "",
   "trigger_words": ["bro", "bang", "min"],
