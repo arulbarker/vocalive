@@ -6,7 +6,6 @@ dan kontrol start/stop streaming ke virtual camera device.
 
 import logging
 import os
-import webbrowser
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -41,7 +40,6 @@ except ImportError:
 
 logger = logging.getLogger("VocaLive")
 
-UNITY_CAPTURE_URL = "https://github.com/schellingb/UnityCapture/releases"
 VIDEO_FILTER = "Video Files (*.mp4 *.avi *.mkv *.mov *.wmv);;All Files (*)"
 MAX_PLAYLIST = 10
 
@@ -125,12 +123,6 @@ class VirtualCameraTab(QWidget):
         driver_desc.setStyleSheet(f"font-size: 11px; color: {TEXT_MUTED}; background: transparent;")
         driver_desc.setWordWrap(True)
         driver_layout.addWidget(driver_desc)
-
-        btn_download = QPushButton("Download UnityCapture")
-        btn_download.setStyleSheet(btn_secondary("font-size: 12px;"))
-        btn_download.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_download.clicked.connect(self._open_driver_download)
-        driver_layout.addWidget(btn_download, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self.driver_panel.setVisible(False)
         layout.addWidget(self.driver_panel)
@@ -377,6 +369,3 @@ class VirtualCameraTab(QWidget):
         else:
             self.manager.set_play_mode("random")
         self.manager.save_config()
-
-    def _open_driver_download(self):
-        webbrowser.open(UNITY_CAPTURE_URL)
