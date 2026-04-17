@@ -115,10 +115,6 @@ class GreetingTTSCache:
 
             from modules_server import tts_engine
 
-            # Detect file extension based on voice (Gemini uses WAV, others use MP3)
-            is_gemini = voice_name and voice_name.startswith('Gemini-')
-            extension = ".wav" if is_gemini else ".mp3"
-
             # Create temp directory to monitor for generated files
             temp_dir = _get_app_root() / "temp"
             temp_dir.mkdir(parents=True, exist_ok=True)

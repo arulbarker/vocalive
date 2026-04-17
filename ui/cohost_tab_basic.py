@@ -661,7 +661,7 @@ class SimpleTikTokListener(QThread):
                         self.client.stop()
                     except Exception:
                         pass
-            except Exception as e:
+            except Exception:
                 # Ignore cleanup errors (common with TikTokLive on Windows)
                 pass
             finally:
@@ -1421,12 +1421,10 @@ class CohostTabBasicSimplified(QWidget):
         self.start_button.setText("Starting...")
 
         try:
-            platform = self.platform_combo.currentText()
-
-            # Stop existing listeners first (force cleanup)
+            # YouTube disabled — platform is TikTok only (CLAUDE.md "Re-enabling YouTube")
+            # When re-enabled, restore: platform = self.platform_combo.currentText()
             self.stop()
 
-            # YouTube disabled — platform is TikTok only
             # To re-enable YouTube, uncomment the block below and restore the dropdown
             # if platform == "YouTube":
             #     video_id = self.video_id_input.text().strip()

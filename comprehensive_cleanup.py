@@ -236,7 +236,7 @@ class ComprehensiveCleanup:
             logger.debug("🗑️ Cleaning up Auto Cache Manager...")
 
             from modules_client.auto_cache_manager import get_cache_manager
-            cache_manager = get_cache_manager()
+            get_cache_manager()
             # Auto cache manager doesn't have explicit cleanup method
             # but we can trigger emergency cleanup if needed
             logger.debug("✅ Auto Cache Manager checked")

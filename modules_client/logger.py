@@ -60,7 +60,7 @@ def setup_logger(name, level=logging.INFO):
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 
-    except Exception as e:
+    except Exception:
         # Jika gagal membuat file handler, gunakan console saja
         pass
 

@@ -260,7 +260,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         if QApplication.instance():
             if is_critical:
                 print("[FORCE-CLOSE-DEBUG] Showing critical error dialog and forcing exit")
-                reply = QMessageBox.critical(
+                QMessageBox.critical(
                     None,
                     "VocaLive - Critical Error",
                     f"Application encountered a critical error and must close:\n\n"
@@ -273,7 +273,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
                 QApplication.instance().quit()
             else:
                 print("[FORCE-CLOSE-DEBUG] Showing recoverable error dialog")
-                reply = QMessageBox.warning(
+                QMessageBox.warning(
                     None,
                     "VocaLive - Error Recovered",
                     f"Application encountered an error but will continue:\n\n"
@@ -527,7 +527,7 @@ def main():
 
         # ⚡ LOADING INDICATOR: Simple console-based loading for now
         print("[LOADING] VocaLive is starting up...")
-        splash = None  # Disable splash screen to prevent segfault
+        # Splash screen disabled to prevent QPaintDevice segfault (see CLAUDE.md)
 
         # Import and create main window
         sys.path.insert(0, os.path.join(ROOT, "ui"))

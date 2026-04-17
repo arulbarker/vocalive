@@ -578,7 +578,6 @@ class ConfigTab(QWidget):
         """Greeting AI System — ON/OFF toggle + status indicator"""
         try:
             from ui.theme import (
-                ACCENT,
                 BG_BASE,
                 BG_ELEVATED,
                 BG_SURFACE,
@@ -598,7 +597,7 @@ class ConfigTab(QWidget):
             )
             BORDER_COLOR = BORDER
         except ImportError:
-            PRIMARY = "#2563EB"; ACCENT = "#60A5FA"; BG_SURFACE = "#162032"
+            PRIMARY = "#2563EB"; BG_SURFACE = "#162032"
             BG_ELEVATED = "#1E2A3B"; TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#94A3B8"
             SUCCESS = "#10B981"; WARNING = "#F59E0B"; ERROR = "#EF4444"
             BORDER_COLOR = "#1E3A5F"
