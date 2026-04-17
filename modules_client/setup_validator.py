@@ -167,7 +167,7 @@ class SetupValidator:
                     "   Valid format: sk-xxxxxxxxxxxxx"
                 )
 
-        except Exception as e:
+        except Exception:
             # Already handled in _validate_json_files
             pass
 

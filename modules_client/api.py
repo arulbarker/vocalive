@@ -456,7 +456,7 @@ def test_api_connection():
     try:
         response = api_bridge.session.get(f"{api_bridge.local_server}/api/health", timeout=10)
         results["local_server"] = response.status_code == 200
-    except (requests.exceptions.RequestException, ConnectionError) as e:
+    except (requests.exceptions.RequestException, ConnectionError):
         pass
     
     # Test direct DeepSeek
@@ -466,7 +466,7 @@ def test_api_connection():
             headers = {"Authorization": f"Bearer {deepseek_key}"}
             response = api_bridge.session.get("https://api.deepseek.com/v1/models", headers=headers, timeout=5)
             results["deepseek_direct"] = response.status_code == 200
-        except (requests.exceptions.RequestException, ConnectionError) as e:
+        except (requests.exceptions.RequestException, ConnectionError):
             pass
     
     # Test direct ChatGPT/OpenAI
@@ -476,7 +476,7 @@ def test_api_connection():
             headers = {"Authorization": f"Bearer {openai_key}"}
             response = api_bridge.session.get("https://api.openai.com/v1/models", headers=headers, timeout=5)
             results["chatgpt_direct"] = response.status_code == 200
-        except (requests.exceptions.RequestException, ConnectionError) as e:
+        except (requests.exceptions.RequestException, ConnectionError):
             pass
     
     results["active_server"] = api_bridge.active_server
