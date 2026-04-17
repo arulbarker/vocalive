@@ -20,5 +20,20 @@
   "common.next": "Next",
   "common.browse": "Browse",
   "config.label.ui_language": "UI Language / Bahasa Antarmuka:",
-  "config.info.restart_required": "UI language will apply after restarting the application."
+  "config.info.restart_required": "UI language will apply after restarting the application.",
+  "license.dialog.title": "VocaLive — License Activation",
+  "license.header.subtitle": "Enter the email used for your purchase",
+  "license.label.email": "Purchase Email",
+  "license.placeholder.email": "example@email.com",
+  "license.hint.email": "💡 Email must match the one used at Lynk.id / Whop during purchase",
+  "license.btn.login": "Login",
+  "license.btn.cancel": "Cancel",
+  "license.progress.default": "Contacting server...",
+  "license.progress.contacting": "Contacting license server...",
+  "license.progress.saving": "Saving session...",
+  "license.err.save_failed": "Failed to save session data.",
+  "license.err.generic": "Error: {detail}",
+  "license.err.email_invalid": "Please enter a valid email.",
+  "license.msg.success": "Login successful! Welcome{name_suffix}.",
+  "license.msg.active_until": "   Active until: {exp}"
 }

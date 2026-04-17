@@ -20,5 +20,20 @@
   "common.next": "Lanjut",
   "common.browse": "Pilih File",
   "config.label.ui_language": "UI Language / Bahasa Antarmuka:",
-  "config.info.restart_required": "Bahasa UI akan diterapkan setelah aplikasi di-restart."
+  "config.info.restart_required": "Bahasa UI akan diterapkan setelah aplikasi di-restart.",
+  "license.dialog.title": "VocaLive — Aktivasi Lisensi",
+  "license.header.subtitle": "Masukkan email yang digunakan saat pembelian",
+  "license.label.email": "Email Pembelian",
+  "license.placeholder.email": "contoh@email.com",
+  "license.hint.email": "💡 Email harus sama dengan yang dipakai di Lynk.id / Whop saat pembelian",
+  "license.btn.login": "Login",
+  "license.btn.cancel": "Batal",
+  "license.progress.default": "Menghubungi server...",
+  "license.progress.contacting": "Menghubungi server lisensi...",
+  "license.progress.saving": "Menyimpan sesi...",
+  "license.err.save_failed": "Gagal menyimpan data sesi.",
+  "license.err.generic": "Error: {detail}",
+  "license.err.email_invalid": "Masukkan email yang valid.",
+  "license.msg.success": "Login berhasil! Selamat datang{name_suffix}.",
+  "license.msg.active_until": "   Aktif hingga: {exp}"
 }

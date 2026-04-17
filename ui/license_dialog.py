@@ -26,6 +26,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from modules_client.i18n import t
+
 logger = logging.getLogger('VocaLive.LicenseDialog')
 
 try:
@@ -61,23 +63,23 @@ class LoginWorker(QThread):
 
     def run(self):
         try:
-            self.progress.emit("Menghubungi server lisensi...")
+            self.progress.emit(t("license.progress.contacting"))
             time.sleep(0.4)
 
             is_valid, message, data = self.license_manager.validate_license_online(self.email)
 
             if is_valid:
-                self.progress.emit("Menyimpan sesi...")
+                self.progress.emit(t("license.progress.saving"))
                 time.sleep(0.3)
                 if self.license_manager.save_license_data(self.email, data):
                     self.done.emit(True, message, data)
                 else:
-                    self.done.emit(False, "Gagal menyimpan data sesi.", {})
+                    self.done.emit(False, t("license.err.save_failed"), {})
             else:
                 self.done.emit(False, message, {})
 
         except Exception as e:
-            self.done.emit(False, f"Error: {str(e)}", {})
+            self.done.emit(False, t("license.err.generic", detail=str(e)), {})
 
 
 class LicenseDialog(QDialog):
@@ -89,7 +91,7 @@ class LicenseDialog(QDialog):
         self.worker = None
         self._entered_email = ""
 
-        self.setWindowTitle("VocaLive — Aktivasi Lisensi")
+        self.setWindowTitle(t("license.dialog.title"))
         self.setFixedSize(480, 560)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         self.setModal(True)
@@ -141,7 +143,7 @@ class LicenseDialog(QDialog):
         title.setStyleSheet(f"color: {C_ACCENT}; letter-spacing: 1px;")
         lay.addWidget(title)
 
-        sub = QLabel("Masukkan email yang digunakan saat pembelian")
+        sub = QLabel(t("license.header.subtitle"))
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sub.setFont(QFont("Segoe UI", 9))
         sub.setStyleSheet(f"color: {C_MUTED};")
@@ -169,13 +171,13 @@ class LicenseDialog(QDialog):
         lay.setSpacing(10)
         lay.setContentsMargins(20, 18, 20, 18)
 
-        lbl = QLabel("Email Pembelian")
+        lbl = QLabel(t("license.label.email"))
         lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Medium))
         lbl.setStyleSheet(f"color: {C_ACCENT};")
         lay.addWidget(lbl)
 
         self.email_input = QLineEdit()
-        self.email_input.setPlaceholderText("contoh@email.com")
+        self.email_input.setPlaceholderText(t("license.placeholder.email"))
         self.email_input.setMinimumHeight(44)
         self.email_input.setFont(QFont("Segoe UI", 11))
         self.email_input.setStyleSheet(f"""
@@ -193,7 +195,7 @@ class LicenseDialog(QDialog):
         self.email_input.returnPressed.connect(self._start_login)
         lay.addWidget(self.email_input)
 
-        hint = QLabel("💡 Email harus sama dengan yang dipakai di Lynk.id / Whop saat pembelian")
+        hint = QLabel(t("license.hint.email"))
         hint.setFont(QFont("Segoe UI", 8))
         hint.setStyleSheet(f"color: {C_MUTED};")
         hint.setWordWrap(True)
@@ -225,7 +227,7 @@ class LicenseDialog(QDialog):
         """)
         lay.addWidget(self.progress_bar)
 
-        self.progress_label = QLabel("Menghubungi server...")
+        self.progress_label = QLabel(t("license.progress.default"))
         self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.progress_label.setFont(QFont("Segoe UI", 9))
         self.progress_label.setStyleSheet(f"color: {C_MUTED};")
@@ -259,7 +261,7 @@ class LicenseDialog(QDialog):
         lay = QHBoxLayout(f)
         lay.setSpacing(12)
 
-        self.btn_cancel = QPushButton("Batal")
+        self.btn_cancel = QPushButton(t("license.btn.cancel"))
         self.btn_cancel.setAutoDefault(False)
         self.btn_cancel.setMinimumHeight(42)
         self.btn_cancel.setFont(QFont("Segoe UI", 10))
@@ -276,7 +278,7 @@ class LicenseDialog(QDialog):
         self.btn_cancel.clicked.connect(self.reject)
         lay.addWidget(self.btn_cancel)
 
-        self.btn_login = QPushButton("Login")
+        self.btn_login = QPushButton(t("license.btn.login"))
         self.btn_login.setMinimumHeight(42)
         self.btn_login.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.btn_login.setStyleSheet(f"""
@@ -314,7 +316,7 @@ class LicenseDialog(QDialog):
     def _start_login(self):
         email = self.email_input.text().strip()
         if not email or "@" not in email:
-            self._show_error("Masukkan email yang valid.")
+            self._show_error(t("license.err.email_invalid"))
             return
 
         self._entered_email = email
@@ -342,9 +344,12 @@ class LicenseDialog(QDialog):
         if success:
             nama = data.get("nama", "")
             exp = data.get("expired_date", "")
-            self.status_text.append(f"\n✅ Login berhasil! Selamat datang{', ' + nama if nama else ''}.")
+            name_suffix = f", {nama}" if nama else ""
+            self.status_text.append(
+                "\n✅ " + t("license.msg.success", name_suffix=name_suffix)
+            )
             if exp:
-                self.status_text.append(f"   Aktif hingga: {exp}")
+                self.status_text.append(t("license.msg.active_until", exp=exp))
             self._scroll_status()
             QTimer.singleShot(1400, self.accept)
         else:

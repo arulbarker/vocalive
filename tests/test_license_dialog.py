@@ -12,9 +12,36 @@ from PyQt6.QtCore import Qt
 pytest.importorskip("pytestqt")
 
 
+# i18n translation map yang di-inject sebelum instantiate LicenseDialog.
+# Deterministic: test assertion tahu persis string apa yang akan muncul di UI.
+_I18N_FIXTURE = {
+    "license.dialog.title": "VocaLive — Aktivasi Lisensi",
+    "license.header.subtitle": "Masukkan email yang digunakan saat pembelian",
+    "license.label.email": "Email Pembelian",
+    "license.placeholder.email": "contoh@email.com",
+    "license.hint.email": "💡 Email harus sama dengan yang dipakai di Lynk.id / Whop saat pembelian",
+    "license.btn.login": "Login",
+    "license.btn.cancel": "Batal",
+    "license.progress.default": "Menghubungi server...",
+    "license.progress.contacting": "Menghubungi server lisensi...",
+    "license.progress.saving": "Menyimpan sesi...",
+    "license.err.save_failed": "Gagal menyimpan data sesi.",
+    "license.err.generic": "Error: {detail}",
+    "license.err.email_invalid": "Masukkan email yang valid.",
+    "license.msg.success": "Login berhasil! Selamat datang{name_suffix}.",
+    "license.msg.active_until": "   Aktif hingga: {exp}",
+}
+
+
 @pytest.fixture
-def dialog(qtbot):
-    """Instantiate LicenseDialog dengan LicenseManager di-mock."""
+def dialog(qtbot, monkeypatch):
+    """Instantiate LicenseDialog dengan LicenseManager dan i18n state di-mock."""
+    from modules_client import i18n
+
+    monkeypatch.setattr(i18n, "_current_lang", "id")
+    monkeypatch.setattr(i18n, "_translations", dict(_I18N_FIXTURE))
+    monkeypatch.setattr(i18n, "_reference_translations", dict(_I18N_FIXTURE))
+
     with patch("ui.license_dialog.LicenseManager") as MockLM:
         MockLM.return_value = MagicMock()
         from ui.license_dialog import LicenseDialog
