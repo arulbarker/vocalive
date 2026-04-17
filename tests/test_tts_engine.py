@@ -9,9 +9,10 @@ Covers:
 """
 
 import sys
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 pytestmark = pytest.mark.integration
 
@@ -65,6 +66,7 @@ sys.modules.setdefault("modules_client.telemetry", _telemetry_mock)
 import importlib
 
 import modules_server.tts_engine as _tts_mod  # initial import
+
 
 def _reload_module():
     """Reload tts_engine and reset its global singleton."""

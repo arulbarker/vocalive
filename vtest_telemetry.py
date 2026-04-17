@@ -3,11 +3,9 @@
 vtest_telemetry.py — Verification test: PostHog + Sentry kirim data ke server.
 Jalankan: python vtest_telemetry.py
 """
-import sys
-import os
-import time
-import json
 import logging
+import os
+import sys
 
 # Suppress posthog debug logs yang spam stdout
 logging.getLogger("posthog").setLevel(logging.CRITICAL)
@@ -61,7 +59,7 @@ except ImportError as e:
     check("import sentry_sdk", False, str(e))
 
 try:
-    from modules_client.telemetry import init, capture, close, set_user_context
+    from modules_client.telemetry import capture, close, init, set_user_context
     check("import telemetry module", True)
 except ImportError as e:
     check("import telemetry module", False, str(e))
@@ -73,6 +71,7 @@ except ImportError as e:
 section("2. Device ID")
 
 from modules_client.telemetry import _read_device_id
+
 device_id = _read_device_id()
 is_real_id = device_id != "anonymous"
 check("device_id loaded", is_real_id, f"id={device_id[:12]}..." if is_real_id else "fallback to 'anonymous'")
@@ -207,6 +206,7 @@ except Exception as e:
 
 # close() with timeout guard — posthog.shutdown() can hang after prior shutdown()
 import threading
+
 close_ok = [False]
 def _do_close():
     tel_mod.close()
@@ -256,7 +256,7 @@ failed = total - passed
 
 print(f"\n  Total: {total}  |  Passed: {passed}  |  Failed: {failed}")
 if failed == 0:
-    print(f"\n  \033[92mAll checks passed! Telemetry is sending to PostHog + Sentry.\033[0m")
+    print("\n  \033[92mAll checks passed! Telemetry is sending to PostHog + Sentry.\033[0m")
 else:
     print(f"\n  \033[91m{failed} check(s) failed. Review output above.\033[0m")
 

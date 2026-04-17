@@ -2,18 +2,19 @@
 DeepSeek AI Integration - Updated to use Supabase config
 """
 
-import requests
-import json
 import logging
 import time
-from typing import Optional, Dict, Any
+from typing import Optional
+
+import requests
+
 from modules_client.config_manager import config_manager
 
 logger = logging.getLogger('VocaLive.DeepSeek')
 
 class DeepSeekAI:
     """DeepSeek AI API client"""
-    
+
     def __init__(self):
         self.base_url = "https://api.deepseek.com/v1"
 
@@ -21,7 +22,7 @@ class DeepSeekAI:
     def api_key(self) -> Optional[str]:
         """Read API key fresh setiap kali — tidak cache, agar selalu up-to-date."""
         return config_manager.get_api_key("DEEPSEEK_API_KEY")
-    
+
     def generate_reply(self, prompt: str, max_tokens: int = 150, fast_mode: bool = False, product_context: str = "") -> Optional[str]:
         """
         Generate AI reply using DeepSeek with retry mechanism
@@ -40,18 +41,18 @@ class DeepSeekAI:
         # PERFORMANCE: Reduce retries in fast mode
         max_retries = 1 if fast_mode else 3
         base_delay = 0.5 if fast_mode else 1.0
-        
+
         for attempt in range(max_retries):
             try:
                 headers = {
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json"
                 }
-                
+
                 # Get custom context and language from settings
                 user_context = config_manager.get("user_context", "")
                 ai_language = config_manager.get("ai_language", "indonesian")  # Default to Indonesian
-                
+
                 # Build system message with language and context
                 language_prompts = {
                     "indonesian": {
@@ -67,10 +68,10 @@ class DeepSeekAI:
                         "default": "You are an AI assistant that helps streamers interact with viewers. Reply naturally, friendly, and relevantly using English."
                     }
                 }
-                
+
                 # Get appropriate prompt based on language
                 lang_prompts = language_prompts.get(ai_language.lower(), language_prompts["indonesian"])
-                
+
                 if user_context and user_context.strip():
                     system_content = lang_prompts["with_context"]
                 else:
@@ -104,14 +105,14 @@ class DeepSeekAI:
                     # Normal mode: progressive timeout
                     # First attempt: 10s, retry: 15s (reduced from 15s/20s)
                     timeout = 10 if attempt == 0 else 15
-                
+
                 response = requests.post(
                     f"{self.base_url}/chat/completions",
                     headers=headers,
                     json=data,
                     timeout=timeout
                 )
-                
+
                 if response.status_code == 200:
                     result = response.json()
                     reply = result["choices"][0]["message"]["content"]
@@ -133,7 +134,7 @@ class DeepSeekAI:
                         time.sleep(delay)
                         continue
                     return None
-                    
+
             except requests.exceptions.Timeout as e:
                 logger.warning(f"DeepSeek timeout on attempt {attempt + 1}: {e}")
                 if attempt < max_retries - 1:
@@ -157,20 +158,20 @@ class DeepSeekAI:
                     time.sleep(delay)
                     continue
                 return None
-        
+
         return None
-    
+
     def test_connection(self) -> bool:
         """Test DeepSeek API connection"""
         try:
             if not self.api_key:
                 return False
-            
+
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            
+
             data = {
                 "model": "deepseek-chat",
                 "messages": [
@@ -181,16 +182,16 @@ class DeepSeekAI:
                 ],
                 "max_tokens": 10
             }
-            
+
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
                 timeout=10
             )
-            
+
             return response.status_code == 200
-            
+
         except Exception as e:
             logger.error(f"DeepSeek connection test failed: {e}")
             return False

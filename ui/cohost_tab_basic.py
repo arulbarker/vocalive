@@ -1,45 +1,77 @@
 # SIMPLIFIED VERSION - Mengurangi kompleksitas threading untuk mencegah force close
 # Fokus pada stabilitas dan fitur inti dengan dukungan YouTube dan TikTok
 
-import sys
-import os
-import time
-import threading
 import json
-import re
-import traceback
 import logging
-from datetime import datetime, timedelta
-from collections import deque, defaultdict
+import os
+import re
+import sys
+import time
+from collections import deque
+from datetime import datetime
 
 logger = logging.getLogger('VocaLive.Cohost')
 
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QTextCursor
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QLineEdit, QCheckBox, QSpinBox, QComboBox,
-    QGroupBox, QScrollArea, QFrame, QSplitter, QTabWidget,
-    QProgressBar, QSlider, QApplication, QMessageBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QDoubleSpinBox
+    QApplication,
+    QComboBox,
+    QDoubleSpinBox,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt, pyqtSlot
-from PyQt6.QtGui import QFont, QTextCursor, QPalette, QColor
 
 # SIMPLIFIED: Minimal imports untuk mengurangi dependency issues
 try:
+    from modules_client.api import generate_reply_with_scene
     from modules_client.config_manager import ConfigManager
     from modules_client.logger import Logger
-    from modules_client.api import generate_reply_with_scene
     from modules_server.tts_engine import speak
 except ImportError as e:
     print(f"Import error: {e}")
     sys.exit(1)
 
 try:
-    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
-        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
-        btn_success, btn_danger, btn_ghost, btn_accent, btn_secondary,
-        status_badge, label_title, label_subtitle, LOG_TEXTEDIT_STYLE)
+    from ui.theme import (
+        ACCENT,
+        BG_BASE,
+        BG_ELEVATED,
+        BG_SURFACE,
+        BORDER,
+        BORDER_GOLD,
+        ERROR,
+        INFO,
+        LOG_TEXTEDIT_STYLE,
+        PRIMARY,
+        RADIUS,
+        RADIUS_SM,
+        SECONDARY,
+        SUCCESS,
+        TEXT_DIM,
+        TEXT_MUTED,
+        TEXT_PRIMARY,
+        WARNING,
+        btn_accent,
+        btn_danger,
+        btn_ghost,
+        btn_secondary,
+        btn_success,
+        label_subtitle,
+        label_title,
+        status_badge,
+    )
 except ImportError:
     PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"; BG_ELEVATED = "#1E2A3B"
     TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#93C5FD"; TEXT_DIM = "#4B7BBA"
@@ -61,14 +93,14 @@ def safe_attr_check(obj, attr_name):
     """Safely check if object has attribute"""
     try:
         return hasattr(obj, attr_name) and getattr(obj, attr_name) is not None
-    except:
+    except Exception:
         return False
 
 # SIMPLIFIED REPLY THREAD - Mengurangi kompleksitas
 class SimpleReplyThread(QThread):
     """Simplified reply thread dengan error handling minimal tapi efektif"""
     finished = pyqtSignal(str, str, str, int)  # author, message, reply, scene_id
-    
+
     def __init__(self, author, message, is_greeting=False, language="Indonesia", parent=None):
         super().__init__(parent)
         self.author = author or "Unknown"
@@ -76,16 +108,16 @@ class SimpleReplyThread(QThread):
         self.is_greeting = is_greeting
         self.language = language
         self.daemon = True  # Ensure thread doesn't block app exit
-    
+
     def _clean_ai_response(self, raw_text):
         """Clean AI response from emojis, formatting, and special chars for TTS"""
         if not raw_text:
             return ""
-        
+
         import re
-        
+
         text = raw_text.strip()
-        
+
         # Remove ALL markdown formatting
         text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # **bold**
         text = re.sub(r'\*(.*?)\*', r'\1', text)      # *italic*
@@ -93,34 +125,34 @@ class SimpleReplyThread(QThread):
         text = re.sub(r'_(.*?)_', r'\1', text)        # _underline_
         text = re.sub(r'`(.*?)`', r'\1', text)        # `code`
         text = re.sub(r'~~(.*?)~~', r'\1', text)      # ~~strikethrough~~
-        
+
         # Remove ALL emojis and emoticons completely for clean TTS
         text = re.sub(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\U00002600-\U000027BF\U0001F900-\U0001F9FF\U00002700-\U000027BF\U00002B00-\U00002BFF\U00002934-\U00002935\U000025A0-\U000025FF\U0001F170-\U0001F251\U00002000-\U0000206F\U0001F004\U0001F0CF\U0001F18E\U0001F191-\U0001F251\U00002764\U00002763\U0001F494\U0001F495\U0001F496\U0001F497\U0001F498\U0001F499\U0001F49A\U0001F49B\U0001F49C\U0001F49D\U0001F49E\U0001F49F\U00002728\U000026A8\U000026F9\U0000267F\U0001F3C3\U0001F3C4]', '', text)
         text = re.sub(r'[:;=8xX]-?[)\]}>dDpP(\[{<|\\/@#$%^&*oO0]', '', text)  # ASCII emoticons
         text = re.sub(r'[)\]}>dDpP(\[{<|\\/@#$%^&*oO0]-?[:;=8xX]', '', text)  # Reverse emoticons
         text = re.sub(r'✨|⭐|🌟|💫|🔥|👍|👏|❤️|💖|💕|🎉|🥳|😊|😍|🤩', '', text)  # Specific common emojis
-        
+
         # Remove excessive punctuation but keep natural sentence flow
         text = re.sub(r'[!]{2,}', '.', text)         # !!! -> .
         text = re.sub(r'[?]{2,}', '?', text)         # ??? -> ?
         text = re.sub(r'[.]{2,}', '.', text)         # ... -> .
         text = re.sub(r'[,]{2,}', ',', text)         # ,, -> ,
-        
+
         # Remove special symbols that TTS reads weirdly
         text = re.sub(r'[~#$%^&*+={}[\]|\\<>]', '', text)  # Remove special chars
         text = re.sub(r'[@]', ' at ', text)          # @ -> "at"
         text = re.sub(r'[/]', ' atau ', text)        # / -> "atau"
-        
+
         # Remove quotes and parentheses (TTS reads them literally)
         text = re.sub(r'["\'""`]', '', text)         # Remove all quotes
         text = re.sub(r'[()[\]{}]', '', text)        # Remove brackets
-        
+
         # Clean up whitespace
         text = re.sub(r'\s+', ' ', text)
         text = text.strip()
-        
+
         return text
-    
+
     def run(self):
         """Simplified run method dengan minimal error handling"""
         scene_id = 0  # default: tidak ada produk relevan
@@ -129,7 +161,7 @@ class SimpleReplyThread(QThread):
             from modules_client.config_manager import ConfigManager
             cfg = ConfigManager()
             user_context = cfg.get("user_context", "")
-            
+
             # Special handling for greeting messages - much shorter and focused
             if self.is_greeting:
                 # For greetings, use the message as direct prompt (already formatted in handle_viewer_greeting)
@@ -151,7 +183,7 @@ PENTING: Berikan respons yang SINGKAT, PADAT, dan LANGSUNG TO THE POINT (maksima
 Jawab komentar dari {self.author} dengan natural dan ramah.
 
 PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, sekitar 150-200 karakter). Jangan panjang lebar! Sebut nama {self.author} dalam respons."""
-            
+
             # API call dengan context-aware prompt
             # PERFORMANCE: Use fast_mode for chat replies (5s timeout, 80 tokens)
             reply, scene_id = generate_reply_with_scene(prompt, fast_mode=True)
@@ -167,7 +199,7 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
             # Clean AI response from emojis, formatting, and special chars
             if reply:
                 reply = self._clean_ai_response(reply)
-            
+
             # Basic validation with natural fallback
             if not reply or len(reply.strip()) == 0:
                 if self.is_greeting:
@@ -180,7 +212,7 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
                         reply = f"Halo {self.author}, selamat datang! Yuk lihat-lihat produk kita!"
                 else:
                     reply = f"Hai {self.author}, terima kasih komentarnya!"
-            
+
             # Different truncation limits for greetings vs regular comments
             # IMPORTANT: Keep responses SHORT for fast TTS playback!
             if self.is_greeting:
@@ -192,10 +224,10 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
                 # 300 chars = ~20s audio (fast, responsive, not boring!)
                 if len(reply) > 300:
                     reply = reply[:297] + "..."
-            
+
             # Emit signal - simple, no retry logic
             self.finished.emit(self.author, self.message, reply, scene_id)
-            
+
         except Exception as e:
             # Simple fallback reply with username - different for greetings and languages
             if self.is_greeting:
@@ -241,20 +273,20 @@ class SimpleListener(QThread):
     """Simplified listener dengan minimal overhead"""
     newComment = pyqtSignal(str, str)
     logMessage = pyqtSignal(str, str)
-    
+
     def __init__(self, video_id, parent=None):
         super().__init__(parent)
         self.video_id = video_id
         self.running = False
         self.daemon = True
-    
+
     def run(self):
         """Simplified pytchat listener with signal fix"""
         try:
             # CRITICAL FIX: Bypass signal issue by monkey-patching
             import signal
             original_signal = signal.signal
-            
+
             def safe_signal(sig, handler):
                 """Safe signal handler that doesn't fail in threads"""
                 try:
@@ -265,36 +297,36 @@ class SimpleListener(QThread):
                         print(f"[SimpleListener] Signal registration ignored in thread: {e}")
                         return None
                     raise
-            
+
             # Apply monkey patch
             signal.signal = safe_signal
-            
+
             import pytchat
             chat = pytchat.create(video_id=self.video_id)
             self.running = True
-            
+
             # Restore original signal after pytchat creation
             signal.signal = original_signal
-            
+
             while self.running and chat.is_alive():
                 try:
                     for c in chat.get().sync_items():
                         if not self.running:
                             break
-                        
+
                         author = c.author.name
                         message = c.message
-                        
+
                         # Simple emit
                         self.newComment.emit(author, message)
-                        
+
                 except Exception as e:
                     print(f"[SimpleListener] Chat error: {e}")
                     time.sleep(1)  # Brief pause on error
-                    
+
         except Exception as e:
             self.logMessage.emit("ERROR", f"Listener failed: {e}")
-    
+
     def stop(self):
         """Simple stop method"""
         self.running = False
@@ -306,7 +338,7 @@ class ViewerGreetingManager(QThread):
     greetingRequested = pyqtSignal(str, str)  # username, display_name
     logMessage = pyqtSignal(str, str)
     statusChanged = pyqtSignal(str)  # status message
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.cfg = ConfigManager()
@@ -315,18 +347,18 @@ class ViewerGreetingManager(QThread):
         self.pending_greetings = []  # Queue for viewers to greet
         self.seen_viewers = set()  # Track seen viewers to avoid duplicates
         self.daemon = True
-        
+
     def start_greeting_system(self):
         """Start the viewer greeting system"""
         enabled = self.cfg.get("viewer_greeting_enabled", False)
         if not enabled:
             self.logMessage.emit("INFO", "Viewer greeting system disabled in settings")
             return
-            
+
         self.is_active = True
         self.start()
         self.logMessage.emit("INFO", "Viewer greeting system started")
-        
+
     def stop_greeting_system(self):
         """Stop the viewer greeting system"""
         self.is_active = False
@@ -335,27 +367,27 @@ class ViewerGreetingManager(QThread):
         self.seen_viewers.clear()
         self.quit()
         self.logMessage.emit("INFO", "Viewer greeting system stopped")
-    
+
     def add_viewer(self, username, display_name):
         """Add viewer to greeting queue if detection is active"""
         if not self.is_active or not self.detection_active:
             return
-            
+
         # Avoid duplicate greetings
         viewer_key = f"{username}:{display_name}"
         if viewer_key in self.seen_viewers:
             return
-            
+
         self.seen_viewers.add(viewer_key)
         self.pending_greetings.append((username, display_name))
         self.logMessage.emit("INFO", f"Added viewer to greeting queue: @{username} ({display_name})")
-        
+
         # Keep memory manageable
         if len(self.seen_viewers) > 200:
             # Keep only recent half
             recent_viewers = list(self.seen_viewers)[-100:]
             self.seen_viewers = set(recent_viewers)
-    
+
     def run(self):
         """Main greeting system loop with timing controls"""
         try:
@@ -363,49 +395,49 @@ class ViewerGreetingManager(QThread):
                 # Get current settings
                 detection_window = self.cfg.get("viewer_detection_window", 60)  # seconds
                 wait_interval = self.cfg.get("viewer_wait_interval", 300)  # seconds
-                
+
                 # Start detection phase
                 self.detection_active = True
                 self.statusChanged.emit(f"🟢 Detecting viewers for {detection_window} seconds...")
                 self.logMessage.emit("INFO", f"Detection phase started: {detection_window} seconds")
-                
+
                 # Detection phase - actively collect viewers
                 start_time = time.time()
                 while self.is_active and (time.time() - start_time) < detection_window:
                     time.sleep(1)  # Check every second
-                
+
                 # End detection phase
                 self.detection_active = False
-                
+
                 # Process pending greetings
                 if self.pending_greetings and self.is_active:
                     greeting_count = len(self.pending_greetings)
                     self.statusChanged.emit(f"🎤 Processing {greeting_count} greetings...")
                     self.logMessage.emit("INFO", f"Processing {greeting_count} pending greetings")
-                    
+
                     # Send greetings to queue (spaced out to avoid spam)
                     for i, (username, display_name) in enumerate(self.pending_greetings):
                         if not self.is_active:
                             break
-                            
+
                         self.greetingRequested.emit(username, display_name)
-                        
+
                         # Space out greetings (2 seconds between each)
                         if i < len(self.pending_greetings) - 1:
                             time.sleep(2)
-                    
+
                     self.pending_greetings.clear()
-                
+
                 # Wait phase
                 if self.is_active:
                     self.statusChanged.emit(f"⏳ Waiting {wait_interval//60} minutes until next cycle...")
                     self.logMessage.emit("INFO", f"Wait phase started: {wait_interval} seconds")
-                    
+
                     # Wait phase - no detection
                     start_time = time.time()
                     while self.is_active and (time.time() - start_time) < wait_interval:
                         time.sleep(5)  # Check every 5 seconds during wait
-                        
+
         except Exception as e:
             self.logMessage.emit("ERROR", f"Error in greeting system: {e}")
         finally:
@@ -417,7 +449,11 @@ class SimpleTikTokListener(QThread):
     newComment = pyqtSignal(str, str)
     viewerJoined = pyqtSignal(str, str)  # username, display_name
     logMessage = pyqtSignal(str, str)
-    
+
+    # Grace period in seconds — ignore all comments during this window after connect.
+    # TikTokLive dumps recent chat history on connect; this filters them out.
+    CONNECT_GRACE_PERIOD = 3.0
+
     def __init__(self, username, parent=None):
         super().__init__(parent)
         self.username = username.replace("@", "").strip()
@@ -426,9 +462,15 @@ class SimpleTikTokListener(QThread):
         self.seen_messages = set()
         self.daemon = True
         self.start_timestamp = None  # Track when listener started
+        self._grace_period_over = False  # True after grace period ends
 
     def should_skip_comment(self, event_timestamp_ms, current_time):
         """Determine if a comment should be skipped based on timing.
+
+        After connecting, TikTokLive sends a batch of old comments (history dump).
+        We use a grace period to drop ALL comments that arrive in the first few
+        seconds after connect. After the grace period, only truly live comments
+        come through.
 
         Args:
             event_timestamp_ms: Event timestamp in milliseconds (None if unavailable)
@@ -440,12 +482,22 @@ class SimpleTikTokListener(QThread):
         if self.start_timestamp is None:
             return False
 
+        elapsed = current_time - self.start_timestamp
+
+        # During grace period — skip ALL comments (history dump)
+        if not self._grace_period_over:
+            if elapsed < self.CONNECT_GRACE_PERIOD:
+                return True
+            # Grace period just ended — mark it and accept from now on
+            self._grace_period_over = True
+
+        # After grace period — also filter by event timestamp if available
         if event_timestamp_ms:
             event_time = event_timestamp_ms / 1000.0
-            time_diff = event_time - self.start_timestamp
-            if time_diff < -0.5:
+            # Skip comments whose event timestamp is before we connected
+            if event_time < self.start_timestamp:
                 return True
-        # Komentar tanpa timestamp → langsung terima
+
         return False
 
     def run(self):
@@ -457,35 +509,37 @@ class SimpleTikTokListener(QThread):
             # Ini penting untuk restart aplikasi agar tidak block komentar lama
             self.seen_messages.clear()  # Clear duplicate tracking
             self.start_timestamp = None  # Reset connection timestamp
+            self._grace_period_over = False  # Reset grace period
             self.running = False  # Will be set to True after client creation
 
-            self.logMessage.emit("INFO", f"[TikTok] State reset - ready for fresh connection")
+            self.logMessage.emit("INFO", "[TikTok] State reset - ready for fresh connection")
 
             from TikTokLive import TikTokLiveClient
-            from TikTokLive.events import ConnectEvent, CommentEvent, DisconnectEvent, JoinEvent
+            from TikTokLive.events import CommentEvent, ConnectEvent, DisconnectEvent, JoinEvent
 
-            self.logMessage.emit("INFO", f"[TikTok] TikTokLive library imported successfully")
+            self.logMessage.emit("INFO", "[TikTok] TikTokLive library imported successfully")
             self.logMessage.emit("INFO", f"[TikTok] Creating client for @{self.username}")
 
             # Create TikTok client
             self.client = TikTokLiveClient(unique_id=self.username)
             self.running = True
 
-            self.logMessage.emit("INFO", f"[TikTok] Client created, setting up event handlers...")
-            
+            self.logMessage.emit("INFO", "[TikTok] Client created, setting up event handlers...")
+
             @self.client.on(ConnectEvent)
             async def on_connect(event):
                 import time
                 self.start_timestamp = time.time()  # Record connection time
+                self._grace_period_over = False  # Reset grace period on every connect
                 logger.info("[COHOST] TikTok connected: username=%s", self.username)
-                self.logMessage.emit("INFO", f"✅ Connected! Siap tangkap komentar @{self.username}")
+                self.logMessage.emit("INFO", f"✅ Connected! Menunggu {self.CONNECT_GRACE_PERIOD:.0f}s untuk skip history lama...")
                 try:
-                    from modules_client.telemetry import capture as _tel_capture
                     from modules_client.config_manager import ConfigManager as _CM
+                    from modules_client.telemetry import capture as _tel_capture
                     _tel_capture("tiktok_connected", {"nickname": _CM().get("tiktok_nickname", "")})
                 except Exception:
                     pass
-            
+
             @self.client.on(CommentEvent)
             async def on_comment(event):
                 if not self.running:
@@ -496,9 +550,13 @@ class SimpleTikTokListener(QThread):
                     current_time = time.time()
 
                     # Filter old chat — delegasi ke method yang bisa di-unit-test
+                    was_grace = not self._grace_period_over
                     event_ts = event.timestamp if hasattr(event, 'timestamp') and event.timestamp else None
                     if self.should_skip_comment(event_ts, current_time):
                         return
+                    # Log when grace period just ended
+                    if was_grace and self._grace_period_over:
+                        self.logMessage.emit("INFO", "✅ Grace period selesai — mulai tangkap komentar LIVE")
 
                     # Extract author and message
                     author = event.user.nickname if safe_attr_check(event.user, 'nickname') else str(event.user.unique_id)
@@ -528,7 +586,7 @@ class SimpleTikTokListener(QThread):
                         # Convert to list, remove first 50, convert back to set
                         messages_list = list(self.seen_messages)
                         self.seen_messages = set(messages_list[50:])
-                        self.logMessage.emit("DEBUG", f"[TikTok] Cleaned up duplicate tracking (kept newest 100)")
+                        self.logMessage.emit("DEBUG", "[TikTok] Cleaned up duplicate tracking (kept newest 100)")
 
                     # Log and emit new comment
                     logger.debug("[COHOST] Comment received: user=%s, msg_len=%d", author, len(message))
@@ -540,49 +598,49 @@ class SimpleTikTokListener(QThread):
                     # Don't block future comments if one fails
                     import traceback
                     self.logMessage.emit("DEBUG", f"Traceback: {traceback.format_exc()}")
-            
+
             @self.client.on(JoinEvent)
             async def on_join(event):
                 if not self.running:
                     return
-                
+
                 try:
                     # Process viewer join with safe attribute check
                     username = event.user.unique_id if safe_attr_check(event.user, 'unique_id') else "Unknown"
                     display_name = event.user.nickname if safe_attr_check(event.user, 'nickname') else username
-                    
+
                     # Emit signal for viewer join processing
                     self.viewerJoined.emit(username, display_name)
-                    
+
                 except Exception as join_error:
                     self.logMessage.emit("ERROR", f"Error processing viewer join: {join_error}")
-            
+
             @self.client.on(DisconnectEvent)
             async def on_disconnect(event):
                 self.logMessage.emit("INFO", "Disconnected from TikTok Live")
                 self.running = False
 
-            self.logMessage.emit("INFO", f"[TikTok] Event handlers registered successfully")
-            self.logMessage.emit("INFO", f"[TikTok] Attempting to connect to live stream...")
+            self.logMessage.emit("INFO", "[TikTok] Event handlers registered successfully")
+            self.logMessage.emit("INFO", "[TikTok] Attempting to connect to live stream...")
             self.logMessage.emit("INFO", f"[TikTok] ⚠️ Make sure @{self.username} is LIVE right now!")
 
             # Start the client
-            self.logMessage.emit("INFO", f"[TikTok] Starting client.run()...")
+            self.logMessage.emit("INFO", "[TikTok] Starting client.run()...")
             self.client.run()
 
-            self.logMessage.emit("INFO", f"[TikTok] client.run() completed (connection closed)")
-            
+            self.logMessage.emit("INFO", "[TikTok] client.run() completed (connection closed)")
+
         except ImportError:
             self.logMessage.emit("ERROR", "❌ TikTokLive library not found. Install with: pip install TikTokLive")
         except Exception as e:
             self.logMessage.emit("ERROR", f"❌ TikTok listener error: {e}")
             import traceback
             self.logMessage.emit("DEBUG", f"Full traceback: {traceback.format_exc()}")
-    
+
     def stop(self):
         """Simple stop method with proper cleanup for restart support"""
         self.running = False
-        
+
         if self.client:
             try:
                 # Suppress betterproto cleanup warnings
@@ -592,34 +650,35 @@ class SimpleTikTokListener(QThread):
                     # Try to stop client gracefully
                     try:
                         self.client.stop()
-                    except:
+                    except Exception:
                         pass
-            except Exception as e:
+            except Exception:
                 # Ignore cleanup errors (common with TikTokLive on Windows)
                 pass
             finally:
                 # CRITICAL: Always clear client reference completely
                 self.client = None
-        
+
         # Clear all state for fresh restart
         self.seen_messages.clear()
         self.start_timestamp = None
-        
+        self._grace_period_over = False
+
         # Quit thread
         try:
             self.quit()
-        except:
+        except Exception:
             pass
 
 # MAIN SIMPLIFIED COHOST CLASS
 class CohostTabBasicSimplified(QWidget):
     """Simplified version focusing on core functionality and stability"""
-    
+
     # Simple signals
     ttsFinished = pyqtSignal()
     replyGenerated = pyqtSignal(str, str, str)
     process_comment_signal = pyqtSignal(str, str)  # For OBS trigger detection
-    
+
     def __init__(self):
         super().__init__()
 
@@ -673,17 +732,17 @@ class CohostTabBasicSimplified(QWidget):
                 pass
             def add_viewer(self, username, display_name):
                 pass
-        
+
         self.viewer_greeting_manager = DummyViewerGreetingManager()
-        
+
         # Statistics counters for unified status table
         self.total_comments = 0
-        self.total_ai_replies = 0  
+        self.total_ai_replies = 0
         self.total_triggers = 0
         self.max_concurrent_threads = 2  # Limit concurrent threads
-        
+
         # OBS Integration removed - now handled separately by OBS Tab
-        
+
         # Timers - simplified
         self.cooldown_timer = QTimer()
         self.cooldown_timer.timeout.connect(self._process_queue)
@@ -692,13 +751,13 @@ class CohostTabBasicSimplified(QWidget):
         self._cleanup_timer = QTimer()
         self._cleanup_timer.timeout.connect(self._cleanup_cooldowns)
         self._cleanup_timer.start(5 * 60 * 1000)  # 5 menit
-        
+
         # Initialize UI
         self.init_ui()
-        
+
         # Setup cleanup on app exit
         QApplication.instance().aboutToQuit.connect(self.cleanup)
-    
+
     def set_popup_window(self, popup_window):
         """Wire ProductPopupWindow ke cohost tab (dipanggil dari main_window)."""
         self._popup_window = popup_window
@@ -708,18 +767,18 @@ class CohostTabBasicSimplified(QWidget):
         try:
             # Stop auto reply first
             self.stop()
-            
+
             # Additional cleanup
             if hasattr(self, 'listener_thread') and self.listener_thread:
                 self.listener_thread.stop()
                 self.listener_thread.wait(3000)
                 self.listener_thread = None
-            
+
             if hasattr(self, 'tiktok_listener_thread') and self.tiktok_listener_thread:
                 self.tiktok_listener_thread.stop()
                 self.tiktok_listener_thread.wait(3000)
                 self.tiktok_listener_thread = None
-            
+
             # Clear any remaining threads
             if hasattr(self, 'active_reply_threads'):
                 for thread in self.active_reply_threads:
@@ -727,19 +786,19 @@ class CohostTabBasicSimplified(QWidget):
                         thread.quit()
                         thread.wait(1000)
                 self.active_reply_threads.clear()
-            
+
             self.log_message("INFO", "Application closing - all processes stopped")
             event.accept()
-            
+
         except Exception as e:
             self.log_message("ERROR", f"Error during close: {e}")
             event.accept()
-    
+
     def init_ui(self):
         """Simplified UI initialization with scroll area"""
         # Create main layout
         main_layout = QVBoxLayout()
-        
+
         # Add tutorial button at the top — compact, tidak full-width
         tutorial_row = QHBoxLayout()
         tutorial_button = QPushButton("📺 Panduan Penggunaan")
@@ -750,17 +809,17 @@ class CohostTabBasicSimplified(QWidget):
         tutorial_row.addStretch()
         tutorial_row.addWidget(tutorial_button)
         main_layout.addLayout(tutorial_row)
-        
+
         # Create scroll area for all content
         main_scroll_area = QScrollArea()
         main_scroll_area.setWidgetResizable(True)
         main_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         main_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        
+
         # Create content widget
         content_widget = QWidget()
         layout = QVBoxLayout(content_widget)
-        
+
         # Basic controls with status indicator
         controls_group = QGroupBox("⚡ Controls")
         controls_layout = QHBoxLayout()
@@ -788,18 +847,18 @@ class CohostTabBasicSimplified(QWidget):
         controls_layout.addWidget(self.status_indicator)
         controls_layout.addStretch()
         controls_group.setLayout(controls_layout)
-        
+
         # Platform selection
         platform_group = QGroupBox("Platform")
         platform_layout = QVBoxLayout()
-        
+
         self.platform_combo = QComboBox()
         # YouTube disabled — uncomment to re-enable: self.platform_combo.addItems(["YouTube", "TikTok"])
         self.platform_combo.addItems(["TikTok"])
         self.platform_combo.setCurrentText("TikTok")
         self.platform_combo.currentTextChanged.connect(self._update_platform_ui)
         platform_layout.addWidget(self.platform_combo)
-        
+
         # YouTube Video ID input
         self.video_id_label = QLabel("YouTube Video ID:")
         platform_layout.addWidget(self.video_id_label)
@@ -807,7 +866,7 @@ class CohostTabBasicSimplified(QWidget):
         self.video_id_input.setPlaceholderText("Enter YouTube video ID")
         self.video_id_input.setText(self.cfg.get("video_id", ""))
         platform_layout.addWidget(self.video_id_input)
-        
+
         # TikTok Nickname input
         self.tiktok_label = QLabel("TikTok Nickname:")
         platform_layout.addWidget(self.tiktok_label)
@@ -815,20 +874,20 @@ class CohostTabBasicSimplified(QWidget):
         self.tiktok_input.setPlaceholderText("Enter TikTok username (without @)")
         self.tiktok_input.setText(self.cfg.get("tiktok_nickname", ""))
         platform_layout.addWidget(self.tiktok_input)
-        
+
         platform_group.setLayout(platform_layout)
-        
+
         # Update UI based on current platform
         self._update_platform_ui(self.platform_combo.currentText())
-        
+
         # Context info (managed via Config tab)
         context_info = QLabel("📋 Context Setting: Diatur melalui Config Tab → Template Live Selling")
         context_info.setStyleSheet(f"color: {PRIMARY}; font-weight: bold; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 6px; margin: 5px;")
-        
+
         # Language & Voice Settings Group
         language_group = QGroupBox("Language & Voice Settings")
         language_layout = QVBoxLayout()
-        
+
         # Language selection
         lang_layout = QHBoxLayout()
         lang_layout.addWidget(QLabel("Output Language:"))
@@ -839,28 +898,28 @@ class CohostTabBasicSimplified(QWidget):
         self.language_combo.currentTextChanged.connect(self.on_language_changed)
         lang_layout.addWidget(self.language_combo)
         language_layout.addLayout(lang_layout)
-        
+
         # Voice selection
         voice_layout = QHBoxLayout()
         voice_layout.addWidget(QLabel("Voice:"))
         self.voice_combo = QComboBox()
         self.update_voice_options(current_lang)
         voice_layout.addWidget(self.voice_combo)
-        
+
         # Preview button
         self.preview_voice_btn = QPushButton("🔊 Preview")
         self.preview_voice_btn.setFixedWidth(80)
         self.preview_voice_btn.clicked.connect(self.preview_selected_voice)
         voice_layout.addWidget(self.preview_voice_btn)
-        
+
         language_layout.addLayout(voice_layout)
-        
+
         language_group.setLayout(language_layout)
-        
+
         # Trigger & Settings Group
         settings_group = QGroupBox("🎯 Trigger & Queue Settings")
         settings_layout = QVBoxLayout()
-        
+
         # Trigger words input (max 5 triggers)
         trigger_layout = QHBoxLayout()
         trigger_layout.addWidget(QLabel("Trigger Words (max 5):"))
@@ -870,7 +929,7 @@ class CohostTabBasicSimplified(QWidget):
             self.trigger_input.setText(", ".join(existing_triggers))
         self.trigger_input.setPlaceholderText("bang,halo,salam,oke,dan (max 5, kosong = balas semua)")
         trigger_layout.addWidget(self.trigger_input)
-        
+
         save_trigger_btn = QPushButton("💾 Save")
         save_trigger_btn.setStyleSheet(btn_ghost())
         save_trigger_btn.clicked.connect(self.save_trigger_settings)
@@ -881,7 +940,7 @@ class CohostTabBasicSimplified(QWidget):
         trigger_info = QLabel("💡 Tips: Kosongkan untuk membalas semua komentar. Tanda tanya (?) otomatis dibalas.")
         trigger_info.setStyleSheet(label_subtitle())
         settings_layout.addWidget(trigger_info)
-        
+
         # Cooldown settings
         cooldown_layout = QHBoxLayout()
         cooldown_layout.addWidget(QLabel("Cooldown/Penonton (mnt):"))
@@ -904,7 +963,7 @@ class CohostTabBasicSimplified(QWidget):
             "Stream sepi: 5-10 | Stream ramai: 15-30"
         )
         cooldown_layout.addWidget(self.queue_spin)
-        
+
         # Sequential Greeting Timer
         cooldown_layout.addWidget(QLabel("Greeting Timer (sec):"))
         self.greeting_timer_spin = QDoubleSpinBox()
@@ -920,7 +979,7 @@ class CohostTabBasicSimplified(QWidget):
         self.cfg.set("greeting_play_mode", "random")
         if hasattr(self, 'sequential_greeting_manager'):
             self.sequential_greeting_manager.set_play_mode("random")
-        
+
         # Mode info (Random only)
         mode_info_layout = QHBoxLayout()
         mode_info = QLabel("🎲 Mode Sapaan: Random (Acak dari slot yang terisi)")
@@ -928,41 +987,41 @@ class CohostTabBasicSimplified(QWidget):
         mode_info_layout.addWidget(mode_info)
         mode_info_layout.addStretch()
         settings_layout.addLayout(mode_info_layout)
-        
+
         settings_group.setLayout(settings_layout)
-        
+
         # Status display
         self.status_display = QTextEdit()
         self.status_display.setMaximumHeight(200)
         self.status_display.setReadOnly(True)
-        
+
         # Comment display
         self.comment_display = QTextEdit()
         self.comment_display.setReadOnly(True)
-        
+
         # Add to main layout
         layout.addWidget(controls_group)
         layout.addWidget(platform_group)
         layout.addWidget(context_info)
         layout.addWidget(language_group)
         layout.addWidget(settings_group)
-        
+
         # Unified Status & Activity Table (BIG TABLE)
         status_group = QGroupBox("📊 Live Status & Activity Monitor")
         status_layout = QVBoxLayout()
-        
+
         # Create comprehensive status table
         self.status_table = QTableWidget()
         self.status_table.setColumnCount(6)
         self.status_table.setHorizontalHeaderLabels([
-            "🕒 Time", 
-            "👤 User", 
-            "💬 Comment", 
-            "🤖 AI Response", 
-            "🎯 Trigger", 
+            "🕒 Time",
+            "👤 User",
+            "💬 Comment",
+            "🤖 AI Response",
+            "🎯 Trigger",
             "📊 Status"
         ])
-        
+
         # Set table properties for big display
         header = self.status_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)  # Time
@@ -971,13 +1030,13 @@ class CohostTabBasicSimplified(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)  # AI Response (35%)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)  # Trigger
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)  # Status
-        
+
         # Make table BIG as requested
         self.status_table.setMinimumHeight(400)
         self.status_table.setMaximumHeight(500)
         self.status_table.setAlternatingRowColors(True)
         self.status_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        
+
         # Enhanced table styling
         self.status_table.setStyleSheet(f"""
             QTableWidget {{
@@ -1008,12 +1067,12 @@ class CohostTabBasicSimplified(QWidget):
                 font-size: 13px;
             }}
         """)
-        
+
         status_layout.addWidget(self.status_table)
-        
+
         # System Status Summary Row (below table)
         summary_layout = QHBoxLayout()
-        
+
         # Connection indicators — status_badge gives bordered pill style
         self.ai_status_label = QLabel("🔴 AI: Disconnected")
         self.ai_status_label.setStyleSheet(status_badge(ERROR))
@@ -1031,29 +1090,29 @@ class CohostTabBasicSimplified(QWidget):
         # Statistics
         self.stats_label = QLabel("📈 0 Komentar | 0 Balasan | 0 Trigger")
         self.stats_label.setStyleSheet(status_badge(INFO))
-        
+
         summary_layout.addWidget(self.ai_status_label)
-        summary_layout.addWidget(self.listener_status_label)  
+        summary_layout.addWidget(self.listener_status_label)
         summary_layout.addWidget(self.tts_status_label)
         summary_layout.addWidget(self.greeting_status_label)
         summary_layout.addWidget(self.stats_label)
         summary_layout.addStretch()
-        
+
         status_layout.addLayout(summary_layout)
         status_group.setLayout(status_layout)
         layout.addWidget(status_group)
-        
+
         # Set content widget to main scroll area
         main_scroll_area.setWidget(content_widget)
-        
+
         # Add main scroll area to main layout
         main_layout.addWidget(main_scroll_area)
-        
+
         self.setLayout(main_layout)
-        
+
         # Initialize status display
         self.update_status_summary()
-    
+
     def _update_platform_ui(self, platform):
         """Update UI based on selected platform"""
         if platform == "YouTube":
@@ -1066,10 +1125,10 @@ class CohostTabBasicSimplified(QWidget):
             self.video_id_input.setVisible(False)
             self.tiktok_label.setVisible(True)
             self.tiktok_input.setVisible(True)
-        
+
         # Save platform selection
         self.cfg.set("platform", platform)
-    
+
     def on_language_changed(self, language):
         """Handle language selection change"""
         self.cfg.set("output_language", language)
@@ -1089,7 +1148,7 @@ class CohostTabBasicSimplified(QWidget):
 
         self.log_message("INFO", f"Output language changed to: {language}")
         self.log_message("INFO", f"AI language set to: {ai_language}")
-    
+
     def update_voice_options(self, language):
         """Update voice options based on selected language using voices.json"""
         self.voice_combo.clear()
@@ -1140,7 +1199,7 @@ class CohostTabBasicSimplified(QWidget):
                 if key_type != "cloud" and "gemini_flash" in voices_data and "en-US" in voices_data["gemini_flash"]:
                     for voice in voices_data["gemini_flash"]["en-US"]:
                         voices.append(f"{voice['model']} ({voice['gender']})")
-            
+
             # Fallback to default voices if loading fails
             if not voices:
                 if language == "Indonesia":
@@ -1149,7 +1208,7 @@ class CohostTabBasicSimplified(QWidget):
                     voices = ["ms-MY-Standard-A (FEMALE)", "ms-MY-Standard-B (MALE)"]
                 else:
                     voices = ["en-US-Standard-A (MALE)", "en-US-Standard-C (FEMALE)"]
-            
+
         except Exception as e:
             self.log_message("ERROR", f"Error loading voices: {e}")
             # Fallback voices
@@ -1157,7 +1216,7 @@ class CohostTabBasicSimplified(QWidget):
                 voices = ["id-ID-Standard-A (FEMALE)", "id-ID-Standard-B (MALE)"]
             else:
                 voices = ["en-US-Standard-A (MALE)", "en-US-Standard-C (FEMALE)"]
-        
+
         self.voice_combo.addItems(voices)
 
         # Set saved voice — jika tidak ada di list (misal voice dihapus), reset ke voice pertama
@@ -1175,12 +1234,12 @@ class CohostTabBasicSimplified(QWidget):
         except TypeError:
             pass  # Belum terhubung — tidak apa-apa
         self.voice_combo.currentTextChanged.connect(self.on_voice_changed)
-    
+
     def on_voice_changed(self, voice):
         """Handle voice selection change"""
         self.cfg.set("tts_voice", voice)
         self.log_message("INFO", f"TTS voice changed to: {voice}")
-    
+
     def preview_selected_voice(self):
         """Preview the currently selected voice with sample text"""
         try:
@@ -1230,15 +1289,15 @@ class CohostTabBasicSimplified(QWidget):
                         sample_text = "Hello, this is a voice preview sample."
                     else:
                         sample_text = "Halo, ini adalah contoh suara untuk preview."
-            
+
             self.log_message("INFO", f"Playing voice preview: {selected_voice}")
-            
+
             def on_preview_finished():
                 """Callback when preview finished"""
                 self.preview_voice_btn.setEnabled(True)
                 self.preview_voice_btn.setText("🔊 Preview")
                 self.log_message("INFO", "Voice preview completed")
-            
+
             # Play TTS preview with Google TTS only (avoid dual playback)
             success = speak(
                 text=sample_text,
@@ -1247,16 +1306,16 @@ class CohostTabBasicSimplified(QWidget):
                 on_finished=on_preview_finished,
                 force_google_tts=True
             )
-            
+
             if not success:
                 self.log_message("ERROR", f"Failed to preview voice: {selected_voice}")
                 on_preview_finished()  # Re-enable button
-                
+
         except Exception as e:
             self.log_message("ERROR", f"Voice preview error: {e}")
             self.preview_voice_btn.setEnabled(True)
             self.preview_voice_btn.setText("🔊 Preview")
-    
+
     def save_trigger_settings(self):
         """Save trigger words and cooldown settings with max 5 limit"""
         try:
@@ -1272,30 +1331,30 @@ class CohostTabBasicSimplified(QWidget):
                 self.cfg.set("trigger_words", trigger_words)
             else:
                 self.cfg.set("trigger_words", [])
-            
+
             # FORCE SAVE to disk to ensure persistence
             self.cfg.save()
-            
+
             # Save cooldown settings
             self.cfg.set("viewer_cooldown_minutes", self.viewer_cooldown_spin.value())
             self.cfg.set("cohost_max_queue", self.queue_spin.value())
-            
+
             # Update queue max size
             self.reply_queue = deque(maxlen=self.queue_spin.value())
-            
+
             # Save greeting timer setting
             greeting_timer = self.greeting_timer_spin.value()
             self.cfg.set("sequential_greeting_interval", greeting_timer)
-            
+
             # Update sequential greeting manager if exists
             if hasattr(self, 'sequential_greeting_manager'):
                 self.sequential_greeting_manager.set_greeting_interval(greeting_timer)
-            
+
             self.log_message("INFO", f"Settings saved: Triggers={trigger_words if trigger_text else 'None'}, Cooldown={self.cooldown_spin.value()}s, Queue={self.queue_spin.value()}, GreetingTimer={greeting_timer}s")
-            
+
         except Exception as e:
             self.log_message("ERROR", f"Failed to save settings: {e}")
-    
+
     def on_greeting_timer_changed(self, value):
         """Handle greeting timer spinbox change"""
         try:
@@ -1328,7 +1387,7 @@ class CohostTabBasicSimplified(QWidget):
 
         except Exception as e:
             self.log_message("ERROR", f"Failed to update greeting mode: {e}")
-    
+
     def update_status_indicator(self, is_active):
         """Update the status indicator lamp"""
         if is_active:
@@ -1337,7 +1396,7 @@ class CohostTabBasicSimplified(QWidget):
         else:
             self.status_indicator.setText("🔴  OFF")
             self.status_indicator.setStyleSheet(status_badge(ERROR, size=13))
-    
+
     def start(self):
         """Start simplified listener"""
         # PERFORMANCE FIX: Prevent multiple simultaneous starts
@@ -1353,12 +1412,10 @@ class CohostTabBasicSimplified(QWidget):
         self.start_button.setText("Starting...")
 
         try:
-            platform = self.platform_combo.currentText()
-
-            # Stop existing listeners first (force cleanup)
+            # YouTube disabled — platform is TikTok only (CLAUDE.md "Re-enabling YouTube")
+            # When re-enabled, restore: platform = self.platform_combo.currentText()
             self.stop()
 
-            # YouTube disabled — platform is TikTok only
             # To re-enable YouTube, uncomment the block below and restore the dropdown
             # if platform == "YouTube":
             #     video_id = self.video_id_input.text().strip()
@@ -1433,7 +1490,7 @@ class CohostTabBasicSimplified(QWidget):
             self._is_starting = False
             self.start_button.setEnabled(True)
             self.start_button.setText("Start")
-    
+
     def stop(self):
         """Stop all processes - with proper TikTok cleanup for restart support"""
         # Telemetry: listener stopped
@@ -1495,7 +1552,7 @@ class CohostTabBasicSimplified(QWidget):
         self.update_status_indicator(False)
 
         self.log_message("INFO", "Stopped all processes")
-    
+
     def add_comment_to_display(self, username, message, comment_type="normal", ai_response=None):
         """Add comment to display — delegates to add_status_entry (comments_table dihapus dari UI)"""
         try:
@@ -1511,16 +1568,16 @@ class CohostTabBasicSimplified(QWidget):
     def update_ai_response_in_table(self, username, message, ai_response):
         """No-op — update AI response ditangani oleh update_status_entry_with_ai_response"""
         pass
-    
+
     def scroll_to_bottom(self):
         """Scroll comments area to bottom"""
         try:
             scroll_area = self.comments_widget.parent()
             if hasattr(scroll_area, 'verticalScrollBar'):
                 scroll_area.verticalScrollBar().setValue(scroll_area.verticalScrollBar().maximum())
-        except:
+        except Exception:
             pass
-    
+
     def handle_comment(self, author, message):
         """Handle incoming comment - simplified"""
         self.comment_counter += 1
@@ -1549,7 +1606,7 @@ class CohostTabBasicSimplified(QWidget):
         # DISABLED: Internal processing to prevent double replies
         # All processing is now handled by UnifiedProcessor in main_window.py
         # This ensures no duplicate TTS responses
-    
+
     def generate_cohost_reply(self, author, message, is_vip=False):
         """Generate Cohost reply - called by UnifiedProcessor only"""
         try:
@@ -1559,35 +1616,35 @@ class CohostTabBasicSimplified(QWidget):
                 self.custom_greeting_manager.add_trigger(author, message, "reply_pending")
         except Exception as e:
             self.logger.error(f"Error in generate_cohost_reply: {e}")
-    
+
     def display_comment(self, author, message):
         """Display comment in UI"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         comment_text = f"[{timestamp}] {author}: {message}\n"
-        
+
         self.comment_display.append(comment_text)
-        
+
         # Keep display manageable
         if self.comment_display.document().blockCount() > 100:
             cursor = self.comment_display.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.Start)
             cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
             cursor.removeSelectedText()
-    
+
     def check_trigger(self, message):
         """Check if message contains trigger words — gunakan cache config, tidak reload dari disk"""
         try:
             triggers = self.cfg.get("trigger_words", [])
-            
+
             self.logger.info(f"[COHOST TRIGGER] Real-time loaded triggers: {triggers}")
-            
+
             # If no triggers set, reply to all comments
             if not triggers:
-                self.logger.info(f"[COHOST TRIGGER] No triggers set, replying to all comments")
+                self.logger.info("[COHOST TRIGGER] No triggers set, replying to all comments")
                 return True
-            
+
             message_lower = message.lower()
-            
+
             # ONLY check for configured trigger words (including "?" if user added it)
             # No automatic "?" trigger - only if explicitly set by user
             for trigger in triggers:
@@ -1599,14 +1656,14 @@ class CohostTabBasicSimplified(QWidget):
                     # Regular word triggers
                     self.logger.info(f"[COHOST TRIGGER] Trigger '{trigger}' matched in: {message}")
                     return True
-            
+
             self.logger.info(f"[COHOST TRIGGER] No trigger matched for: {message}")
             return False
         except Exception as e:
             self.logger.error(f"Error checking trigger: {e}")
             return True  # Default to responding if config fails
-    
-    
+
+
     def add_to_queue(self, author, message, is_vip=False):
         """Add comment to reply queue — VIP user bypass cooldown sepenuhnya"""
         # Toxic filter (berlaku untuk semua, termasuk VIP)
@@ -1635,7 +1692,7 @@ class CohostTabBasicSimplified(QWidget):
         self.reply_queue.append((author, message, now))
         label = "⭐ VIP" if is_vip else author
         self.log_message("INFO", f"Queued: {label}")
-    
+
     def _process_queue(self):
         """Process reply queue — satu item per satu TTS (serialized pipeline)"""
         # reply_busy = True artinya TTS sedang bermain; tunggu sampai selesai
@@ -1668,11 +1725,11 @@ class CohostTabBasicSimplified(QWidget):
         self.active_reply_threads.append(reply_thread)
 
         self.log_message("INFO", f"Processing reply for: {author}")
-    
+
     def clean_ai_response(self, text):
         """Clean AI response completely for natural TTS - remove ALL formatting and symbols"""
         import re
-        
+
         # Remove ALL markdown formatting
         text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # **bold**
         text = re.sub(r'\*(.*?)\*', r'\1', text)      # *italic*
@@ -1680,43 +1737,43 @@ class CohostTabBasicSimplified(QWidget):
         text = re.sub(r'_(.*?)_', r'\1', text)        # _underline_
         text = re.sub(r'`(.*?)`', r'\1', text)        # `code`
         text = re.sub(r'~~(.*?)~~', r'\1', text)      # ~~strikethrough~~
-        
+
         # Remove ALL emojis and emoticons completely
         text = re.sub(r'[😀-🙏🌀-🗿🚀-🛿🇀-🇿💀-💿]+', '', text)  # Unicode emojis
         text = re.sub(r'[:;=8xX]-?[)\]}>dDpP(\[{<|\\/@#$%^&*oO0]', '', text)  # ASCII emoticons
         text = re.sub(r'[)\]}>dDpP(\[{<|\\/@#$%^&*oO0]-?[:;=8xX]', '', text)  # Reverse emoticons
-        
+
         # Remove excessive punctuation but keep natural sentence flow
         text = re.sub(r'[!]{2,}', '.', text)         # !!! -> .
         text = re.sub(r'[?]{2,}', '?', text)         # ??? -> ?
         text = re.sub(r'[.]{2,}', '.', text)         # ... -> .
         text = re.sub(r'[,]{2,}', ',', text)         # ,, -> ,
-        
+
         # Remove special symbols that TTS reads weirdly
         text = re.sub(r'[~#$%^&*+={}[\]|\\<>]', '', text)  # Remove special chars
         text = re.sub(r'[@]', ' at ', text)          # @ -> "at"
         text = re.sub(r'[/]', ' atau ', text)        # / -> "atau"
-        
+
         # Remove quotes and parentheses (TTS reads them literally)
         text = re.sub(r'["\'""`]', '', text)         # Remove all quotes
         text = re.sub(r'[()[\]{}]', '', text)        # Remove brackets
-        
+
         # Clean up numbers and symbols that sound weird in TTS
         text = re.sub(r'(\d+)%', r'\1 persen', text) # 50% -> "50 persen"
         text = re.sub(r'(\d+)\+', r'\1 lebih', text) # 18+ -> "18 lebih"
-        
+
         # Clean up extra spaces and normalize
         text = re.sub(r'\s+', ' ', text).strip()
-        
+
         # Ensure natural sentence ending for TTS
         if text and not text.endswith('.') and not text.endswith('!') and not text.endswith('?'):
             text = text + '.'
-        
+
         # Add slight pause for natural TTS flow
         text = ' ' + text.strip() + ' '
-        
+
         return text
-    
+
     def handle_reply(self, author, message, reply, scene_id=0):
         """Handle generated reply — display + TTS (non-blocking)"""
         # Jangan TTS-kan error message dari AI
@@ -1766,7 +1823,7 @@ class CohostTabBasicSimplified(QWidget):
         self.reply_busy = True
         self.do_tts(clean_reply)
         self.log_message("INFO", f"Reply → {author}")
-    
+
     def do_tts(self, text):
         """Mulai TTS di background thread — GUI tidak freeze"""
         try:
@@ -1803,21 +1860,21 @@ class CohostTabBasicSimplified(QWidget):
             self.log_message("ERROR", f"TTS finished callback: {e}")
         finally:
             self.reply_busy = False  # Buka kunci — queue bisa proses item berikutnya
-    
+
     def log_message(self, level, message):
         """Log message to status display"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         log_text = f"[{timestamp}] {level}: {message}\n"
-        
+
         self.status_display.append(log_text)
-        
+
         # Keep log manageable
         if self.status_display.document().blockCount() > 50:
             cursor = self.status_display.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.Start)
             cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
             cursor.removeSelectedText()
-    
+
     def is_spam(self, author, message):
         """Simple anti-spam check"""
         try:
@@ -1825,19 +1882,19 @@ class CohostTabBasicSimplified(QWidget):
             recent_count = sum(1 for msg in self.recent_messages if msg == message)
             if recent_count >= 5:  # Increased from 3 to 5 to allow more trigger testing
                 return True
-            
+
             # Check for excessive caps
             if len(message) > 10 and message.isupper():
                 return True
-            
+
             # Check for excessive repeated characters
             if re.search(r'(.)\1{4,}', message):
                 return True
-            
+
             return False
-        except:
+        except Exception:
             return False
-    
+
     def is_toxic(self, message):
         """Simple toxic content filter"""
         try:
@@ -1845,16 +1902,16 @@ class CohostTabBasicSimplified(QWidget):
                 "toxic", "spam", "hate", "stupid", "idiot", "fool",
                 "bodoh", "tolol", "goblok", "bangsat", "anjing"
             ])
-            
+
             message_lower = message.lower()
             for word in toxic_words:
                 if word.lower() in message_lower:
                     return True
-            
+
             return False
-        except:
+        except Exception:
             return False
-    
+
     def _cleanup_cooldowns(self):
         """Hapus viewer_cooldowns yang sudah expired — cegah memory leak di stream panjang"""
         try:
@@ -1872,17 +1929,17 @@ class CohostTabBasicSimplified(QWidget):
         """Add entry to unified status table"""
         try:
             current_time = datetime.now().strftime("%H:%M:%S")
-            
+
             # Insert new row at the top
             self.status_table.insertRow(0)
-            
+
             # Add data to columns
             self.status_table.setItem(0, 0, QTableWidgetItem(current_time))
             self.status_table.setItem(0, 1, QTableWidgetItem(author or "System"))
             self.status_table.setItem(0, 2, QTableWidgetItem(message[:100] + "..." if len(message) > 100 else message))
             self.status_table.setItem(0, 3, QTableWidgetItem(ai_response[:300] + "..." if len(ai_response) > 300 else ai_response))
             self.status_table.setItem(0, 4, QTableWidgetItem(trigger))
-            
+
             # Color-code status
             status_item = QTableWidgetItem(status)
             if status == "AI Reply":
@@ -1895,19 +1952,19 @@ class CohostTabBasicSimplified(QWidget):
                 status_item.setBackground(QColor(TEXT_DIM))
             else:
                 status_item.setBackground(QColor(INFO))
-            
+
             self.status_table.setItem(0, 5, status_item)
-            
+
             # Keep only last 100 entries for performance
             if self.status_table.rowCount() > 100:
                 self.status_table.removeRow(100)
-                
+
             # Update statistics
             self.update_status_summary()
-            
+
         except Exception as e:
             print(f"Error adding status entry: {e}")
-    
+
     def update_status_entry_with_ai_response(self, author, ai_response):
         """Update the most recent entry with AI response"""
         try:
@@ -1918,19 +1975,19 @@ class CohostTabBasicSimplified(QWidget):
                     # Update AI response column
                     ai_item = QTableWidgetItem(ai_response[:300] + "..." if len(ai_response) > 300 else ai_response)
                     self.status_table.setItem(row, 3, ai_item)
-                    
+
                     # Update status
                     status_item = QTableWidgetItem("AI Reply")
                     status_item.setBackground(QColor(SUCCESS))
                     self.status_table.setItem(row, 5, status_item)
-                    
+
                     self.total_ai_replies += 1
                     self.update_status_summary()
                     break
-                    
+
         except Exception as e:
             print(f"Error updating status with AI response: {e}")
-    
+
     def update_status_summary(self):
         """Update the status summary indicators"""
         try:
@@ -1965,7 +2022,7 @@ class CohostTabBasicSimplified(QWidget):
                 else:
                     self.listener_status_label.setText("🔴 Listener: Stopped")
                     self.listener_status_label.setStyleSheet(status_badge(ERROR))
-                    
+
             if hasattr(self, 'tts_status_label'):
                 # TTS status based on API key or credentials file
                 tts_api_key = self.cfg.get("google_tts_api_key", "").strip()
@@ -1978,14 +2035,14 @@ class CohostTabBasicSimplified(QWidget):
                 else:
                     self.tts_status_label.setText("🔴 TTS: Not Ready")
                     self.tts_status_label.setStyleSheet(status_badge(ERROR))
-                    
+
             if hasattr(self, 'stats_label'):
                 # Update statistics
                 self.stats_label.setText(f"📈 Comments: {self.total_comments} | AI Replies: {self.total_ai_replies} | Triggers: {self.total_triggers}")
-                
+
         except Exception as e:
             print(f"Error updating status summary: {e}")
-    
+
     def open_tutorial(self):
         """Open tutorial video in browser"""
         import webbrowser
@@ -1995,16 +2052,16 @@ class CohostTabBasicSimplified(QWidget):
             self.log_message("INFO", "Tutorial video opened in browser")
         except Exception as e:
             self.log_message("ERROR", f"Failed to open tutorial: {e}")
-    
+
     def _clean_ai_response(self, raw_text):
         """Clean AI response from emojis, formatting, and special chars for TTS"""
         if not raw_text:
             return ""
-        
+
         import re
-        
+
         text = raw_text.strip()
-        
+
         # Remove ALL markdown formatting
         text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)  # **bold**
         text = re.sub(r'\*(.*?)\*', r'\1', text)      # *italic*
@@ -2012,71 +2069,71 @@ class CohostTabBasicSimplified(QWidget):
         text = re.sub(r'_(.*?)_', r'\1', text)        # _underline_
         text = re.sub(r'`(.*?)`', r'\1', text)        # `code`
         text = re.sub(r'~~(.*?)~~', r'\1', text)      # ~~strikethrough~~
-        
+
         # Remove ALL emojis and emoticons completely for clean TTS
         text = re.sub(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\U00002600-\U000027BF\U0001F900-\U0001F9FF\U00002700-\U000027BF\U00002B00-\U00002BFF\U00002934-\U00002935\U000025A0-\U000025FF\U0001F170-\U0001F251\U00002000-\U0000206F\U0001F004\U0001F0CF\U0001F18E\U0001F191-\U0001F251\U00002764\U00002763\U0001F494\U0001F495\U0001F496\U0001F497\U0001F498\U0001F499\U0001F49A\U0001F49B\U0001F49C\U0001F49D\U0001F49E\U0001F49F\U00002728\U000026A8\U000026F9\U0000267F\U0001F3C3\U0001F3C4]', '', text)
         text = re.sub(r'[:;=8xX]-?[)\]}>dDpP(\[{<|\\/@#$%^&*oO0]', '', text)  # ASCII emoticons
         text = re.sub(r'[)\]}>dDpP(\[{<|\\/@#$%^&*oO0]-?[:;=8xX]', '', text)  # Reverse emoticons
         text = re.sub(r'✨|⭐|🌟|💫|🔥|👍|👏|❤️|💖|💕|🎉|🥳|😊|😍|🤩', '', text)  # Specific common emojis
-        
+
         # Remove excessive punctuation but keep natural sentence flow
         text = re.sub(r'[!]{2,}', '.', text)         # !!! -> .
         text = re.sub(r'[?]{2,}', '?', text)         # ??? -> ?
         text = re.sub(r'[.]{2,}', '.', text)         # ... -> .
         text = re.sub(r'[,]{2,}', ',', text)         # ,, -> ,
-        
+
         # Remove special symbols that TTS reads weirdly
         text = re.sub(r'[~#$%^&*+={}[\]|\\<>]', '', text)  # Remove special chars
         text = re.sub(r'[@]', ' at ', text)          # @ -> "at"
         text = re.sub(r'[/]', ' atau ', text)        # / -> "atau"
-        
+
         # Remove quotes and parentheses (TTS reads them literally)
         text = re.sub(r'["\'""`]', '', text)         # Remove all quotes
         text = re.sub(r'[()[\]{}]', '', text)        # Remove brackets
-        
+
         # Clean up whitespace
         text = re.sub(r'\s+', ' ', text)
         text = text.strip()
-        
+
         return text
-    
+
     def cleanup(self):
         """Simple cleanup on exit"""
         print("[Cleanup] Starting simplified cleanup...")
         self.stop()
-        
+
         # Reset filter states on close
         self.viewer_cooldowns.clear()
         self.recent_messages.clear()
         self.reply_queue.clear()
-        
+
         # Additional cleanup for TikTok listener
         if self.tiktok_listener_thread:
             self.tiktok_listener_thread.stop()
             self.tiktok_listener_thread.wait(1000)
             self.tiktok_listener_thread = None
-        
+
         # Clean up greeting systems
         if hasattr(self, 'sequential_greeting_manager'):
             self.sequential_greeting_manager.stop()
-        
+
         print("[Cleanup] Filter states reset and cleanup completed")
-    
+
     def handle_viewer_join(self, username, display_name):
         """Handle viewer join event from TikTok listener"""
         try:
             # Add viewer to greeting manager queue
             self.viewer_greeting_manager.add_viewer(username, display_name)
-            
+
         except Exception as e:
             self.log_message("ERROR", f"Error handling viewer join: {e}")
-    
+
     def handle_viewer_greeting(self, username, display_name):
         """Handle greeting request from greeting manager"""
         try:
             # Get current language setting for appropriate response
             current_language = self.language_combo.currentText()
-            
+
             # Create direct sales-oriented greeting with clear structure
             if current_language == "Indonesia":
                 greeting_prompt = f"Jawab dengan tepat: Halo {display_name}, selamat datang! Yuk lihat-lihat produk unggulan kita yang lagi promo hari ini!"
@@ -2084,20 +2141,20 @@ class CohostTabBasicSimplified(QWidget):
                 greeting_prompt = f"Jawab dengan tepat: Hai {display_name}, selamat datang! Jom tengok-tengok produk terbaik kita yang ada discount menarik!"
             else:  # English
                 greeting_prompt = f"Reply exactly: Hello {display_name}, welcome! Check out our amazing products with special offers today!"
-            
+
             # Add to reply queue with special greeting flag
             self.reply_queue.append(("🤖 Auto Greeting", username, greeting_prompt, True))  # True = is_greeting
             self.log_message("INFO", f"Added sales greeting for @{username} ({display_name}) in {current_language}")
-            
+
         except Exception as e:
             self.log_message("ERROR", f"Error handling viewer greeting: {e}")
-    
+
     def update_greeting_status(self, status_message):
         """Update greeting status label"""
         try:
             if hasattr(self, 'greeting_status_label'):
                 self.greeting_status_label.setText(status_message)
-                
+
                 # Update style based on status
                 if "Detecting" in status_message:
                     self.greeting_status_label.setStyleSheet(status_badge(SUCCESS))
@@ -2107,7 +2164,7 @@ class CohostTabBasicSimplified(QWidget):
                     self.greeting_status_label.setStyleSheet(status_badge(INFO))
                 else:
                     self.greeting_status_label.setStyleSheet(status_badge(TEXT_DIM))
-                
+
         except Exception as e:
             self.log_message("ERROR", f"Error updating greeting status: {e}")
 

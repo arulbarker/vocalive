@@ -1,8 +1,9 @@
 """Tests untuk ProductSceneManager — modules_client/product_scene_manager.py"""
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 from modules_client.product_scene_manager import ProductSceneManager
 

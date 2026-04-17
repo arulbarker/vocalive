@@ -2,11 +2,12 @@
 Gemini AI Integration — Gemini 3.1 Flash Lite Preview
 """
 
-import requests
-import json
 import logging
 import time
 from typing import Optional
+
+import requests
+
 from modules_client.config_manager import config_manager
 
 logger = logging.getLogger('VocaLive.Gemini')

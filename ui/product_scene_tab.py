@@ -3,22 +3,50 @@ ProductSceneTab - Tab UI untuk kelola daftar produk video overlay.
 User mendaftarkan nama produk + file video MP4 lokal.
 """
 
-import os
 import logging
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTableWidget, QTableWidgetItem, QHeaderView, QFileDialog,
-    QSpinBox, QFrame, QMessageBox, QAbstractItemView,
-    QDialog, QLineEdit, QDialogButtonBox
-)
+import os
+
 from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 try:
     from ui.theme import (
-        PRIMARY, BG_BASE, BG_SURFACE, BG_ELEVATED, TEXT_PRIMARY, TEXT_MUTED,
-        BORDER, BORDER_GOLD, SUCCESS, ERROR, WARNING, RADIUS,
-        btn_success, btn_danger, btn_ghost, btn_secondary,
-        label_title, label_subtitle, CARD_STYLE
+        BG_BASE,
+        BG_ELEVATED,
+        BG_SURFACE,
+        BORDER,
+        BORDER_GOLD,
+        CARD_STYLE,
+        ERROR,
+        PRIMARY,
+        RADIUS,
+        SUCCESS,
+        TEXT_MUTED,
+        TEXT_PRIMARY,
+        WARNING,
+        btn_danger,
+        btn_ghost,
+        btn_secondary,
+        btn_success,
+        label_subtitle,
+        label_title,
     )
 except ImportError:
     PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"
@@ -256,9 +284,10 @@ class ProductSceneTab(QWidget):
         info.setStyleSheet(f"color: {WARNING}; font-size: 11px;")
         size_layout.addWidget(info)
 
-        layout.addWidget(size_frame)
+        # Hidden — ukuran popup pakai original video, user resize manual via drag
+        size_frame.setVisible(False)
 
-        # Load current size
+        # Load current size (still used as initial default by ProductPopupWindow)
         w, h = self._psm.get_popup_size()
         self.spin_width.blockSignals(True)
         self.spin_height.blockSignals(True)

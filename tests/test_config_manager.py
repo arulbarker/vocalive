@@ -2,9 +2,10 @@
 
 import json
 import sys
-import pytest
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from modules_client.config_manager import ConfigManager, _get_app_root
 

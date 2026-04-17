@@ -5,19 +5,17 @@ VocaLive - Setup Validator
 Validates all required files and configurations before app starts
 """
 
-import os
-import sys
 import json
+import sys
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 
 # Fix Windows console encoding for emoji
 if sys.platform == "win32":
-    import codecs
     if hasattr(sys.stdout, 'reconfigure'):
         try:
             sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-        except:
+        except Exception:
             pass
 
 class SetupValidator:
@@ -167,7 +165,7 @@ class SetupValidator:
                     "   Valid format: sk-xxxxxxxxxxxxx"
                 )
 
-        except Exception as e:
+        except Exception:
             # Already handled in _validate_json_files
             pass
 
@@ -263,7 +261,7 @@ class SetupValidator:
             )
 
             root.destroy()
-        except:
+        except Exception:
             # Fallback to console
             print("\n" + "="*60)
             print("SETUP ERROR")

@@ -4,13 +4,15 @@ VocaLive - Real-time License Monitor
 Monitors license status and force close app if manually disabled
 """
 
-import sys
-import time
-import threading
-from datetime import datetime
-from PyQt6.QtCore import QTimer, QObject, pyqtSignal
-from modules_client.license_manager import LicenseManager
 import logging
+import sys
+import threading
+import time
+from datetime import datetime
+
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+
+from modules_client.license_manager import LicenseManager
 
 logger = logging.getLogger("VocaLive.LicenseMonitor")
 
@@ -81,14 +83,14 @@ class LicenseMonitor(QObject):
                     logger.warning(f"[LICENSE_MONITOR] ⚠️ License expires in {days_remaining} days")
                     self.license_warning.emit(f"License expires in {days_remaining} days", days_remaining)
                 elif days_remaining == 0:
-                    logger.info(f"[LICENSE_MONITOR] ⚠️ License expires today!")
+                    logger.info("[LICENSE_MONITOR] ⚠️ License expires today!")
                     self.license_warning.emit("License expires today!", 0)
                 elif license_info.get('is_unlimited', False):
-                    logger.info(f"[LICENSE_MONITOR] ✅ Unlimited license")
+                    logger.info("[LICENSE_MONITOR] ✅ Unlimited license")
                 else:
                     logger.info(f"[LICENSE_MONITOR] ✅ License valid ({days_remaining} days remaining)")
             else:
-                logger.info(f"[LICENSE_MONITOR] ✅ License valid")
+                logger.info("[LICENSE_MONITOR] ✅ License valid")
 
         except Exception as e:
             logger.error(f"[LICENSE_MONITOR] Error checking license: {e}")
@@ -104,7 +106,7 @@ class LicenseEnforcer:
 
         try:
             # Show message to user
-            from PyQt6.QtWidgets import QMessageBox, QApplication
+            from PyQt6.QtWidgets import QApplication, QMessageBox
 
             app = QApplication.instance()
             if app:
@@ -125,7 +127,7 @@ class LicenseEnforcer:
             app = QApplication.instance()
             if app:
                 app.quit()
-        except:
+        except Exception:
             pass
 
         # Nuclear option - force exit
@@ -189,7 +191,7 @@ class BackgroundLicenseChecker:
                         sys.exit(1)
                     return
                 else:
-                    logger.info(f"[BACKGROUND_CHECKER] License valid")
+                    logger.info("[BACKGROUND_CHECKER] License valid")
 
                 # Wait for next check
                 time.sleep(self.check_interval)

@@ -6,8 +6,9 @@ Covers:
 - check_for_update()
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 pytestmark = pytest.mark.unit
 
@@ -31,8 +32,7 @@ for _mod in (
         sys.modules[_mod] = MagicMock()
 
 # Now safe to import
-from modules_client.updater import _parse_version, check_for_update, CURRENT_VERSION
-
+from modules_client.updater import CURRENT_VERSION, _parse_version, check_for_update
 
 # ===========================================================================
 # TestParseVersion

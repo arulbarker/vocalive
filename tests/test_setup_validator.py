@@ -7,13 +7,13 @@ Covers:
 """
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 pytestmark = pytest.mark.integration
 
 from modules_client.setup_validator import SetupValidator
-
 
 # ===========================================================================
 # test_validate_valid_setup

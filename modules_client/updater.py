@@ -9,13 +9,12 @@ Cara rilis versi baru (developer):
 3. Deploy AppScript → user otomatis dapat notifikasi saat buka app
 """
 
+import json
+import logging
 import os
 import sys
-import json
-import zipfile
 import tempfile
-import subprocess
-import logging
+import zipfile
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -27,7 +26,8 @@ logger = logging.getLogger('VocaLive.Updater')
 # ============================================================
 # Versi di-import dari version.py (satu sumber kebenaran)
 try:
-    import sys as _sys, os as _os
+    import os as _os
+    import sys as _sys
     _root = (_os.path.dirname(_sys.executable) if getattr(_sys, 'frozen', False)
              else _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
     _sys.path.insert(0, _root)
@@ -230,8 +230,13 @@ def install_update(zip_path: str) -> bool:
             "    goto retry\n"
             ")\n"
             "\n"
-            "echo Update berhasil! Meluncurkan VocaLive...\n"
-            f'start "" "{current_exe}"\n'
+            "echo.\n"
+            "echo ================================\n"
+            "echo  Update berhasil!\n"
+            "echo  Silakan buka VocaLive secara manual.\n"
+            "echo ================================\n"
+            "echo.\n"
+            "timeout /t 3 /nobreak > nul\n"
             "\n"
             ":: Cleanup\n"
             f'del /f /q "{new_exe}" > nul 2>&1\n'

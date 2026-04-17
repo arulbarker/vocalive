@@ -9,14 +9,14 @@ Mode Preview  : Chroma green — apply Chroma Key filter di TikTok Live Studio
 Mode Video    : Video frame dirender ke QLabel, ter-capture normal
 """
 
+import logging
 import os
 import threading
-import logging
 
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
-from PyQt6.QtCore import Qt, QUrl, QPoint, QRect, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QPainter, QPen, QColor, QFont, QPixmap
-from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
+from PyQt6.QtCore import QPoint, QRect, Qt, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 logger = logging.getLogger('VocaLive')
 

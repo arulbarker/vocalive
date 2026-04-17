@@ -6,13 +6,24 @@ Fitur: tambah/hapus, search/filter real-time, import/export CSV
 
 import csv
 import logging
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QListWidget, QListWidgetItem, QLineEdit,
-    QMessageBox, QFrame, QSplitter, QAbstractItemView, QFileDialog
-)
+
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QFileDialog,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
 logger = logging.getLogger("VocaLive.UserManagement")
 
@@ -24,10 +35,30 @@ except ImportError:
     logger.warning("User list manager not available")
 
 try:
-    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
-        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
-        btn_success, btn_danger, btn_ghost, btn_primary, label_title)
+    from ui.theme import (
+        ACCENT,
+        BG_BASE,
+        BG_ELEVATED,
+        BG_SURFACE,
+        BORDER,
+        BORDER_GOLD,
+        ERROR,
+        INFO,
+        PRIMARY,
+        RADIUS,
+        RADIUS_SM,
+        SECONDARY,
+        SUCCESS,
+        TEXT_DIM,
+        TEXT_MUTED,
+        TEXT_PRIMARY,
+        WARNING,
+        btn_danger,
+        btn_ghost,
+        btn_primary,
+        btn_success,
+        label_title,
+    )
 except ImportError:
     PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"; BG_ELEVATED = "#1E2A3B"
     TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#93C5FD"; TEXT_DIM = "#4B7BBA"

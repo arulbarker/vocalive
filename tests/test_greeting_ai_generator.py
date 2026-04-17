@@ -7,8 +7,9 @@ Covers:
 - generate_greetings_with_ai()
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 pytestmark = pytest.mark.unit
 
@@ -18,12 +19,11 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 
 from modules_client.greeting_ai_generator import (
-    clean_greeting_text,
-    _parse_greeting_response,
-    generate_greetings_with_ai,
     FALLBACK_GREETINGS,
+    _parse_greeting_response,
+    clean_greeting_text,
+    generate_greetings_with_ai,
 )
-
 
 # ===========================================================================
 # TestCleanGreetingText

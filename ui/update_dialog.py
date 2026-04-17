@@ -4,26 +4,33 @@ VocaLive - Update Dialog
 Dialog download & install update dengan progress bar.
 """
 
+import logging
 import os
 import sys
 import tempfile
-import logging
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QProgressBar, QTextEdit, QFrame, QApplication
-)
 from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+)
 
 logger = logging.getLogger('VocaLive.UpdateDialog')
 
 try:
-    from modules_client.updater import DownloadThread, install_update, CURRENT_VERSION
+    from modules_client.updater import CURRENT_VERSION, DownloadThread, install_update
 except ImportError:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-    from modules_client.updater import DownloadThread, install_update, CURRENT_VERSION
+    from modules_client.updater import CURRENT_VERSION, DownloadThread, install_update
 
 # Ocean Blue palette
 C_BG       = "#0F1623"
@@ -222,12 +229,13 @@ class UpdateDialog(QDialog):
         self.progress_bar.setValue(100)
         ok = install_update(zip_path)
         if ok:
-            self.progress_label.setText("✅ Update berhasil! Aplikasi akan restart otomatis.")
+            self.progress_label.setText(
+                "✅ Update berhasil!\n"
+                "Aplikasi akan ditutup. Silakan buka kembali VocaLive secara manual."
+            )
             self.progress_label.setStyleSheet(f"color: {C_SUCCESS}; font-weight: bold;")
-            # Quit SEGERA (100ms) — sama persis dengan TikDance.
-            # Delay panjang menyebabkan taskkill membunuh app paksa → _MEI tidak di-cleanup
-            # → new EXE reuse _MEI lama yang corrupt → DLL error.
-            QTimer.singleShot(100, self._quit_for_update)
+            # Beri waktu user membaca pesan sebelum quit
+            QTimer.singleShot(3000, self._quit_for_update)
         else:
             self._set_status("Gagal install. Coba jalankan sebagai Administrator.", error=True)
             self.btn_later.setEnabled(True)

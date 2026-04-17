@@ -1,8 +1,8 @@
 # listeners/tiktok_runner.py
 #!/usr/bin/env python3
+import json
 import sys
 from pathlib import Path
-import json
 
 # tambahkan root project ke path
 ROOT = Path(__file__).resolve().parent.parent
@@ -12,7 +12,7 @@ def main():
     from modules.config_manager import ConfigManager
     try:
         from TikTokLive import TikTokLiveClient
-        from TikTokLive.events import ConnectEvent, CommentEvent
+        from TikTokLive.events import CommentEvent, ConnectEvent
     except ImportError:
         print("❌ Modul TikTokLive tidak ditemukan. Jalankan: pip install TikTokLive")
         return

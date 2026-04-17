@@ -16,14 +16,14 @@ print("[RUNTIME] PyTchat environment configured")
 # Add pytchat paths for EXE mode
 if getattr(sys, 'frozen', False):
     app_dir = Path(sys.executable).parent
-    
+
     pytchat_paths = [
         app_dir / "_internal" / "pytchat",
-        app_dir / "_internal" / "pytchat_ng", 
+        app_dir / "_internal" / "pytchat_ng",
         app_dir / "thirdparty" / "pytchat_ng",
         app_dir / "thirdparty" / "pytchat",
     ]
-    
+
     for path in pytchat_paths:
         if path.exists() and str(path) not in sys.path:
             sys.path.insert(0, str(path))
