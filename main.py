@@ -16,7 +16,7 @@ if sys.platform == "win32":
         try:
             sys.stdout.reconfigure(encoding='utf-8', errors='replace')
             sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-        except:
+        except Exception:
             # Fallback: Wrap stdout/stderr with UTF-8 encoder - FIX for EXE
             try:
                 stdout_buffer = sys.stdout.detach()
@@ -667,7 +667,7 @@ def main():
         try:
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(None, "VocaLive Error", error_msg)
-        except:
+        except Exception:
             pass
 
         return 1

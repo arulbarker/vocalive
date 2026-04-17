@@ -17,7 +17,7 @@ if sys.platform == "win32":
     if hasattr(sys.stdout, 'reconfigure'):
         try:
             sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-        except:
+        except Exception:
             pass
 
 class SetupValidator:
@@ -263,7 +263,7 @@ class SetupValidator:
             )
 
             root.destroy()
-        except:
+        except Exception:
             # Fallback to console
             print("\n" + "="*60)
             print("SETUP ERROR")

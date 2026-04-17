@@ -102,7 +102,7 @@ def safe_attr_check(obj, attr_name):
     """Safely check if object has attribute"""
     try:
         return hasattr(obj, attr_name) and getattr(obj, attr_name) is not None
-    except:
+    except Exception:
         return False
 
 # SIMPLIFIED REPLY THREAD - Mengurangi kompleksitas
@@ -659,7 +659,7 @@ class SimpleTikTokListener(QThread):
                     # Try to stop client gracefully
                     try:
                         self.client.stop()
-                    except:
+                    except Exception:
                         pass
             except Exception as e:
                 # Ignore cleanup errors (common with TikTokLive on Windows)
@@ -676,7 +676,7 @@ class SimpleTikTokListener(QThread):
         # Quit thread
         try:
             self.quit()
-        except:
+        except Exception:
             pass
 
 # MAIN SIMPLIFIED COHOST CLASS
@@ -1586,7 +1586,7 @@ class CohostTabBasicSimplified(QWidget):
             scroll_area = self.comments_widget.parent()
             if hasattr(scroll_area, 'verticalScrollBar'):
                 scroll_area.verticalScrollBar().setValue(scroll_area.verticalScrollBar().maximum())
-        except:
+        except Exception:
             pass
 
     def handle_comment(self, author, message):
@@ -1903,7 +1903,7 @@ class CohostTabBasicSimplified(QWidget):
                 return True
 
             return False
-        except:
+        except Exception:
             return False
 
     def is_toxic(self, message):
@@ -1920,7 +1920,7 @@ class CohostTabBasicSimplified(QWidget):
                     return True
 
             return False
-        except:
+        except Exception:
             return False
 
     def _cleanup_cooldowns(self):
