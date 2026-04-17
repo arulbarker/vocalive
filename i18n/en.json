@@ -35,5 +35,18 @@
   "license.err.generic": "Error: {detail}",
   "license.err.email_invalid": "Please enter a valid email.",
   "license.msg.success": "Login successful! Welcome{name_suffix}.",
-  "license.msg.active_until": "   Active until: {exp}"
+  "license.msg.active_until": "   Active until: {exp}",
+  "update.dialog.title": "VocaLive — Update Available",
+  "update.label.title": "Update Available!",
+  "update.label.version_arrow": "v{current}  →  v{latest}",
+  "update.label.changelog": "What's new:",
+  "update.label.downloading_init": "Downloading update...",
+  "update.btn.update_now": "⬇️  Update Now",
+  "update.btn.later": "Later",
+  "update.msg.downloading": "Downloading... {progress}%",
+  "update.msg.installing": "Download complete. Installing...",
+  "update.msg.done": "✅ Update successful!\nThe application will close. Please open VocaLive manually.",
+  "update.err.no_url": "Download URL not available.",
+  "update.err.install_failed": "Install failed. Try running as Administrator.",
+  "update.err.generic": "Error: {reason}"
 }

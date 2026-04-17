@@ -35,5 +35,18 @@
   "license.err.generic": "Error: {detail}",
   "license.err.email_invalid": "Masukkan email yang valid.",
   "license.msg.success": "Login berhasil! Selamat datang{name_suffix}.",
-  "license.msg.active_until": "   Aktif hingga: {exp}"
+  "license.msg.active_until": "   Aktif hingga: {exp}",
+  "update.dialog.title": "VocaLive — Update Tersedia",
+  "update.label.title": "Update Tersedia!",
+  "update.label.version_arrow": "v{current}  →  v{latest}",
+  "update.label.changelog": "Apa yang baru:",
+  "update.label.downloading_init": "Mengunduh update...",
+  "update.btn.update_now": "⬇️  Update Sekarang",
+  "update.btn.later": "Nanti Saja",
+  "update.msg.downloading": "Mengunduh... {progress}%",
+  "update.msg.installing": "Download selesai. Menginstall...",
+  "update.msg.done": "✅ Update berhasil!\nAplikasi akan ditutup. Silakan buka kembali VocaLive secara manual.",
+  "update.err.no_url": "URL download tidak tersedia.",
+  "update.err.install_failed": "Gagal install. Coba jalankan sebagai Administrator.",
+  "update.err.generic": "Error: {reason}"
 }
