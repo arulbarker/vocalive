@@ -13,11 +13,24 @@ pytest.importorskip("pytestqt")
 
 
 @pytest.fixture
-def config_tab(qtbot):
+def config_tab(qtbot, monkeypatch):
     """Instantiate ConfigTab dengan ConfigManager di-mock.
 
     Mock returns sensible defaults agar load_saved_keys() tidak crash.
+    i18n di-load dari i18n/id.json agar UI strings sesuai dengan yang dikirim ke user.
     """
+    import json
+    from pathlib import Path
+
+    from modules_client import i18n
+
+    # Load real id.json translations supaya label / placeholder dapat nilai asli
+    i18n_path = Path(__file__).parent.parent / "i18n" / "id.json"
+    translations = json.loads(i18n_path.read_text(encoding="utf-8"))
+    monkeypatch.setattr(i18n, "_current_lang", "id")
+    monkeypatch.setattr(i18n, "_translations", translations)
+    monkeypatch.setattr(i18n, "_reference_translations", translations)
+
     mock_cfg_data = {
         "ai_provider": "deepseek",
         "api_keys": {
