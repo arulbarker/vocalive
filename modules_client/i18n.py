@@ -8,6 +8,7 @@ Public API:
 """
 import locale as _locale
 import logging
+from typing import Any
 
 logger = logging.getLogger("VocaLive")
 
@@ -42,3 +43,33 @@ def _detect_os_locale() -> str:
     except Exception as e:
         logger.warning(f"[i18n] OS locale detection failed: {e}")
     return _DEFAULT_LANG
+
+
+def t(key: str, **kwargs: Any) -> str:
+    """Lookup terjemahan untuk key.
+
+    Fallback chain:
+        1. _translations (current_lang)
+        2. _reference_translations (id.json — reference locale)
+        3. raw key string itu sendiri
+
+    kwargs di-substitusi via str.format() jika ada placeholder.
+    Format error di-swallow (return string unformatted) untuk anti-crash.
+    """
+    text = _translations.get(key)
+    if text is None:
+        text = _reference_translations.get(key)
+    if text is None:
+        text = key
+
+    if kwargs:
+        try:
+            text = text.format(**kwargs)
+        except (KeyError, IndexError, ValueError) as e:
+            logger.warning(f"[i18n] format() failed for key={key!r}: {e}")
+
+    return text
+
+
+def current_language() -> str:
+    return _current_lang
