@@ -21,9 +21,18 @@ _reference_translations: dict[str, str] = {}
 
 
 def _detect_os_locale() -> str:
-    """Return 'id' untuk Windows id-ID/ms-MY, 'en' untuk en-*, default 'id' lainnya."""
+    """Return 'id' untuk Windows id-ID/ms-MY, 'en' untuk en-*, default 'id' lainnya.
+
+    Note: menggunakan `locale.getdefaultlocale()` yang deprecated di Python 3.11+
+    tapi tetap dipakai karena `locale.getlocale()` (penggantinya) TIDAK membaca
+    Windows user UI language preference — hanya current C locale yang biasanya None.
+    Revisit ketika Python 3.15 menghapus API ini (pakai ctypes.windll.kernel32.GetUserDefaultUILanguage).
+    """
+    import warnings
     try:
-        lang_tuple = _locale.getdefaultlocale()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            lang_tuple = _locale.getdefaultlocale()
         if lang_tuple and lang_tuple[0]:
             lang = lang_tuple[0].lower()
             if lang.startswith(("id", "ms")):

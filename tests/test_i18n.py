@@ -1,6 +1,8 @@
 """Tests untuk modules_client/i18n.py - translation manager."""
 import locale
 
+import pytest
+
 
 class TestDetectOSLocale:
     """Test deteksi OS locale → 'id' atau 'en'."""
