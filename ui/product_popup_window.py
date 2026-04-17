@@ -14,7 +14,7 @@ import os
 import threading
 
 from PyQt6.QtCore import QPoint, QRect, Qt, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 

@@ -6,7 +6,6 @@ Support: YouTube & TikTok
 
 import logging
 from datetime import datetime
-from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
@@ -18,7 +17,6 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QLabel,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QScrollArea,
     QTableWidget,

@@ -3,11 +3,9 @@
 vtest_telemetry.py — Verification test: PostHog + Sentry kirim data ke server.
 Jalankan: python vtest_telemetry.py
 """
-import json
 import logging
 import os
 import sys
-import time
 
 # Suppress posthog debug logs yang spam stdout
 logging.getLogger("posthog").setLevel(logging.CRITICAL)

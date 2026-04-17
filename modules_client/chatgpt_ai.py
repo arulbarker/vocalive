@@ -4,9 +4,8 @@
 ChatGPT AI Integration - OpenAI API
 """
 
-import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import requests
 

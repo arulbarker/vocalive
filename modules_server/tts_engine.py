@@ -8,13 +8,10 @@ Google Cloud Text-to-Speech implementation with fallback to pyttsx3
 import base64
 import json
 import logging
-import os
-import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 try:
     import requests as _requests

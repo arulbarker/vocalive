@@ -6,7 +6,6 @@ Wrapper for server-side TTS functionality
 """
 
 import logging
-from typing import Optional
 
 # Import from server module
 try:

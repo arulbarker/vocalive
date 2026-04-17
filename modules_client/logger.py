@@ -39,7 +39,6 @@ def setup_logger(name, level=logging.INFO):
 
     # Buat file handler untuk logs
     try:
-        import os
 
         # Buat direktori logs jika belum ada - handle EXE mode
         import sys

@@ -27,7 +27,6 @@ except ImportError:
     print("Missing cryptography library. Install: pip install cryptography")
     sys.exit(1)
 
-import time
 
 import requests
 

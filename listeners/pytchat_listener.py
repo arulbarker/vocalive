@@ -1,6 +1,5 @@
 
 # ========== PYTCHAT IMPORT WITH PATH HANDLING ==========
-import os
 import sys
 from pathlib import Path
 

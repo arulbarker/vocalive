@@ -123,9 +123,7 @@ except ImportError:
     from theme import (
         ACCENT,
         BG_BASE,
-        BG_ELEVATED,
         BG_SURFACE,
-        BORDER_GOLD,
         GLOBAL_QSS,
         PRIMARY,
         SUCCESS,

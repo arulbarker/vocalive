@@ -6,37 +6,28 @@ import logging
 import os
 import re
 import sys
-import threading
 import time
-import traceback
-from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from collections import deque
+from datetime import datetime
 
 logger = logging.getLogger('VocaLive.Cohost')
 
-from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QFont, QPalette, QTextCursor
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
-    QProgressBar,
     QPushButton,
     QScrollArea,
-    QSlider,
     QSpinBox,
-    QSplitter,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,

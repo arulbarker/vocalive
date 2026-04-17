@@ -4,13 +4,11 @@ API Bridge untuk VocaLive Client
 Menghubungkan aplikasi client dengan server VPS untuk AI processing
 """
 
-import json
 import json as _json
 import logging
 import os
 import re
 import time
-from pathlib import Path
 
 import requests
 from dotenv import load_dotenv

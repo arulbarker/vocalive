@@ -10,7 +10,7 @@ import sys
 import time
 from typing import Optional, Tuple
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,

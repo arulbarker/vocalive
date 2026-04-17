@@ -3,7 +3,6 @@
 import logging
 import random
 import threading
-import time
 from datetime import datetime
 from enum import Enum
 

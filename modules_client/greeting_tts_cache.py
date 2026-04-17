@@ -3,7 +3,6 @@
 import hashlib
 import json
 import logging
-import os
 import shutil
 import sys
 from datetime import datetime, timedelta
@@ -110,10 +109,7 @@ class GreetingTTSCache:
 
         try:
             # Import TTS engine
-            import glob
-            import tempfile
 
-            from modules_server import tts_engine
 
             # Create temp directory to monitor for generated files
             temp_dir = _get_app_root() / "temp"

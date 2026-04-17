@@ -2,10 +2,9 @@
 DeepSeek AI Integration - Updated to use Supabase config
 """
 
-import json
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import requests
 

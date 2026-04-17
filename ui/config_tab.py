@@ -23,28 +23,23 @@ adapter = HTTPAdapter(pool_connections=5, pool_maxsize=10, max_retries=retry_str
 _session.mount("http://", adapter)
 _session.mount("https://", adapter)
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QComboBox,
-    QFileDialog,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QScrollArea,
-    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from modules_client.config_manager import ConfigManager
-from sales_templates import get_template, get_template_list
+from sales_templates import get_template
 
 try:
     from ui.theme import (
@@ -604,7 +599,6 @@ class ConfigTab(QWidget):
             def btn_success(extra=""): return f"background-color:{SUCCESS};color:white;border:none;border-radius:6px;padding:6px 14px;{extra}"
             def btn_danger(extra=""): return f"background-color:{ERROR};color:white;border:none;border-radius:6px;padding:6px 14px;{extra}"
 
-        from PyQt6.QtCore import Qt
         from PyQt6.QtWidgets import QCheckBox, QFrame, QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
         group = QGroupBox("Greeting AI")

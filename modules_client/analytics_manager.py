@@ -6,7 +6,6 @@ Support: YouTube (pytchat) dan TikTok (TikTokLive)
 
 import json
 import logging
-import os
 import re
 import sys
 import threading

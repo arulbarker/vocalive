@@ -5,7 +5,6 @@ Device ID dibaca dari config/device_id.dat (sama dengan license system).
 """
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 

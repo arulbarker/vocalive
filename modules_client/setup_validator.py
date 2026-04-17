@@ -6,14 +6,12 @@ Validates all required files and configurations before app starts
 """
 
 import json
-import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 # Fix Windows console encoding for emoji
 if sys.platform == "win32":
-    import codecs
     if hasattr(sys.stdout, 'reconfigure'):
         try:
             sys.stdout.reconfigure(encoding='utf-8', errors='replace')

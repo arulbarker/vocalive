@@ -2,7 +2,6 @@
 Gemini AI Integration — Gemini 3.1 Flash Lite Preview
 """
 
-import json
 import logging
 import time
 from typing import Optional
