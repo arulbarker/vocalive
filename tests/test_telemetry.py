@@ -10,14 +10,14 @@ Covers:
 
 import json
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
+
+import pytest
 
 pytestmark = pytest.mark.integration
 
 import modules_client.telemetry as t
-
 
 # ---------------------------------------------------------------------------
 # Autouse fixture — reset module-level globals between tests

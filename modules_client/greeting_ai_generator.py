@@ -4,12 +4,13 @@ Greeting AI Generator — generate 10 sapaan unik via Gemini
 Teks plain (tanpa tanda baca/simbol) untuk TTS yang bersih
 """
 
-import re
 import json
 import logging
+import re
 import time
-import requests
 from typing import List
+
+import requests
 
 from modules_client.config_manager import config_manager
 

@@ -4,9 +4,9 @@ VocaLive - Live Streaming Automation
 Main Entry Point - Fixed Version for Windows Encoding
 """
 
-import sys
-import os
 import multiprocessing
+import os
+import sys
 
 # CRITICAL FIX: Set Windows Console Encoding to UTF-8 to prevent UnicodeEncodeError
 if sys.platform == "win32":
@@ -21,7 +21,7 @@ if sys.platform == "win32":
             try:
                 stdout_buffer = sys.stdout.detach()
                 stderr_buffer = sys.stderr.detach()
-                
+
                 # Check if detach() returned valid buffers (not None)
                 if stdout_buffer is not None:
                     sys.stdout = codecs.getwriter('utf-8')(stdout_buffer, errors='replace')
@@ -36,7 +36,7 @@ if sys.platform == "win32":
         try:
             stdout_buffer = sys.stdout.detach()
             stderr_buffer = sys.stderr.detach()
-            
+
             # Check if detach() returned valid buffers (not None)
             if stdout_buffer is not None:
                 sys.stdout = codecs.getwriter('utf-8')(stdout_buffer, errors='replace')
@@ -91,14 +91,14 @@ try:
     qInstallMessageHandler(qt_message_handler)
 except ImportError:
     pass  # PyQt6 not loaded yet
-import json
-import time
 import importlib.util
-import threading
-from datetime import datetime
-from pathlib import Path
-from logging.handlers import RotatingFileHandler
+import json
 import logging
+import threading
+import time
+from datetime import datetime
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 # ========== CRITICAL: HIGH DPI SETUP SEBELUM IMPORT PYQT6 ==========
 # Ini HARUS dipanggil sebelum QGuiApplication atau QApplication dibuat
@@ -125,7 +125,7 @@ logger.setLevel(logging.INFO)
 
 # File handler dengan rotation
 file_handler = RotatingFileHandler(
-    SYSTEM_LOG, 
+    SYSTEM_LOG,
     maxBytes=10*1024*1024,  # 10MB
     backupCount=5,
     encoding='utf-8'
@@ -211,26 +211,26 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
-    
+
     # Format error message dengan full traceback
     error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-    
+
     # Enhanced logging dengan lebih banyak detail
     logger.critical(f"[FORCE-CLOSE-DEBUG] Uncaught Exception: {exc_type.__name__}: {exc_value}")
     logger.critical(f"[FORCE-CLOSE-DEBUG] Traceback:\n{error_msg}")
-    
+
     # Print ke console untuk debugging real-time
-    print(f"\n[FORCE-CLOSE-DEBUG] ========== CRITICAL ERROR ==========")
+    print("\n[FORCE-CLOSE-DEBUG] ========== CRITICAL ERROR ==========")
     print(f"[FORCE-CLOSE-DEBUG] Exception Type: {exc_type.__name__}")
     print(f"[FORCE-CLOSE-DEBUG] Exception Value: {exc_value}")
-    print(f"[FORCE-CLOSE-DEBUG] Traceback:")
+    print("[FORCE-CLOSE-DEBUG] Traceback:")
     print(error_msg)
-    print(f"[FORCE-CLOSE-DEBUG] =====================================\n")
-    
+    print("[FORCE-CLOSE-DEBUG] =====================================\n")
+
     # Save error to temp file untuk debugging
     error_log_path = Path(ROOT) / "temp" / "error_log.txt"
     error_log_path.parent.mkdir(exist_ok=True)
-    
+
     try:
         with open(error_log_path, "a", encoding="utf-8") as f:
             f.write(f"\n[{datetime.now().isoformat()}] FORCE-CLOSE-DEBUG:\n")
@@ -243,25 +243,25 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     except Exception as log_error:
         logger.error(f"[FORCE-CLOSE-DEBUG] Failed to write error log: {log_error}")
         print(f"[FORCE-CLOSE-DEBUG] Failed to write error log: {log_error}")
-    
+
     # Enhanced error handling - try to keep app alive for non-critical errors
     critical_errors = [
-        'SystemError', 'MemoryError', 'KeyboardInterrupt', 
+        'SystemError', 'MemoryError', 'KeyboardInterrupt',
         'SystemExit', 'GeneratorExit', 'RuntimeError'
     ]
-    
+
     error_name = exc_type.__name__
     is_critical = error_name in critical_errors
-    
+
     print(f"[FORCE-CLOSE-DEBUG] Error classification: {'CRITICAL' if is_critical else 'NON-CRITICAL'}")
-    
+
     # Show error dialog jika QApplication sudah ada
     try:
         if QApplication.instance():
             if is_critical:
-                print(f"[FORCE-CLOSE-DEBUG] Showing critical error dialog and forcing exit")
+                print("[FORCE-CLOSE-DEBUG] Showing critical error dialog and forcing exit")
                 reply = QMessageBox.critical(
-                    None, 
+                    None,
                     "VocaLive - Critical Error",
                     f"Application encountered a critical error and must close:\n\n"
                     f"{exc_type.__name__}: {exc_value}\n\n"
@@ -272,9 +272,9 @@ def handle_exception(exc_type, exc_value, exc_traceback):
                 # Force exit for critical errors
                 QApplication.instance().quit()
             else:
-                print(f"[FORCE-CLOSE-DEBUG] Showing recoverable error dialog")
+                print("[FORCE-CLOSE-DEBUG] Showing recoverable error dialog")
                 reply = QMessageBox.warning(
-                    None, 
+                    None,
                     "VocaLive - Error Recovered",
                     f"Application encountered an error but will continue:\n\n"
                     f"{exc_type.__name__}: {exc_value}\n\n"
@@ -283,14 +283,14 @@ def handle_exception(exc_type, exc_value, exc_traceback):
                     QMessageBox.StandardButton.Ok
                 )
                 # Try to continue for non-critical errors
-                print(f"[FORCE-CLOSE-DEBUG] Attempting to continue after non-critical error")
+                print("[FORCE-CLOSE-DEBUG] Attempting to continue after non-critical error")
                 return
     except Exception as dialog_error:
         # If even the error dialog fails, log it and exit gracefully
         logger.error(f"[FORCE-CLOSE-DEBUG] Failed to show error dialog: {dialog_error}")
         print(f"[FORCE-CLOSE-DEBUG] Failed to show error dialog: {dialog_error}")
         if is_critical:
-            print(f"[FORCE-CLOSE-DEBUG] Forcing exit due to critical error")
+            print("[FORCE-CLOSE-DEBUG] Forcing exit due to critical error")
             sys.exit(1)
 
 # Install global exception handler
@@ -299,7 +299,7 @@ sys.excepthook = handle_exception
 def check_dependencies():
     """Check critical dependencies sebelum aplikasi dimulai"""
     logger.info("Checking critical dependencies...")
-    
+
     required_modules = {
         'PyQt6': 'pip install PyQt6',
         'requests': 'pip install requests',
@@ -307,9 +307,9 @@ def check_dependencies():
         'pygame': 'pip install pygame',
         'cryptography': 'pip install cryptography',
     }
-    
+
     missing_modules = []
-    
+
     for module, install_cmd in required_modules.items():
         try:
             if module == 'PyQt6':
@@ -321,29 +321,29 @@ def check_dependencies():
         except ImportError:
             missing_modules.append((module, install_cmd))
             logger.error(f"[MISSING] {module} - MISSING")
-    
+
     if missing_modules:
         error_msg = "Missing required dependencies:\n\n"
         for module, cmd in missing_modules:
             error_msg += f"- {module}: {cmd}\n"
-        
+
         logger.error("Critical dependencies missing!")
         print(error_msg)
         return False
-    
+
     logger.info("All critical dependencies OK")
     return True
 
 def initialize_directories():
     """Initialize required directories dengan error handling"""
     logger.info("Initializing directory structure...")
-    
+
     required_dirs = [
         "temp", "logs", "config", "knowledge",
         "knowledge_bases", "assets",
         "temp/cache", "resources"
     ]
-    
+
     for directory in required_dirs:
         dir_path = Path(ROOT) / directory
         try:
@@ -352,7 +352,7 @@ def initialize_directories():
         except Exception as e:
             logger.error(f"[ERROR] Failed to create directory {directory}: {e}")
             return False
-    
+
     logger.info("Directory structure initialized successfully")
     return True
 
@@ -361,20 +361,20 @@ def validate_application_license():
     if not LICENSE_SYSTEM_AVAILABLE:
         logger.warning("License system disabled - continuing without validation")
         return True
-    
+
     logger.info("Checking application license...")
-    
+
     try:
         license_manager = LicenseManager(ROOT)
-        
+
         # Check if license exists and is valid
         is_valid, message = license_manager.is_license_valid()
-        
+
         if is_valid:
             # License is valid
             license_info = license_manager.get_license_info()
             logger.info(f"License validation successful: {message}")
-            
+
             if 'days_remaining' in license_info:
                 days = license_info['days_remaining']
                 if license_info.get('is_unlimited', False):
@@ -383,36 +383,36 @@ def validate_application_license():
                 else:
                     logger.info(f"License expires in {days} days")
                     print(f"[LICENSE] ✅ {days} days remaining")
-                
+
             print(f"[LICENSE] ✅ {message}")
             return True
         else:
             # License invalid or not found - show license dialog
             logger.warning(f"License validation failed: {message}")
             print(f"[LICENSE] ❌ {message}")
-            
+
             # Import and show license dialog
             try:
                 # Create minimal QApplication for license dialog
-                from PyQt6.QtWidgets import QApplication
                 from PyQt6.QtCore import Qt
-                
+                from PyQt6.QtWidgets import QApplication
+
                 # Create QApplication jika belum ada
                 app = QApplication.instance()
                 if not app:
                     app = QApplication(sys.argv)
                     app.setStyle('Fusion')
-                
+
                 # Import license dialog
                 sys.path.insert(0, os.path.join(ROOT, "ui"))
                 from ui.license_dialog import show_license_dialog
-                
+
                 print("[LICENSE] Opening license activation dialog...")
                 logger.info("Showing license activation dialog")
-                
+
                 # Show license dialog
                 success, license_key = show_license_dialog()
-                
+
                 if success:
                     logger.info("License activated successfully via dialog")
                     print("[LICENSE] ✅ License activated successfully!")
@@ -421,12 +421,12 @@ def validate_application_license():
                     logger.warning("License activation cancelled by user")
                     print("[LICENSE] ❌ License activation cancelled")
                     return False
-                    
+
             except Exception as dialog_error:
                 logger.error(f"License dialog error: {dialog_error}")
                 print(f"[LICENSE] Dialog error: {dialog_error}")
                 return False
-                
+
     except Exception as e:
         logger.error(f"License validation error: {e}")
         print(f"[LICENSE] Validation error: {e}")
@@ -477,7 +477,7 @@ def main():
     if not _license_is_valid:
         logger.critical("License validation failed - application cannot start")
         print("[LICENSE] ❌ Application cannot start without valid license")
-        
+
         # Show final message and exit
         try:
             from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -492,13 +492,15 @@ def main():
             )
         except Exception:
             pass
-            
+
         return 1
-    
+
     logger.info("License validation completed successfully")
 
     # Init monitoring (PostHog + Sentry) — non-blocking, never crashes app
-    from modules_client.telemetry import init as telemetry_init, capture as telemetry_capture, set_user_context
+    from modules_client.telemetry import capture as telemetry_capture
+    from modules_client.telemetry import init as telemetry_init
+    from modules_client.telemetry import set_user_context
     telemetry_init(POSTHOG_PROJECT_KEY, SENTRY_DSN, _APP_VERSION)
     logger.info("[STARTUP] Telemetry initialized")
     set_user_context({"platform": "windows", "app_mode": APP_MODE})
@@ -507,9 +509,9 @@ def main():
     # LAUNCH GUI APPLICATION
     try:
         print("[GUI] Launching VocaLive GUI...")
-        
+
         from PyQt6.QtWidgets import QApplication, QMessageBox
-        
+
         # Create or get existing QApplication
         app = QApplication.instance()
         if not app:
@@ -519,28 +521,28 @@ def main():
         app.setApplicationVersion(_APP_VERSION)
         app.setOrganizationName("VocaLive")
         app.setOrganizationDomain("vocalive.com")
-        
+
         # Apply dark theme
         app.setStyle('Fusion')
-        
+
         # ⚡ LOADING INDICATOR: Simple console-based loading for now
         print("[LOADING] VocaLive is starting up...")
         splash = None  # Disable splash screen to prevent segfault
-        
+
         # Import and create main window
         sys.path.insert(0, os.path.join(ROOT, "ui"))
-        
+
         # Console loading progress
         print("[LOADING] Setting up UI components...")
-        
+
         # Fix relative imports for frozen executable
         import importlib.util
-        
+
         # Load main_window module with proper path handling
         main_window_path = os.path.join(ROOT, "ui", "main_window.py")
-        
+
         print("[LOADING] Loading main window...")
-        
+
         # Check if running from frozen executable
         if getattr(sys, 'frozen', False):
             # In frozen mode, try direct import
@@ -569,7 +571,7 @@ def main():
                 spec.loader.exec_module(main_window_module)
                 MainWindow = main_window_module.MainWindow
                 print("[GUI] Loaded MainWindow via importlib (development mode fallback)")
-        
+
         # Console loading progress
         print("[LOADING] Initializing features...")
 
@@ -590,17 +592,17 @@ def main():
         print("[LOADING] Finalizing startup...")
 
         main_window.show()
-        
+
         print("[LOADING] Ready!")
-        
+
         print("[GUI] VocaLive GUI launched successfully")
         logger.info("GUI application started")
-        
+
         # Enhanced application exit handling
         try:
             # Set up proper signal handling for graceful shutdown
             import signal
-            
+
             def signal_handler(signum, frame):
                 logger.info(f"Received signal {signum}, initiating graceful shutdown...")
                 try:
@@ -609,20 +611,20 @@ def main():
                 except Exception as e:
                     logger.error(f"Error during signal shutdown: {e}")
                     app.exit(1)
-            
+
             # Register signal handlers (Windows compatible)
             if hasattr(signal, 'SIGTERM'):
                 signal.signal(signal.SIGTERM, signal_handler)
             if hasattr(signal, 'SIGINT'):
                 signal.signal(signal.SIGINT, signal_handler)
-            
+
             # Set quit on last window closed
             app.setQuitOnLastWindowClosed(True)
-            
+
             # Start event loop with proper error handling
             logger.info("Starting Qt event loop...")
             exit_code = app.exec()
-            
+
             print("[GUI] VocaLive GUI closed")
             logger.info(f"GUI application closed with exit code: {exit_code}")
             logger.info("[SHUTDOWN] App closing")
@@ -633,21 +635,21 @@ def main():
                 telemetry_close()
             except Exception:
                 pass
-            
+
             # Force cleanup before exit
             try:
                 app.closeAllWindows()
                 app.quit()
-                
+
                 # Force garbage collection
                 import gc
                 gc.collect()
-                
+
             except Exception as cleanup_error:
                 logger.error(f"Error during final cleanup: {cleanup_error}")
-            
+
             return exit_code
-            
+
         except Exception as event_loop_error:
             logger.error(f"Event loop error: {event_loop_error}")
             try:
@@ -655,19 +657,19 @@ def main():
             except Exception:
                 pass
             return 1
-        
+
     except Exception as e:
         error_msg = f"Failed to launch GUI: {e}"
         print(f"[ERROR] {error_msg}")
         logger.error(error_msg)
-        
+
         # Show error in message box if possible
         try:
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(None, "VocaLive Error", error_msg)
         except:
             pass
-            
+
         return 1
 
 if __name__ == "__main__":

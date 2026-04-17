@@ -1,7 +1,7 @@
 
 # ========== PYTCHAT IMPORT WITH PATH HANDLING ==========
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Handle pytchat import for both development and frozen executable
@@ -10,7 +10,7 @@ try:
     print("[DEBUG] PyTchat imported directly")
 except ImportError:
     print("[DEBUG] Direct pytchat import failed, trying thirdparty...")
-    
+
     # Get correct application path
     if getattr(sys, 'frozen', False):
         # Running as executable
@@ -18,7 +18,7 @@ except ImportError:
     else:
         # Running as script
         application_path = Path(__file__).resolve().parent.parent
-    
+
     # Add thirdparty path
     thirdparty_path = application_path / "thirdparty" / "pytchat_ng"
     if thirdparty_path.exists():
@@ -34,9 +34,10 @@ except ImportError:
         print(f"[ERROR] Thirdparty path not found: {thirdparty_path}")
         raise ImportError("PyTchat not found in both system and thirdparty paths")
 
+import json
 import threading
 import time
-import json
+
 
 # ========== PATH HANDLING FOR FROZEN EXE ==========
 def get_application_path():
@@ -56,14 +57,14 @@ def start_pytchat_listener(video_id, callback):
     try:
         print(f"[DEBUG] Starting pytchat listener for video_id: {video_id}")
         chat = pytchat.create(video_id=video_id)
-        print(f"[DEBUG] PyTchat chat object created successfully")
+        print("[DEBUG] PyTchat chat object created successfully")
 
         # Muat konfigurasi reply mode dari file config (dengan path handling yang benar)
         ROOT_PATH = get_application_path()
         config_path = ROOT_PATH / "config" / "live_state.json"
-        
+
         print(f"[DEBUG] Looking for config at: {config_path}")
-        
+
         try:
             with open(config_path, "r", encoding='utf-8') as f:
                 config = json.load(f)
@@ -76,11 +77,11 @@ def start_pytchat_listener(video_id, callback):
                 "delay_seconds": 5,
                 "custom_cohost_name": "halo,bang,min"
             }
-            
+
         reply_mode = config.get("reply_mode", "Trigger")
         delay_seconds = config.get("delay_seconds", 5)
         custom_trigger = config.get("custom_cohost_name", "").strip().lower()
-        
+
         print(f"[DEBUG] Reply mode: {reply_mode}")
         print(f"[DEBUG] Custom trigger: {custom_trigger}")
 
@@ -100,7 +101,7 @@ def start_pytchat_listener(video_id, callback):
             threading.Thread(target=process_delay_mode, daemon=True).start()
 
         def run():
-            print(f"[DEBUG] Starting pytchat run loop...")
+            print("[DEBUG] Starting pytchat run loop...")
             try:
                 while chat.is_alive():
                     for c in chat.get().sync_items():
@@ -112,7 +113,7 @@ def start_pytchat_listener(video_id, callback):
                             # Jika mode Trigger, cek apakah pesan mengandung trigger word
                             trigger_words = [word.strip() for word in custom_trigger.split(',') if word.strip()]
                             message_lower = message.lower()
-                            
+
                             for trigger in trigger_words:
                                 if trigger and trigger in message_lower:
                                     print(f"[DEBUG] Trigger '{trigger}' detected in message")
@@ -129,7 +130,7 @@ def start_pytchat_listener(video_id, callback):
                             # Default: perlakukan sebagai mode Trigger
                             trigger_words = [word.strip() for word in custom_trigger.split(',') if word.strip()]
                             message_lower = message.lower()
-                            
+
                             for trigger in trigger_words:
                                 if trigger and trigger in message_lower:
                                     print(f"[DEBUG] Trigger '{trigger}' detected in message")
@@ -143,8 +144,8 @@ def start_pytchat_listener(video_id, callback):
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
-        print(f"[DEBUG] PyTchat listener thread started successfully")
-        
+        print("[DEBUG] PyTchat listener thread started successfully")
+
     except Exception as e:
         print(f"[ERROR] Failed to start pytchat listener: {e}")
         import traceback

@@ -5,11 +5,12 @@ Semua test di-mark sebagai integration karena melibatkan import modul client
 dan mocking di level yang membutuhkan dependency modules_client.
 """
 
-import sys
 import json
-import pytest
+import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Pastikan root project ada di sys.path
 ROOT_DIR = Path(__file__).parent.parent

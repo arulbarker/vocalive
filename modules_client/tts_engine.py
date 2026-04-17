@@ -10,7 +10,8 @@ from typing import Optional
 
 # Import from server module
 try:
-    from modules_server.tts_engine import speak as server_speak, get_tts_engine
+    from modules_server.tts_engine import get_tts_engine
+    from modules_server.tts_engine import speak as server_speak
 except ImportError:
     server_speak = None
     get_tts_engine = None
@@ -35,6 +36,6 @@ if __name__ == "__main__":
     # Test the client TTS
     test_text = "Test dari client TTS engine."
     print(f"Testing client TTS with text: {test_text}")
-    
+
     success = speak(test_text)
     print(f"Client TTS test {'successful' if success else 'failed'}")

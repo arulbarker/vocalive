@@ -4,30 +4,32 @@ VocaLive - License Manager (AppScript Edition)
 Validasi lisensi via email + Google AppScript — tanpa service account key.
 """
 
-import os
-import sys
-import json
 import hashlib
+import json
+import logging
+import os
 import platform
-import uuid
 import subprocess
+import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
-import logging
+from typing import Any, Dict, Optional, Tuple
 
 # Encryption imports
 try:
+    import base64
+
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    import base64
 except ImportError:
     print("Missing cryptography library. Install: pip install cryptography")
     sys.exit(1)
 
-import requests
 import time
+
+import requests
 
 # ============================================================
 # KONFIGURASI — Update URL saat deploy AppScript baru

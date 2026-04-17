@@ -3,7 +3,8 @@ Tests untuk sales_templates.py — TEMPLATES dict dan helper functions.
 """
 
 import pytest
-from sales_templates import TEMPLATES, get_template_list, get_template
+
+from sales_templates import TEMPLATES, get_template, get_template_list
 
 pytestmark = pytest.mark.unit
 

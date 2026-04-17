@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import logging
-from typing import List, Dict, Optional
+import os
+from typing import Dict, List, Optional
 
 logger = logging.getLogger('VocaLive')
 

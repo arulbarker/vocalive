@@ -1,11 +1,12 @@
 """Shared fixtures untuk VocaLive test suite."""
 
 import json
-import sys
 import os
-import pytest
+import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Tambah root project ke sys.path agar import modules_client/ bisa
 ROOT_DIR = Path(__file__).parent.parent

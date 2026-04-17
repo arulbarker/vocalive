@@ -74,4 +74,4 @@ if __name__ == '__main__':
     # This part allows for direct testing of the script, but it won't be used by the main app.
     # The main app will import and run the `youtube_chat_worker` function in a process.
     print("This script is designed to be run as a process from the main application.")
-    print("To test, you would need to provide a video_id and a queue.") 
+    print("To test, you would need to provide a video_id and a queue.")

@@ -3,8 +3,9 @@ Tests untuk modules_client/analytics_manager.py — LiveAnalyticsManager.
 """
 
 import csv
-import pytest
 from pathlib import Path
+
+import pytest
 
 from modules_client.analytics_manager import LiveAnalyticsManager
 

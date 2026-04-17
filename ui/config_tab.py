@@ -1,12 +1,13 @@
 # ui/config_tab.py - Tab Konfigurasi API Keys
 
 import json
-import os
 import logging
+import os
+from pathlib import Path
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from pathlib import Path
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -21,23 +22,56 @@ retry_strategy = Retry(
 adapter = HTTPAdapter(pool_connections=5, pool_maxsize=10, max_retries=retry_strategy)
 _session.mount("http://", adapter)
 _session.mount("https://", adapter)
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-    QPushButton, QGroupBox, QTextEdit, QMessageBox, QFrame,
-    QProgressBar, QCheckBox, QComboBox, QFileDialog, QScrollArea,
-    QSpinBox
-)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from modules_client.config_manager import ConfigManager
-from sales_templates import get_template_list, get_template
+from sales_templates import get_template, get_template_list
 
 try:
-    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
-        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
-        btn_success, btn_danger, btn_ghost, btn_primary, status_badge, label_subtitle)
+    from ui.theme import (
+        ACCENT,
+        BG_BASE,
+        BG_ELEVATED,
+        BG_SURFACE,
+        BORDER,
+        BORDER_GOLD,
+        ERROR,
+        INFO,
+        PRIMARY,
+        RADIUS,
+        RADIUS_SM,
+        SECONDARY,
+        SUCCESS,
+        TEXT_DIM,
+        TEXT_MUTED,
+        TEXT_PRIMARY,
+        WARNING,
+        btn_danger,
+        btn_ghost,
+        btn_primary,
+        btn_success,
+        label_subtitle,
+        status_badge,
+    )
 except ImportError:
     PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"; BG_ELEVATED = "#1E2A3B"
     TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#93C5FD"; TEXT_DIM = "#4B7BBA"
@@ -54,12 +88,12 @@ except ImportError:
 class APITestThread(QThread):
     """Thread untuk test API connection"""
     result_ready = pyqtSignal(str, bool, str)  # api_type, success, message
-    
+
     def __init__(self, api_type, api_key):
         super().__init__()
         self.api_type = api_type
         self.api_key = api_key
-    
+
     def run(self):
         """Test API connection"""
         try:
@@ -69,11 +103,11 @@ class APITestThread(QThread):
                 success, message = self.test_gemini_api()
             else:
                 success, message = False, "Unknown API type"
-            
+
             self.result_ready.emit(self.api_type, success, message)
         except Exception as e:
             self.result_ready.emit(self.api_type, False, f"Error: {str(e)}")
-    
+
     def test_deepseek_api(self):
         """Test DeepSeek API"""
         try:
@@ -81,7 +115,7 @@ class APITestThread(QThread):
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
-            
+
             data = {
                 "model": "deepseek-chat",
                 "messages": [
@@ -89,22 +123,22 @@ class APITestThread(QThread):
                 ],
                 "max_tokens": 10
             }
-            
+
             response = _session.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers=headers,
                 json=data,
                 timeout=10
             )
-            
+
             if response.status_code == 200:
                 return True, "✅ DeepSeek API berhasil terhubung!"
             else:
                 return False, f"❌ DeepSeek API error: {response.status_code}"
-                
+
         except Exception as e:
             return False, f"❌ DeepSeek API gagal: {str(e)}"
-    
+
     def test_gemini_api(self):
         """Test Gemini API — coba primary model dulu, fallback jika 403"""
         models = ["gemini-3.1-flash-lite-preview", "gemini-flash-lite-latest"]
@@ -223,7 +257,7 @@ class ConfigTab(QWidget):
         self.init_ui()
         self.load_saved_keys()
         self.greeting_status_changed.connect(self._apply_greeting_status)
-    
+
     def closeEvent(self, event):
         """Cleanup when tab is closed"""
         if self.test_thread and self.test_thread.isRunning():
@@ -232,25 +266,25 @@ class ConfigTab(QWidget):
                 self.test_thread.terminate()
                 self.test_thread.wait(100)
         event.accept()
-    
+
     def init_ui(self):
         """Initialize UI with scroll area"""
         # Main layout for the entire widget
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Create scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        
+
         # Create content widget for scroll area
         content_widget = QWidget()
         layout = QVBoxLayout(content_widget)
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
-        
+
         # Title
         title = QLabel("🔧 Konfigurasi API Keys")
         title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
@@ -269,34 +303,34 @@ class ConfigTab(QWidget):
         lang_note.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lang_note.setStyleSheet(f"color: {PRIMARY}; font-size: 12px; margin-bottom: 20px; font-style: italic; background-color: {BG_ELEVATED}; padding: 8px; border-radius: 5px;")
         layout.addWidget(lang_note)
-        
+
         # AI Provider Section
         self.create_ai_provider_section(layout)
-        
+
         # Viewer Greeting Section
         self.create_viewer_greeting_section(layout)
-        
+
         # Sales Template Section
         self.create_sales_template_section(layout)
-        
+
         # Google TTS Section
         self.create_google_tts_section(layout)
-        
+
         # Status Section
         self.create_status_section(layout)
-        
+
         # Buttons
         self.create_buttons(layout)
-        
+
         # Add stretch to push content to top
         layout.addStretch()
-        
+
         # Set content widget to scroll area
         scroll_area.setWidget(content_widget)
-        
+
         # Add scroll area to main layout
         main_layout.addWidget(scroll_area)
-        
+
         # Apply Gold Seller theme
         self.setStyleSheet(f"""
             QWidget {{
@@ -473,19 +507,19 @@ class ConfigTab(QWidget):
                 font-weight: bold;
             }}
         """)
-    
+
     def create_ai_provider_section(self, layout):
         """Create AI Provider section with flexible API key input"""
         group = QGroupBox("🤖 AI Chat Provider")
         group_layout = QVBoxLayout(group)
         group_layout.setSpacing(15)
-        
+
         # Provider selection with better layout
         provider_layout = QHBoxLayout()
         provider_label = QLabel("Provider:")
         provider_label.setMinimumWidth(100)
         provider_layout.addWidget(provider_label)
-        
+
         self.provider_combo = QComboBox()
         # ChatGPT disabled — uncomment to re-enable: ["DeepSeek", "Gemini Flash Lite", "OpenAI (ChatGPT)"]
         self.provider_combo.addItems(["DeepSeek", "Gemini Flash Lite"])
@@ -493,12 +527,12 @@ class ConfigTab(QWidget):
         provider_layout.addWidget(self.provider_combo)
         provider_layout.addStretch()
         group_layout.addLayout(provider_layout)
-        
+
         # API Key input with better styling
         api_key_label = QLabel("API Key:")
         api_key_label.setMinimumWidth(100)
         group_layout.addWidget(api_key_label)
-        
+
         # API Key input container
         api_key_container = QHBoxLayout()
         self.api_key_input = QLineEdit()
@@ -506,7 +540,7 @@ class ConfigTab(QWidget):
         self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.api_key_input.textChanged.connect(self.on_api_key_changed)
         api_key_container.addWidget(self.api_key_input)
-        
+
         # Show/Hide button with better styling
         show_btn = QPushButton("Lihat")
         show_btn.setProperty("class", "secondary")
@@ -515,38 +549,53 @@ class ConfigTab(QWidget):
         show_btn.setToolTip("Tampilkan / sembunyikan API Key")
         show_btn.clicked.connect(lambda: self.toggle_password_visibility(self.api_key_input))
         api_key_container.addWidget(show_btn)
-        
+
         group_layout.addLayout(api_key_container)
-        
+
         # Button container
         button_layout = QHBoxLayout()
-        
+
         # Test button
         self.ai_test_btn = QPushButton("🔍 Test Connection")
         self.ai_test_btn.setProperty("class", "success")
         self.ai_test_btn.clicked.connect(self.test_ai_api)
         self.ai_test_btn.setEnabled(False)  # Disabled until API key is entered
         button_layout.addWidget(self.ai_test_btn)
-        
+
         button_layout.addStretch()
         group_layout.addLayout(button_layout)
-        
+
         # Status with better styling
         self.ai_status = QLabel("Status: Belum ada API key")
         self.ai_status.setProperty("class", "status-info")
         self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
         group_layout.addWidget(self.ai_status)
-        
+
         layout.addWidget(group)
-    
-    
+
+
     def create_viewer_greeting_section(self, layout):
         """Greeting AI System — ON/OFF toggle + status indicator"""
         try:
-            from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE,
-                                   BG_ELEVATED, TEXT_PRIMARY, TEXT_MUTED, SUCCESS,
-                                   WARNING, ERROR, BORDER, btn_primary, btn_success,
-                                   btn_danger, btn_ghost, CARD_STYLE)
+            from ui.theme import (
+                ACCENT,
+                BG_BASE,
+                BG_ELEVATED,
+                BG_SURFACE,
+                BORDER,
+                CARD_STYLE,
+                ERROR,
+                PRIMARY,
+                SECONDARY,
+                SUCCESS,
+                TEXT_MUTED,
+                TEXT_PRIMARY,
+                WARNING,
+                btn_danger,
+                btn_ghost,
+                btn_primary,
+                btn_success,
+            )
             BORDER_COLOR = BORDER
         except ImportError:
             PRIMARY = "#2563EB"; ACCENT = "#60A5FA"; BG_SURFACE = "#162032"
@@ -556,9 +605,8 @@ class ConfigTab(QWidget):
             def btn_success(extra=""): return f"background-color:{SUCCESS};color:white;border:none;border-radius:6px;padding:6px 14px;{extra}"
             def btn_danger(extra=""): return f"background-color:{ERROR};color:white;border:none;border-radius:6px;padding:6px 14px;{extra}"
 
-        from PyQt6.QtWidgets import (QGroupBox, QVBoxLayout, QHBoxLayout,
-                                      QLabel, QPushButton, QCheckBox, QFrame)
         from PyQt6.QtCore import Qt
+        from PyQt6.QtWidgets import QCheckBox, QFrame, QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
         group = QGroupBox("Greeting AI")
         group_layout = QVBoxLayout(group)
@@ -643,7 +691,7 @@ class ConfigTab(QWidget):
         group_layout.addWidget(info)
 
         layout.addWidget(group)
-    
+
     def create_sales_template_section(self, layout):
         """Create product knowledge section — AI uses this to understand what's being sold"""
         group = QGroupBox("🧠 Pengetahuan Produk untuk AI")
@@ -721,7 +769,7 @@ class ConfigTab(QWidget):
         group_layout.addLayout(button_layout)
 
         layout.addWidget(group)
-    
+
     def create_google_tts_section(self, layout):
         """Create Google TTS section with API Key only (simplified)"""
         group = QGroupBox("🎤 Google Text-to-Speech & Gemini Flash TTS")
@@ -822,13 +870,13 @@ class ConfigTab(QWidget):
         group_layout.addWidget(self.tts_status)
 
         layout.addWidget(group)
-    
+
     def create_status_section(self, layout):
         """Create status section with better styling"""
         group = QGroupBox("📊 Status Konfigurasi")
         group_layout = QVBoxLayout(group)
         group_layout.setSpacing(15)
-        
+
         # Status overview with better styling
         self.status_text = QTextEdit()
         self.status_text.setMaximumHeight(120)
@@ -848,10 +896,10 @@ class ConfigTab(QWidget):
             }}
         """)
         group_layout.addWidget(self.status_text)
-        
+
         # Connection status indicators
         indicators_layout = QHBoxLayout()
-        
+
         # AI Status Indicator
         self.ai_indicator = QLabel("🔴 AI: Tidak terhubung")
         self.ai_indicator.setStyleSheet(f"""
@@ -866,7 +914,7 @@ class ConfigTab(QWidget):
             }}
         """)
         indicators_layout.addWidget(self.ai_indicator)
-        
+
         # TTS Status Indicator
         self.tts_indicator = QLabel("🔴 TTS: Tidak terhubung")
         self.tts_indicator.setStyleSheet(f"""
@@ -881,17 +929,17 @@ class ConfigTab(QWidget):
             }}
         """)
         indicators_layout.addWidget(self.tts_indicator)
-        
+
         indicators_layout.addStretch()
         group_layout.addLayout(indicators_layout)
-        
+
         layout.addWidget(group)
-    
+
     def create_buttons(self, layout):
         """Create action buttons with better styling"""
         button_layout = QHBoxLayout()
         button_layout.setSpacing(15)
-        
+
         # Save button with success styling
         save_btn = QPushButton("💾 Simpan Konfigurasi")
         save_btn.setProperty("class", "success")
@@ -914,7 +962,7 @@ class ConfigTab(QWidget):
             }}
         """)
         button_layout.addWidget(save_btn)
-        
+
         # Reset button with danger styling
         reset_btn = QPushButton("🔄 Reset Konfigurasi")
         reset_btn.setProperty("class", "danger")
@@ -937,7 +985,7 @@ class ConfigTab(QWidget):
             }}
         """)
         button_layout.addWidget(reset_btn)
-        
+
         # Test All button
         test_all_btn = QPushButton("🔍 Test Semua Koneksi")
         test_all_btn.clicked.connect(self.test_all_connections)
@@ -959,9 +1007,9 @@ class ConfigTab(QWidget):
             }}
         """)
         button_layout.addWidget(test_all_btn)
-        
+
         layout.addLayout(button_layout)
-    
+
     def on_provider_changed(self, provider):
         """Handle provider selection change"""
         if provider == "DeepSeek":
@@ -969,12 +1017,12 @@ class ConfigTab(QWidget):
         elif provider == "Gemini Flash Lite":
             self.api_key_input.setPlaceholderText("Masukkan Gemini API Key (AIzaSy...)")
         self.update_status_overview()
-    
+
     def on_api_key_changed(self):
         """Handle API key input change"""
         api_key = self.api_key_input.text().strip()
         self.ai_test_btn.setEnabled(len(api_key) > 0)
-        
+
         if len(api_key) > 0:
             self.ai_status.setText("Status: API key siap untuk ditest")
             self.ai_status.setProperty("class", "status-warning")
@@ -983,9 +1031,9 @@ class ConfigTab(QWidget):
             self.ai_status.setText("Status: Belum ada API key")
             self.ai_status.setProperty("class", "status-info")
             self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
-        
+
         self.update_status_overview()
-    
+
     def test_all_connections(self):
         """Test all configured connections"""
         api_key = self.api_key_input.text().strip()
@@ -1013,7 +1061,7 @@ class ConfigTab(QWidget):
             "Test Selesai",
             "Test koneksi telah selesai. Periksa status masing-masing layanan di atas."
         ))
-    
+
     def on_tts_api_key_changed(self):
         """Handle TTS API Key input change"""
         api_key = self.tts_api_key_input.text().strip()
@@ -1035,7 +1083,7 @@ class ConfigTab(QWidget):
             self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
 
         self.update_status_overview()
-    
+
     def _update_char_count(self):
         """Update character count label"""
         count = len(self.context_input.toPlainText())
@@ -1082,85 +1130,85 @@ class ConfigTab(QWidget):
             self.context_input.setPlainText(self._original_context)
             self._original_context = ""
         self.revert_btn.setVisible(False)
-    
+
     def save_context_setting(self):
         """Save context setting from manual input"""
         context_content = self.context_input.toPlainText().strip()
-        
+
         if not context_content:
             QMessageBox.warning(self, "Peringatan", "Context setting kosong. Silakan isi terlebih dahulu.")
             return
-        
+
         try:
             # Save context to user_context setting
             config = self.cfg.get_all_settings()
             config["user_context"] = context_content
-            
+
             # Save to file
             config_path = Path("config/settings.json")
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
-            
+
             self.char_count_label.setText(f"{len(context_content)} karakter  ·  ✅ Tersimpan")
-            
+
             QMessageBox.information(
-                self, 
-                "Sukses", 
+                self,
+                "Sukses",
                 "✅ Context Setting berhasil disimpan!\n\n"
                 "AI sekarang akan menggunakan context yang baru.\n"
                 "Perubahan berlaku untuk semua reply AI selanjutnya."
             )
-            
+
         except Exception as e:
             QMessageBox.critical(self, "Error", f"❌ Gagal menyimpan context setting:\n{str(e)}")
-    
+
     def clear_context_setting(self):
         """Clear context setting"""
         reply = QMessageBox.question(
-            self, 
-            "Konfirmasi", 
+            self,
+            "Konfirmasi",
             "Yakin ingin menghapus Context Setting?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply == QMessageBox.StandardButton.Yes:
             self.context_input.clear()
             self.template_combo.setCurrentIndex(0)
-    
+
     def toggle_password_visibility(self, line_edit):
         """Toggle password visibility for line edit"""
         if line_edit.echoMode() == QLineEdit.EchoMode.Password:
             line_edit.setEchoMode(QLineEdit.EchoMode.Normal)
         else:
             line_edit.setEchoMode(QLineEdit.EchoMode.Password)
-    
+
     def test_ai_api(self):
         """Test AI API connection"""
         api_key = self.api_key_input.text().strip()
         provider = self.provider_combo.currentText()
-        
+
         if not api_key:
             self.ai_status.setText("Status: ❌ API key kosong")
             self.ai_status.setStyleSheet(status_badge(ERROR))
             return
-        
+
         self.ai_test_btn.setText("⏳ Testing...")
         self.ai_test_btn.setEnabled(False)
-        
+
         # Determine API type for testing
         api_type_map = {"DeepSeek": "deepseek", "Gemini Flash Lite": "gemini"}
         api_type = api_type_map.get(provider, "deepseek")
-        
+
         # Stop existing thread if running
         if self.test_thread and self.test_thread.isRunning():
             self.test_thread.quit()
             self.test_thread.wait(500)
-        
+
         # Start test thread
         self.test_thread = APITestThread(api_type, api_key)
         self.test_thread.result_ready.connect(self.on_test_result)
         self.test_thread.start()
-    
+
     def _populate_tts_voice_combo(self, key_type: str = "all"):
         """Isi dropdown suara test. key_type: 'gemini' | 'cloud' | 'all'."""
         self.tts_voice_combo.clear()
@@ -1368,12 +1416,12 @@ class ConfigTab(QWidget):
             self.tts_test_btn.setText("🔍 Test Google TTS")
             self.tts_test_btn.setEnabled(True)
             self.update_status_overview()
-    
+
     def on_test_result(self, api_type, success, message):
         """Handle API test result"""
         self.ai_test_btn.setText("🔍 Test Connection")
         self.ai_test_btn.setEnabled(True)
-        
+
         if success:
             self.ai_status.setText(f"Status: {message}")
             self.ai_status.setProperty("class", "status-success")
@@ -1382,9 +1430,9 @@ class ConfigTab(QWidget):
             self.ai_status.setText(f"Status: {message}")
             self.ai_status.setProperty("class", "status-error")
             self.ai_status.setStyleSheet(status_badge(ERROR))
-        
+
         self.update_status_overview()
-    
+
     def update_status_overview(self):
         """Update status overview with better formatting"""
         api_key = self.api_key_input.text().strip()
@@ -1427,7 +1475,7 @@ class ConfigTab(QWidget):
 
         # Google TTS Status (API Key only)
         if tts_api_key:
-            status_lines.append(f"✅ Google TTS: Terkonfigurasi")
+            status_lines.append("✅ Google TTS: Terkonfigurasi")
             status_lines.append(f"   🔑 API Key: {'*' * (len(tts_api_key) - 4)}{tts_api_key[-4:] if len(tts_api_key) > 4 else '****'}")
             self.tts_indicator.setText("🟢 TTS: Google Cloud")
             self.tts_indicator.setStyleSheet(f"""
@@ -1470,7 +1518,7 @@ class ConfigTab(QWidget):
             status_lines.append("   Perlu konfigurasi AI API untuk menggunakan aplikasi.")
 
         self.status_text.setPlainText("\n".join(status_lines))
-    
+
     def save_config(self):
         """Save configuration"""
         try:
@@ -1556,7 +1604,7 @@ class ConfigTab(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"❌ Gagal menyimpan konfigurasi:\n{str(e)}")
-    
+
     def load_saved_keys(self):
         """Load saved API keys and context"""
         try:
@@ -1586,16 +1634,16 @@ class ConfigTab(QWidget):
 
         except Exception as e:
             print(f"Error loading saved keys: {e}")
-    
+
     def reset_config(self):
         """Reset configuration"""
         reply = QMessageBox.question(
-            self, 
-            "Konfirmasi", 
+            self,
+            "Konfirmasi",
             "Yakin ingin reset semua konfigurasi?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply == QMessageBox.StandardButton.Yes:
             self.api_key_input.clear()
 
@@ -1613,28 +1661,28 @@ class ConfigTab(QWidget):
             if hasattr(self, 'greeting_slots'):
                 for text_input in self.greeting_slots:
                     text_input.clear()
-            
+
             self.ai_status.setText("Status: Belum ada API key")
             self.ai_status.setProperty("class", "status-info")
             self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
-            
+
             self.tts_status.setText("Status: Belum ada file kredensial")
             self.tts_status.setProperty("class", "status-info")
             self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
-            
+
             if hasattr(self, 'template_status'):
                 self.template_status.setText("Status: Semua konfigurasi direset")
                 self.template_status.setStyleSheet(f"color: {INFO}; font-size: 12px; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 4px;")
-            
+
             # Reset button states
             self.ai_test_btn.setEnabled(False)
             self.tts_test_btn.setEnabled(False)
             if hasattr(self, 'copy_template_btn'):
                 self.copy_template_btn.setEnabled(False)
-            
+
             self.update_status_overview()
-    
-    
+
+
     def on_greeting_enabled_changed(self):
         """Handle viewer greeting enabled/disabled change"""
         try:
@@ -1644,7 +1692,7 @@ class ConfigTab(QWidget):
             self.update_greeting_example()
         except Exception as e:
             print(f"Error changing greeting enabled setting: {e}")
-    
+
     def on_detection_window_changed(self):
         """Handle detection window duration change"""
         try:
@@ -1654,7 +1702,7 @@ class ConfigTab(QWidget):
             self.update_greeting_example()
         except Exception as e:
             print(f"Error changing detection window: {e}")
-    
+
     def on_wait_interval_changed(self):
         """Handle wait interval duration change"""
         try:
@@ -1664,14 +1712,14 @@ class ConfigTab(QWidget):
             self.update_greeting_example()
         except Exception as e:
             print(f"Error changing wait interval: {e}")
-    
+
     def update_greeting_example(self):
         """Update the greeting system example text"""
         try:
             if hasattr(self, 'greeting_example_label'):
                 detection_window = self.detection_window_spin.value()
                 wait_interval = self.wait_interval_spin.value()
-                
+
                 # Convert to user-friendly format
                 detection_text = f"{detection_window} detik"
                 if detection_window >= 3600:  # Hours
@@ -1680,7 +1728,7 @@ class ConfigTab(QWidget):
                     detection_text = f"{hours} jam {minutes} menit" if minutes else f"{hours} jam"
                 elif detection_window >= 60:  # Minutes
                     detection_text = f"{detection_window//60} menit {detection_window%60} detik" if detection_window % 60 else f"{detection_window//60} menit"
-                
+
                 wait_text = f"{wait_interval} detik"
                 if wait_interval >= 3600:  # Hours
                     hours = wait_interval // 3600
@@ -1688,26 +1736,26 @@ class ConfigTab(QWidget):
                     wait_text = f"{hours} jam {minutes} menit" if minutes else f"{hours} jam"
                 elif wait_interval >= 60:  # Minutes
                     wait_text = f"{wait_interval//60} menit {wait_interval%60} detik" if wait_interval % 60 else f"{wait_interval//60} menit"
-                
+
                 example_text = f"Contoh: Sistem akan aktif selama {detection_text} untuk mendeteksi penonton baru, lalu menunggu {wait_text} sebelum siklus berikutnya"
                 self.greeting_example_label.setText(example_text)
         except Exception as e:
             print(f"Error updating greeting example: {e}")
-    
+
     # === CUSTOM GREETING SYSTEM METHODS ===
-    
+
     def on_custom_greeting_enabled_changed(self):
         """Handle custom greeting system enabled/disabled change with 5-slot validation"""
         try:
             enabled = self.greeting_enabled_cb.isChecked()
-            
+
             if enabled:
                 # Count filled greeting slots
                 filled_slots = 0
                 for text_input in self.greeting_slots:
                     if text_input.text().strip():
                         filled_slots += 1
-                
+
                 # Require minimum 5 filled slots
                 if filled_slots < 5:
                     # Show warning and uncheck
@@ -1721,14 +1769,14 @@ class ConfigTab(QWidget):
                     # Uncheck the checkbox
                     self.greeting_enabled_cb.setChecked(False)
                     return
-            
+
             # Save to both keys for compatibility with different greeting systems
             self.cfg.set("custom_greeting_enabled", enabled)
             self.cfg.set("sequential_greeting_enabled", enabled)
             print(f"[CONFIG] Custom greeting system: {'Enabled' if enabled else 'Disabled'}")
         except Exception as e:
             print(f"Error changing custom greeting enabled setting: {e}")
-    
+
     def on_greeting_slot_changed(self, slot_number, text):
         """Handle greeting slot text change"""
         try:
@@ -1737,8 +1785,8 @@ class ConfigTab(QWidget):
             print(f"[CONFIG] Greeting slot {slot_number} updated: {text[:30]}...")
         except Exception as e:
             print(f"Error saving greeting slot {slot_number}: {e}")
-    
-    
+
+
     def test_greeting_slot(self, slot_number):
         """Test play greeting for specific slot"""
         try:
@@ -1780,7 +1828,7 @@ class ConfigTab(QWidget):
         except Exception as e:
             print(f"Error testing greeting slot {slot_number}: {e}")
             QMessageBox.critical(self, "Error", f"Error testing slot {slot_number}: {str(e)}")
-    
+
     def save_all_greeting_slots(self):
         """Save all greeting slots to config (without individual timers)"""
         try:
@@ -1807,7 +1855,7 @@ class ConfigTab(QWidget):
         except Exception as e:
             print(f"Error saving greeting slots: {e}")
             QMessageBox.critical(self, "Error", f"Gagal menyimpan slot: {str(e)}")
-    
+
     def clear_all_greeting_slots(self):
         """Clear all greeting slots"""
         try:
@@ -1861,8 +1909,7 @@ class ConfigTab(QWidget):
     def on_greeting_ai_regen_clicked(self):
         """Trigger manual regenerasi greeting AI (bisa sebelum atau saat live)."""
         try:
-            from modules_client.sequential_greeting_manager import get_sequential_greeting_manager
-            from modules_client.sequential_greeting_manager import GreetingState
+            from modules_client.sequential_greeting_manager import GreetingState, get_sequential_greeting_manager
             mgr = get_sequential_greeting_manager()
             if mgr.state == GreetingState.IDLE:
                 # Belum live — pakai prepare_texts (tidak mulai timer)

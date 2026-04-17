@@ -1,13 +1,13 @@
 # ui/main_window.py - BASIC MODE ONLY VERSION
-import sys
-import os
-import json 
+import json
 import logging
-import traceback
+import os
+import sys
 import time
-from pathlib import Path
-from datetime import datetime
+import traceback
 from collections import deque
+from datetime import datetime
+from pathlib import Path
 
 # Setup logger
 logger = logging.getLogger('VocaLive')
@@ -19,18 +19,18 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
         # Allow keyboard interrupt to work normally
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
-    
+
     # Log the exception
     error_msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     logger.critical(f"Uncaught exception: {error_msg}")
-    
+
     # Try to save application state before potential crash
     try:
         # Save any critical data here if needed
         logger.info("Attempting to save application state...")
     except Exception as save_error:
         logger.error(f"Failed to save application state: {save_error}")
-    
+
     # Show user-friendly error message
     try:
         from PyQt6.QtWidgets import QMessageBox
@@ -49,11 +49,19 @@ def global_exception_handler(exc_type, exc_value, exc_traceback):
 sys.excepthook = global_exception_handler
 
 # Import PyQt6 components
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QGuiApplication, QIcon
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QMessageBox,
-    QLabel, QStatusBar, QWidget, QVBoxLayout, QSizePolicy, QPushButton
+    QApplication,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QStatusBar,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
 
@@ -65,10 +73,9 @@ class UpdateCheckThread(QThread):
 
     def run(self):
         try:
-            from modules_client.updater import (
-                check_for_update, APPSCRIPT_URL, APP_SECRET, PRODUCT_ID, CURRENT_VERSION
-            )
             import requests as _req
+
+            from modules_client.updater import APP_SECRET, APPSCRIPT_URL, CURRENT_VERSION, PRODUCT_ID, check_for_update
             has_update, info = check_for_update()
             if has_update and info:
                 self.update_available.emit(info)
@@ -101,13 +108,29 @@ except ImportError:
 # Gold Seller brand colors — import dari ui/theme.py
 try:
     from ui.theme import (
-        GLOBAL_QSS, PRIMARY, BG_BASE, BG_ELEVATED, BG_SURFACE,
-        TEXT_PRIMARY, TEXT_MUTED, BORDER_GOLD, SUCCESS, ACCENT
+        ACCENT,
+        BG_BASE,
+        BG_ELEVATED,
+        BG_SURFACE,
+        BORDER_GOLD,
+        GLOBAL_QSS,
+        PRIMARY,
+        SUCCESS,
+        TEXT_MUTED,
+        TEXT_PRIMARY,
     )
 except ImportError:
     from theme import (
-        GLOBAL_QSS, PRIMARY, BG_BASE, BG_ELEVATED, BG_SURFACE,
-        TEXT_PRIMARY, TEXT_MUTED, BORDER_GOLD, SUCCESS, ACCENT
+        ACCENT,
+        BG_BASE,
+        BG_ELEVATED,
+        BG_SURFACE,
+        BORDER_GOLD,
+        GLOBAL_QSS,
+        PRIMARY,
+        SUCCESS,
+        TEXT_MUTED,
+        TEXT_PRIMARY,
     )
 
 GOLD_COLORS = {
@@ -128,7 +151,7 @@ class ConfigManager:
         self.config_file = config_file
         self.config = {}
         self.load_config()
-    
+
     def load_config(self):
         try:
             if os.path.exists(self.config_file):
@@ -137,14 +160,14 @@ class ConfigManager:
         except Exception as e:
             logger.warning(f"Failed to load config: {e}")
             self.config = {}
-    
+
     def get(self, key, default=None):
         return self.config.get(key, default)
-    
+
     def set(self, key, value):
         self.config[key] = value
         self.save_config()
-    
+
     def save_config(self):
         try:
             os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
@@ -162,12 +185,12 @@ try:
 except ImportError:
     logger.warning("Using fallback ConfigManager")
     DATABASE_SCHEDULER_AVAILABLE = False
-    
+
     # Fallback functions for database scheduler
     def start_database_maintenance():
         logger.warning("Database scheduler not available")
         return False
-    
+
     def stop_database_maintenance():
         logger.warning("Database scheduler not available")
         return False
@@ -185,7 +208,7 @@ except ImportError:
     except ImportError:
         COHOST_AVAILABLE = False
         logger.warning("CohostTabBasic not available")
-        
+
         # Create placeholder tab
         class CohostTabBasic(QWidget):
             def __init__(self):
@@ -206,7 +229,7 @@ except ImportError:
     except ImportError:
         CONFIG_AVAILABLE = False
         logger.warning("ConfigTab not available")
-        
+
         # Create placeholder tab
         class ConfigTab(QWidget):
             def __init__(self):
@@ -235,8 +258,8 @@ except ImportError as e:
 
 # Import VirtualCameraTab + Manager
 try:
-    from ui.virtual_camera_tab import VirtualCameraTab
     from modules_client.virtual_camera_manager import VirtualCameraManager
+    from ui.virtual_camera_tab import VirtualCameraTab
     VIRTUAL_CAMERA_TAB_AVAILABLE = True
     logger.info("VirtualCameraTab imported successfully")
 except ImportError as e:
@@ -269,7 +292,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
     logger.error(f"Uncaught Exception: {exc_type.__name__}: {exc_value}")
-    
+
     # Log error to file
     try:
         error_log = Path("logs/error_log.txt")
@@ -332,7 +355,7 @@ class UnifiedCommentProcessor:
         self.GENERAL_COOLDOWN = 30    # 30 seconds for general Q&A
 
         logger.info("UnifiedCommentProcessor initialized with SPAM+TOXIC FILTER")
-    
+
     def _is_toxic(self, message):
         """Check if message contains toxic words"""
         message_lower = message.lower()
@@ -340,7 +363,7 @@ class UnifiedCommentProcessor:
             if word in message_lower:
                 return True, word
         return False, None
-    
+
     def _get_message_hash(self, message):
         """Create simple hash for message comparison"""
         import hashlib
@@ -350,39 +373,39 @@ class UnifiedCommentProcessor:
             normalized = normalized.replace(word, "")
         normalized = ''.join(c for c in normalized if c.isalnum() or c.isspace())
         return hashlib.md5(normalized.encode()).hexdigest()[:8]
-    
+
     def _is_spam(self, author, message):
         """Check if user is spamming similar messages"""
         current_time = time.time()
         msg_hash = self._get_message_hash(message)
-        
+
         # Get user history
         if author not in self.user_message_history:
             self.user_message_history[author] = []
-        
+
         user_history = self.user_message_history[author]
-        
+
         # Clean old messages (older than SPAM_WINDOW)
         user_history = [(ts, h) for ts, h in user_history if current_time - ts < self.SPAM_WINDOW]
-        
+
         # Count similar messages
         similar_count = sum(1 for ts, h in user_history if h == msg_hash)
-        
+
         # Add current message to history
         user_history.append((current_time, msg_hash))
-        
+
         # Keep only last 20 messages per user
         if len(user_history) > 20:
             user_history = user_history[-20:]
-        
+
         self.user_message_history[author] = user_history
-        
+
         # Check if spam
         if similar_count >= self.MAX_SIMILAR_MESSAGES:
             return True, f"Pesan serupa {similar_count}x dalam {self.SPAM_WINDOW}s"
-        
+
         return False, None
-    
+
     def process_comment(self, author, message):
         """Process incoming comment with BLACKLIST/WHITELIST + SPAM/TOXIC FILTER
 
@@ -396,14 +419,14 @@ class UnifiedCommentProcessor:
         try:
             logger.info(f"[UnifiedProcessor] 📨 Processing comment from {author}: {message[:50]}...")
             current_time = time.time()
-            
+
             # ===== STEP -1: BLACKLIST CHECK =====
             if self.user_list_manager:
                 if self.user_list_manager.is_blacklisted(author):
                     logger.warning(f"[UnifiedProcessor] 🚫 BLACKLISTED USER: {author} - IGNORING")
                     print(f"[FILTER] 🚫 BLACKLISTED USER: {author} - pesan diabaikan")
                     return  # Stop processing - ignore blacklisted users completely
-            
+
             # ===== STEP 0: WHITELIST CHECK (for bypass cooldown) =====
             is_vip = False
             if self.user_list_manager:
@@ -411,14 +434,14 @@ class UnifiedCommentProcessor:
                 if is_vip:
                     logger.info(f"[UnifiedProcessor] ⭐ VIP USER: {author} - bypass cooldown")
                     print(f"[VIP] ⭐ {author} adalah VIP - bypass cooldown")
-            
+
             # ===== STEP 1: TOXIC WORD FILTER =====
             is_toxic, toxic_word = self._is_toxic(message)
             if is_toxic:
                 logger.warning(f"[UnifiedProcessor] 🚫 TOXIC BLOCKED: '{toxic_word}' from {author}")
                 print(f"[FILTER] 🚫 TOXIC MESSAGE BLOCKED: kata '{toxic_word}' dari {author}")
                 return  # Stop processing - don't respond to toxic messages
-            
+
             # ===== STEP 1.5: SPAM DETECTION (VIP bypass) =====
             if not is_vip:  # VIP users bypass spam filter
                 is_spam, spam_reason = self._is_spam(author, message)
@@ -426,23 +449,23 @@ class UnifiedCommentProcessor:
                     logger.warning(f"[UnifiedProcessor] 🚫 SPAM BLOCKED: {spam_reason} from {author}")
                     print(f"[FILTER] 🚫 SPAM MESSAGE BLOCKED: {spam_reason} dari {author}")
                     return  # Stop processing - don't respond to spam
-            
+
             # ===== STEP 2: CHECK COHOST TRIGGERS =====
-            logger.info(f"[UnifiedProcessor] 💬 Checking Cohost triggers...")
-            print(f"[TRIGGER ROUTER] 💬 Checking Cohost triggers...")
-            
+            logger.info("[UnifiedProcessor] 💬 Checking Cohost triggers...")
+            print("[TRIGGER ROUTER] 💬 Checking Cohost triggers...")
+
             if not self.cohost_tab:
                 logger.warning("[UnifiedProcessor] No cohost tab available")
                 return
-            
+
             # Check for cohost trigger words
             if hasattr(self.cohost_tab, 'check_trigger'):
                 is_trigger = self.cohost_tab.check_trigger(message)
-                
+
                 if is_trigger:
                     logger.info(f"[UnifiedProcessor] 🗣️ COHOST TRIGGER MATCHED for {author}")
-                    print(f"[TRIGGER ROUTER] 🗣️ Cohost trigger matched -> Routing to Cohost tab")
-                    
+                    print("[TRIGGER ROUTER] 🗣️ Cohost trigger matched -> Routing to Cohost tab")
+
                     # Check cohost cooldown — VIP user bypass sepenuhnya
                     cohost_user_key = f"cohost_{author}"
                     if not is_vip:
@@ -458,39 +481,39 @@ class UnifiedCommentProcessor:
                     # Generate AI reply using cohost tab — pass is_vip agar bypass viewer_cooldown
                     if hasattr(self.cohost_tab, 'generate_cohost_reply'):
                         self.cohost_tab.generate_cohost_reply(author, message, is_vip=is_vip)
-                        logger.info(f"[UnifiedProcessor] ✅ Routed to Cohost tab for AI reply")
+                        logger.info("[UnifiedProcessor] ✅ Routed to Cohost tab for AI reply")
                     else:
                         logger.warning("[UnifiedProcessor] Cohost tab missing generate_cohost_reply method")
                 else:
                     logger.debug(f"[UnifiedProcessor] No cohost trigger matched for: {message[:30]}...")
             else:
                 logger.warning("[UnifiedProcessor] Cohost tab missing check_trigger method")
-                
+
         except Exception as e:
             logger.error(f"[UnifiedProcessor] Error processing comment: {e}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
-    
+
     def process_queue(self):
         """Process queued comments"""
         try:
             if not self.unified_queue or self.is_processing:
                 return
-            
+
             self.is_processing = True
             item = self.unified_queue.popleft()
-            
+
             # Process the queued item
             self.process_comment(item['author'], item['message'])
-            
+
             self.is_processing = False
         except Exception as e:
             logger.error(f"[UnifiedProcessor] Queue processing error: {e}")
             self.is_processing = False
-    
+
 class MainWindow(QMainWindow):
     """Main window aplikasi VocaLive - Basic Mode Only."""
-    
+
     def __init__(self):
         super().__init__()
 
@@ -531,7 +554,7 @@ class MainWindow(QMainWindow):
 
         # Show main tabs
         self.setCentralWidget(self.main_tabs)
-        
+
         # Start database maintenance scheduler
         try:
             if DATABASE_SCHEDULER_AVAILABLE:
@@ -545,7 +568,7 @@ class MainWindow(QMainWindow):
         # Cek update otomatis setelah 5 detik (non-blocking)
         if UPDATER_AVAILABLE:
             QTimer.singleShot(5000, self._start_update_check)
-    
+
     def _start_update_check(self):
         """Cek update otomatis di background saat startup — tidak freeze UI."""
         try:
@@ -661,7 +684,7 @@ class MainWindow(QMainWindow):
                         logger.info(f"Tab {i} cleanup completed")
                     except Exception as tab_error:
                         logger.error(f"Error cleaning up tab {i}: {tab_error}")
-            
+
             # Stop database maintenance scheduler
             try:
                 if DATABASE_SCHEDULER_AVAILABLE:
@@ -669,7 +692,7 @@ class MainWindow(QMainWindow):
                     logger.info("Database maintenance scheduler stopped")
             except Exception as scheduler_error:
                 logger.error(f"Error stopping database scheduler: {scheduler_error}")
-            
+
             # Run comprehensive cleanup system
             try:
                 from comprehensive_cleanup import cleanup_all_resources
@@ -688,9 +711,9 @@ class MainWindow(QMainWindow):
                 # Fallback to basic garbage collection
                 import gc
                 gc.collect()
-            
+
             event.accept()
-            
+
         except Exception as e:
             logger.error(f"Error during close: {e}")
             # Emergency cleanup if normal cleanup fails
@@ -700,10 +723,10 @@ class MainWindow(QMainWindow):
                 logger.info(f"Emergency cleanup result: {emergency_result}")
             except Exception as emergency_error:
                 logger.error(f"Emergency cleanup failed: {emergency_error}")
-            
+
             # Force accept even if cleanup fails
             event.accept()
-    
+
     def _setup_status_bar(self):
         """Setup status bar dengan Gold Seller styling."""
         self.status_bar = QStatusBar()
@@ -727,8 +750,8 @@ class MainWindow(QMainWindow):
         # Tombol "Cek Update" manual
         self.check_update_btn = QPushButton("🔄 Cek Update")
         self.check_update_btn.setFixedHeight(22)
-        self.check_update_btn.setStyleSheet(f"""
-            QPushButton {{
+        self.check_update_btn.setStyleSheet("""
+            QPushButton {
                 background: #1E3A5F;
                 border: 1px solid #2563EB;
                 border-radius: 4px;
@@ -737,9 +760,9 @@ class MainWindow(QMainWindow):
                 font-weight: 600;
                 padding: 0 8px;
                 margin-right: 4px;
-            }}
-            QPushButton:hover {{ background: #2563EB; color: white; }}
-            QPushButton:disabled {{ background: #0F1623; color: #4B6A8A; border-color: #1E3A5F; }}
+            }
+            QPushButton:hover { background: #2563EB; color: white; }
+            QPushButton:disabled { background: #0F1623; color: #4B6A8A; border-color: #1E3A5F; }
         """)
         self.check_update_btn.clicked.connect(self._manual_check_update)
         self.status_bar.addPermanentWidget(self.check_update_btn)
@@ -764,7 +787,7 @@ class MainWindow(QMainWindow):
         self.update_btn.clicked.connect(self._on_update_btn_clicked)
         self.status_bar.addPermanentWidget(self.update_btn)
         self._update_info = None
-    
+
     def _setup_icon(self):
         """Setup aplikasi icon jika tersedia."""
         try:
@@ -773,7 +796,7 @@ class MainWindow(QMainWindow):
                 self.setWindowIcon(QIcon(icon_path))
         except Exception as e:
             logger.warning(f"Failed to load icon: {e}")
-    
+
     def _create_main_tabs(self):
         """Create main tab widget dengan Cohost Basic dan Config Tab."""
         # Inisialisasi popup window (top-level, tidak ada parent)
@@ -789,7 +812,7 @@ class MainWindow(QMainWindow):
                 logger.error(f"Failed to create ProductPopupWindow: {e}")
 
         self.main_tabs = QTabWidget()
-        
+
         # Add Cohost Basic tab
         if COHOST_AVAILABLE:
             try:
@@ -808,7 +831,7 @@ class MainWindow(QMainWindow):
                 layout.addWidget(QLabel(f"Error loading Cohost Basic: {e}"))
                 placeholder.setLayout(layout)
                 self.main_tabs.addTab(placeholder, "Cohost Basic (Error)")
-        
+
         # Add Config tab
         if CONFIG_AVAILABLE:
             try:
@@ -842,7 +865,7 @@ class MainWindow(QMainWindow):
                 layout.addWidget(QLabel(f"Error loading Config: {e}"))
                 placeholder.setLayout(layout)
                 self.main_tabs.addTab(placeholder, "Konfigurasi (Error)")
-        
+
         # Add Analytics tab
         try:
             from ui.analytics_tab import AnalyticsTab
@@ -908,12 +931,12 @@ class MainWindow(QMainWindow):
         # DISABLED: Old direct connection system - causes double processing
         # Using unified processor system instead to prevent duplicate replies
         logger.info("Direct Cohost-OBS connection disabled - using unified processor system")
-        
+
         # Set default tab to Cohost Basic
         self.main_tabs.setCurrentIndex(0)
-        
+
         logger.info("Main tabs created successfully")
-    
+
     def _setup_unified_processor(self):
         """Setup unified comment processor"""
         try:
@@ -952,7 +975,7 @@ def main():
         except Exception:
             _v = "1.0.3"
         app.setApplicationVersion(_v)
-        
+
         # Setup logging dengan error handling
         try:
             os.makedirs('logs', exist_ok=True)
@@ -968,7 +991,7 @@ def main():
             print(f"Failed to setup logging: {log_error}")
             # Fallback to basic logging
             logging.basicConfig(level=logging.INFO)
-        
+
         # Create main window dengan error handling
         try:
             window = MainWindow()
@@ -977,12 +1000,12 @@ def main():
         except Exception as window_error:
             logger.critical(f"Failed to create main window: {window_error}")
             return 1
-        
+
         # Setup application recovery timer
         recovery_timer = QTimer()
         recovery_timer.timeout.connect(lambda: logger.debug("Application heartbeat - running normally"))
         recovery_timer.start(300000)  # Log heartbeat every 5 minutes
-        
+
         # Run application dengan error handling
         try:
             exit_code = app.exec()
@@ -991,7 +1014,7 @@ def main():
         except Exception as app_error:
             logger.critical(f"Application runtime error: {app_error}")
             return 1
-            
+
     except Exception as main_error:
         print(f"Critical error in main(): {main_error}")
         return 1
