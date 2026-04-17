@@ -1,13 +1,13 @@
 # modules_client/sequential_greeting_manager.py - AI-Powered Greeting System
 
-import time
-import threading
+import logging
 import random
+import threading
+import time
 from datetime import datetime
 from enum import Enum
 
 from modules_client.config_manager import ConfigManager
-import logging
 
 logger = logging.getLogger("VocaLive.GreetingAI")
 

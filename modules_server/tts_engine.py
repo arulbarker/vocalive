@@ -5,16 +5,16 @@ VocaLive - Text-to-Speech Engine
 Google Cloud Text-to-Speech implementation with fallback to pyttsx3
 """
 
+import base64
+import json
+import logging
 import os
 import sys
-import json
-import time
-import base64
-import logging
 import tempfile
 import threading
+import time
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 try:
     import requests as _requests
@@ -41,7 +41,7 @@ logger = logging.getLogger('VocaLive')
 
 class TTSEngine:
     """Text-to-Speech Engine with Google Cloud TTS and pyttsx3 fallback"""
-    
+
     def __init__(self):
         self.google_client = None
         self.google_api_key = None   # plain API key (REST auth)
@@ -50,7 +50,7 @@ class TTSEngine:
         self.language_code = "id-ID"
         self.temp_dir = Path("temp")
         self.temp_dir.mkdir(exist_ok=True)
-        
+
         # Initialize pygame mixer for audio playback
         self.pygame_available = False
         if pygame:
@@ -60,14 +60,14 @@ class TTSEngine:
             except Exception as e:
                 logger.warning(f"Failed to initialize pygame mixer: {e}")
                 self.pygame_available = False
-        
+
         self._initialize_engines()
-    
+
     def _initialize_engines(self):
         """Initialize TTS engines"""
         # Try to initialize Google Cloud TTS
         self._initialize_google_tts()
-        
+
         # Initialize pyttsx3 as fallback
         if pyttsx3:
             try:
@@ -75,7 +75,7 @@ class TTSEngine:
                 logger.info("pyttsx3 engine initialized successfully")
             except Exception as e:
                 logger.warning(f"Failed to initialize pyttsx3: {e}")
-    
+
     def _initialize_google_tts(self):
         """Initialize Google Cloud TTS — supports API key or service account credentials"""
         # Always try to load an API key from settings first (simplest auth)
@@ -97,12 +97,12 @@ class TTSEngine:
             # Fall back to service account credentials
             settings = self._load_settings()
             credentials_path = settings.get('google_tts_credentials')
-            
+
             if credentials_path and Path(credentials_path).exists():
                 try:
                     with open(credentials_path, 'r') as f:
                         cred_data = json.load(f)
-                    
+
                     # Check if it's service account credentials
                     if "type" in cred_data and cred_data["type"] == "service_account":
                         self.google_client = texttospeech.TextToSpeechClient.from_service_account_file(
@@ -114,15 +114,15 @@ class TTSEngine:
                         logger.warning(f"Invalid credentials format in {credentials_path}. Please use service account JSON file.")
                 except Exception as e:
                     logger.warning(f"Failed to load credentials from {credentials_path}: {e}")
-            
+
             # Fallback: Load service account credentials from default config
             config_path = Path("config/gcloud_tts_credentials.json")
             if config_path.exists():
                 with open(config_path, 'r') as f:
                     cred_data = json.load(f)
-                
+
                 # Check if it's service account credentials and not placeholder
-                if ("type" in cred_data and cred_data["type"] == "service_account" and 
+                if ("type" in cred_data and cred_data["type"] == "service_account" and
                     not any("REPLACE_WITH" in str(value) for value in cred_data.values())):
                     self.google_client = texttospeech.TextToSpeechClient.from_service_account_file(
                         str(config_path)
@@ -131,20 +131,20 @@ class TTSEngine:
                     return
                 else:
                     logger.warning("Invalid credentials format or placeholder values in gcloud_tts_credentials.json")
-            
+
             # Try default credentials as fallback
             self.google_client = texttospeech.TextToSpeechClient()
             logger.info("Google Cloud TTS initialized with default credentials")
-            
+
         except Exception as e:
             logger.warning(f"Failed to initialize Google Cloud TTS: {e}")
             logger.info("Please ensure valid Google Cloud TTS credentials are configured")
             self.google_client = None
-    
 
-    
 
-    
+
+
+
     def _load_settings(self) -> Dict[str, Any]:
         """Load settings from config file"""
         try:
@@ -152,28 +152,28 @@ class TTSEngine:
             if settings_path.exists():
                 with open(settings_path, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
-                
+
                 # Update voice settings
                 self.voice_model = settings.get('tts_voice', settings.get('cohost_voice_model', 'id-ID-Standard-A'))
-                
+
                 # Extract language code from voice model
                 if '-' in self.voice_model:
                     parts = self.voice_model.split('-')
                     if len(parts) >= 2:
                         self.language_code = f"{parts[0]}-{parts[1]}"
-                
+
                 return settings
         except Exception as e:
             logger.warning(f"Failed to load settings: {e}")
-        
+
         return {}
-    
+
     def _calculate_credits(self, text: str) -> float:
         """Calculate TTS credits based on character count (for logging only)"""
         char_count = len(text)
         # Google TTS pricing: approximately 0.03 credits per character (logging only)
         return round(char_count * 0.03, 4)
-    
+
     def _play_audio_file(self, file_path: str):
         """Play audio file using pygame"""
         if not self.pygame_available or not pygame:
@@ -198,7 +198,7 @@ class TTSEngine:
 
         except Exception as e:
             logger.error(f"Failed to play audio file: {e}")
-    
+
     def _speak_with_gemini(self, text: str, voice_name: str) -> bool:
         """Panggil Gemini 2.5 Flash Lite TTS API — voices multilingual, output WAV"""
         if not _requests:
@@ -304,7 +304,7 @@ class TTSEngine:
         """Speak text using Google Cloud TTS with optional voice override"""
         if not self.google_client and not self.google_api_key:
             return False
-        
+
         # Load current settings if no voice override — so Gemini vs Standard routing is correct
         if not voice_name:
             self._load_settings()
@@ -367,15 +367,15 @@ class TTSEngine:
         except Exception as e:
             logger.error(f"Google TTS failed: {e}")
             return False
-    
+
     def speak_pyttsx3(self, text: str) -> bool:
         """Speak text using pyttsx3 fallback"""
         if not self.pyttsx3_engine:
             return False
-        
+
         try:
             logger.info(f"Using pyttsx3 fallback for TTS: {text[:50]}{'...' if len(text) > 50 else ''}")
-            
+
             # Configure voice properties
             voices = self.pyttsx3_engine.getProperty('voices')
             if voices:
@@ -384,38 +384,38 @@ class TTSEngine:
                     if 'female' in voice.name.lower() or 'woman' in voice.name.lower():
                         self.pyttsx3_engine.setProperty('voice', voice.id)
                         break
-            
+
             # Set speech rate
             self.pyttsx3_engine.setProperty('rate', 150)
-            
+
             # Speak the text
             self.pyttsx3_engine.say(text)
             self.pyttsx3_engine.runAndWait()
-            
+
             logger.info("TTS completed (pyttsx3 fallback)")
             return True
-            
+
         except Exception as e:
             logger.error(f"pyttsx3 TTS failed: {e}")
             return False
-    
+
     def speak(self, text: str, voice_name: str = None, language_code: str = None) -> bool:
         """Main speak function with fallback logic and voice override support"""
         if not text or not text.strip():
             return False
-        
+
         # Clean the text
         text = text.strip()
-        
+
         # Try Google TTS first with voice override
         if self.speak_google_tts(text, voice_name=voice_name, language_code=language_code):
             return True
-        
+
         # Fallback to pyttsx3
         logger.warning("[TTS] fallback: Google TTS gagal, menggunakan pyttsx3")
         if self.speak_pyttsx3(text):
             return True
-        
+
         # If all fails
         logger.error("All TTS engines failed")
         return False
@@ -427,12 +427,12 @@ _tts_lock = threading.Lock()
 def get_tts_engine() -> TTSEngine:
     """Get or create TTS engine instance (thread-safe)"""
     global _tts_engine
-    
+
     if _tts_engine is None:
         with _tts_lock:
             if _tts_engine is None:
                 _tts_engine = TTSEngine()
-    
+
     return _tts_engine
 
 def reinitialize_tts_engine() -> bool:
@@ -500,6 +500,6 @@ if __name__ == "__main__":
     # Test the TTS engine
     test_text = "Halo, ini adalah test Text-to-Speech engine VocaLive."
     print(f"Testing TTS with text: {test_text}")
-    
+
     success = speak(test_text)
     print(f"TTS test {'successful' if success else 'failed'}")

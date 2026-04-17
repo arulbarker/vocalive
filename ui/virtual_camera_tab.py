@@ -7,20 +7,47 @@ dan kontrol start/stop streaming ke virtual camera device.
 import logging
 import os
 
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QRadioButton,
-    QButtonGroup, QFileDialog, QFrame, QAbstractItemView,
-)
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QButtonGroup,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QRadioButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 try:
     from ui.theme import (
-        PRIMARY, BG_BASE, BG_SURFACE, BG_ELEVATED, TEXT_PRIMARY, TEXT_MUTED,
-        BORDER, SUCCESS, ERROR, WARNING, ACCENT, RADIUS,
-        btn_primary, btn_success, btn_danger, btn_ghost, btn_secondary,
-        label_title, label_subtitle, status_badge,
-        CARD_STYLE, HEADER_FRAME_STYLE
+        ACCENT,
+        BG_BASE,
+        BG_ELEVATED,
+        BG_SURFACE,
+        BORDER,
+        CARD_STYLE,
+        ERROR,
+        HEADER_FRAME_STYLE,
+        PRIMARY,
+        RADIUS,
+        SUCCESS,
+        TEXT_MUTED,
+        TEXT_PRIMARY,
+        WARNING,
+        btn_danger,
+        btn_ghost,
+        btn_primary,
+        btn_secondary,
+        btn_success,
+        label_subtitle,
+        label_title,
+        status_badge,
     )
 except ImportError:
     PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"

@@ -5,11 +5,11 @@ VocaLive - Setup Validator
 Validates all required files and configurations before app starts
 """
 
+import json
 import os
 import sys
-import json
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import Dict, List, Tuple
 
 # Fix Windows console encoding for emoji
 if sys.platform == "win32":

@@ -5,14 +5,14 @@ Support: YouTube (pytchat) dan TikTok (TikTokLive)
 """
 
 import json
+import logging
 import os
+import re
 import sys
 import threading
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
-from collections import defaultdict, Counter
-import re
-import logging
 
 logger = logging.getLogger("VocaLive.Analytics")
 
@@ -384,11 +384,11 @@ class LiveAnalyticsManager:
                 keywords.append(f'size_{num}')
 
         # Extract significant words (>3 chars, not common stopwords)
-        stopwords = {'yang', 'dan', 'atau', 'dengan', 'untuk', 'dari', 'ini', 'itu', 
+        stopwords = {'yang', 'dan', 'atau', 'dengan', 'untuk', 'dari', 'ini', 'itu',
                      'ada', 'tidak', 'bisa', 'akan', 'sudah', 'juga', 'saya', 'kami',
-                     'kamu', 'mereka', 'apa', 'siapa', 'mana', 'kapan', 'kenapa', 
+                     'kamu', 'mereka', 'apa', 'siapa', 'mana', 'kapan', 'kenapa',
                      'bagaimana', 'kalau', 'jadi', 'dong', 'nih', 'sih', 'lho', 'ya'}
-        
+
         words = re.findall(r'[a-z]{4,}', message_lower)
         for word in words:
             if word not in stopwords and word not in product_keywords:

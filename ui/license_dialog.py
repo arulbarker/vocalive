@@ -4,18 +4,27 @@ VocaLive - Login Dialog (AppScript Edition)
 User login dengan email pembelian (Lynk.id / Whop).
 """
 
-import sys
-import os
-import time
 import logging
+import os
+import sys
+import time
 from typing import Optional, Tuple
 
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QProgressBar, QTextEdit, QFrame, QApplication, QGraphicsDropShadowEffect
+    QApplication,
+    QDialog,
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
 )
-from PyQt6.QtGui import QFont, QColor
 
 logger = logging.getLogger('VocaLive.LicenseDialog')
 

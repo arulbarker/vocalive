@@ -6,9 +6,10 @@ Tier 2: mocked Qt — test logic filter timestamp tanpa koneksi TikTok.
 
 import sys
 import time
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 ROOT_DIR = Path(__file__).parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -147,14 +148,16 @@ class TestStopCleanup:
     def test_stop_no_sleep_call(self):
         """stop() tidak boleh panggil time.sleep() — blocking main thread."""
         import inspect
+
         from ui.cohost_tab_basic import CohostTabBasic
         source = inspect.getsource(CohostTabBasic.stop)
         assert "time.sleep" not in source, "stop() masih punya time.sleep() — blocking UI thread!"
 
     def test_stop_wait_max_300ms(self):
         """stop() thread.wait() tidak boleh lebih dari 500ms."""
-        import re
         import inspect
+        import re
+
         from ui.cohost_tab_basic import CohostTabBasic
         source = inspect.getsource(CohostTabBasic.stop)
         # Find all .wait(N) calls

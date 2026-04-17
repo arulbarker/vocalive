@@ -4,17 +4,30 @@ Live Analytics Tab - Real-time streaming performance analytics
 Support: YouTube & TikTok
 """
 
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QGroupBox, QTextEdit,
-    QMessageBox, QFileDialog, QHeaderView, QTabWidget,
-    QScrollArea, QFrame, QProgressBar
-)
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QColor
+import logging
 from datetime import datetime
 from pathlib import Path
-import logging
+
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 logger = logging.getLogger('VocaLive.AnalyticsTab')
 
@@ -26,11 +39,33 @@ except ImportError:
     logger.warning("[AnalyticsTab] analytics_manager not available")
 
 try:
-    from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
-        TEXT_PRIMARY, TEXT_MUTED, TEXT_DIM, BORDER_GOLD, BORDER,
-        SUCCESS, ERROR, WARNING, INFO, RADIUS, RADIUS_SM,
-        btn_success, btn_danger, btn_ghost, CARD_ELEVATED_STYLE,
-        label_value, label_subtitle, label_muted, LOG_TEXTEDIT_STYLE)
+    from ui.theme import (
+        ACCENT,
+        BG_BASE,
+        BG_ELEVATED,
+        BG_SURFACE,
+        BORDER,
+        BORDER_GOLD,
+        CARD_ELEVATED_STYLE,
+        ERROR,
+        INFO,
+        LOG_TEXTEDIT_STYLE,
+        PRIMARY,
+        RADIUS,
+        RADIUS_SM,
+        SECONDARY,
+        SUCCESS,
+        TEXT_DIM,
+        TEXT_MUTED,
+        TEXT_PRIMARY,
+        WARNING,
+        btn_danger,
+        btn_ghost,
+        btn_success,
+        label_muted,
+        label_subtitle,
+        label_value,
+    )
 except ImportError:
     PRIMARY = "#2563EB"; BG_BASE = "#0F1623"; BG_SURFACE = "#162032"; BG_ELEVATED = "#1E2A3B"
     TEXT_PRIMARY = "#F0F6FF"; TEXT_MUTED = "#93C5FD"; TEXT_DIM = "#4B7BBA"
@@ -141,7 +176,7 @@ class AnalyticsTab(QWidget):
         if CHARTS_AVAILABLE:
             self.charts_tab = self._create_charts_tab()
             self.tabs.addTab(self.charts_tab, "📈 Charts")
-        
+
         # Initialize chart data lists for real-time updates
         self.chart_time_data = []
         self.chart_viewers_data = []
@@ -513,12 +548,12 @@ class AnalyticsTab(QWidget):
         """Create charts tab with real-time line graphs"""
         widget = QWidget()
         layout = QVBoxLayout()
-        
+
         # Description
         desc = QLabel("📈 Real-time charts showing session performance over time")
         desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
-        
+
         # Chart 1: Viewers over time
         viewers_group = QGroupBox("👥 Viewers Over Time")
         viewers_group.setStyleSheet(f"""
@@ -533,7 +568,7 @@ class AnalyticsTab(QWidget):
             }}
         """)
         viewers_layout = QVBoxLayout()
-        
+
         self.viewers_chart = PlotWidget()
         self.viewers_chart.setBackground(BG_ELEVATED)
         self.viewers_chart.setLabel('left', 'Viewers', color=PRIMARY)
@@ -541,16 +576,16 @@ class AnalyticsTab(QWidget):
         self.viewers_chart.showGrid(x=True, y=True, alpha=0.3)
         self.viewers_chart.setMinimumHeight(150)
         self.viewers_plot = self.viewers_chart.plot([], [], pen=pg.mkPen(PRIMARY, width=2), symbol='o', symbolSize=5, symbolBrush=PRIMARY)
-        
+
         viewers_layout.addWidget(self.viewers_chart)
         viewers_group.setLayout(viewers_layout)
         layout.addWidget(viewers_group)
-        
+
         # Chart 2: Comments over time
         comments_group = QGroupBox("💬 Comments Over Time")
         comments_group.setStyleSheet(viewers_group.styleSheet())
         comments_layout = QVBoxLayout()
-        
+
         self.comments_chart = PlotWidget()
         self.comments_chart.setBackground(BG_ELEVATED)
         self.comments_chart.setLabel('left', 'Comments', color=SUCCESS)
@@ -558,14 +593,14 @@ class AnalyticsTab(QWidget):
         self.comments_chart.showGrid(x=True, y=True, alpha=0.3)
         self.comments_chart.setMinimumHeight(150)
         self.comments_plot = self.comments_chart.plot([], [], pen=pg.mkPen(SUCCESS, width=2), symbol='o', symbolSize=5, symbolBrush=SUCCESS)
-        
+
         comments_layout.addWidget(self.comments_chart)
         comments_group.setLayout(comments_layout)
         layout.addWidget(comments_group)
-        
+
         # Clear charts button
         btn_layout = QHBoxLayout()
-        
+
         clear_btn = QPushButton("🗑️ Clear Charts")
         clear_btn.clicked.connect(self._clear_charts)
         clear_btn.setStyleSheet(f"""
@@ -584,12 +619,12 @@ class AnalyticsTab(QWidget):
         """)
         btn_layout.addWidget(clear_btn)
         btn_layout.addStretch()
-        
+
         layout.addLayout(btn_layout)
-        
+
         widget.setLayout(layout)
         return widget
-    
+
     def _clear_charts(self):
         """Clear chart data"""
         self.chart_time_data = []
@@ -598,26 +633,26 @@ class AnalyticsTab(QWidget):
         if CHARTS_AVAILABLE and hasattr(self, 'viewers_plot'):
             self.viewers_plot.setData([], [])
             self.comments_plot.setData([], [])
-    
+
     def _update_charts(self, stats):
         """Update chart data with current stats"""
         if not CHARTS_AVAILABLE or not hasattr(self, 'viewers_plot'):
             return
-        
+
         # Get current time in minutes since session start
         duration = self.analytics.get_session_duration()
-        
+
         # Add new data point
         self.chart_time_data.append(duration)
         self.chart_viewers_data.append(stats.get("unique_viewers", 0))
         self.chart_comments_data.append(stats.get("total_comments", 0))
-        
+
         # Keep only last 60 data points (for performance)
         if len(self.chart_time_data) > 60:
             self.chart_time_data = self.chart_time_data[-60:]
             self.chart_viewers_data = self.chart_viewers_data[-60:]
             self.chart_comments_data = self.chart_comments_data[-60:]
-        
+
         # Update plots
         self.viewers_plot.setData(self.chart_time_data, self.chart_viewers_data)
         self.comments_plot.setData(self.chart_time_data, self.chart_comments_data)
@@ -648,7 +683,7 @@ class AnalyticsTab(QWidget):
 
         # Update keywords table
         self._update_keywords_table()
-        
+
         # Update charts (if available)
         self._update_charts(stats)
 
@@ -900,7 +935,7 @@ class AnalyticsTab(QWidget):
         super().showEvent(event)
         self.refresh_analytics()
         self.refresh_history()
-    
+
     def export_to_pdf(self):
         """Export analytics ke PDF menggunakan QPrinter built-in PyQt6 — tanpa library tambahan"""
         if not ANALYTICS_AVAILABLE or not self.analytics:
@@ -920,8 +955,8 @@ class AnalyticsTab(QWidget):
             return
 
         try:
-            from PyQt6.QtPrintSupport import QPrinter
             from PyQt6.QtGui import QTextDocument
+            from PyQt6.QtPrintSupport import QPrinter
 
             duration = self.analytics.get_session_duration()
             total = stats.get("total_comments", 0)

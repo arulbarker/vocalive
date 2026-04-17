@@ -1,14 +1,15 @@
 # modules_client/greeting_tts_cache.py - TTS Cache Manager untuk Custom Greeting System
 
-import os
-import sys
-import json
 import hashlib
-from pathlib import Path
-from datetime import datetime, timedelta
-from modules_server.tts_engine import speak, get_tts_engine
-import shutil
+import json
 import logging
+import os
+import shutil
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from modules_server.tts_engine import get_tts_engine, speak
 
 logger = logging.getLogger("VocaLive.GreetingCache")
 
@@ -28,11 +29,11 @@ class GreetingTTSCache:
             cache_dir = _get_app_root() / "greeting_cache"
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Cache metadata file
         self.metadata_file = self.cache_dir / "cache_metadata.json"
         self.metadata = self._load_metadata()
-    
+
     def _load_metadata(self):
         """Load cache metadata"""
         if self.metadata_file.exists():
@@ -43,7 +44,7 @@ class GreetingTTSCache:
                 logger.error(f"[TTS_CACHE] Error loading metadata: {e}")
                 return {}
         return {}
-    
+
     def _save_metadata(self):
         """Save cache metadata"""
         try:
@@ -51,19 +52,19 @@ class GreetingTTSCache:
                 json.dump(self.metadata, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.error(f"[TTS_CACHE] Error saving metadata: {e}")
-    
+
     def _generate_hash(self, text, voice_name, language_code):
         """Generate hash for unique filename"""
         content = f"{text.strip()}_{voice_name}_{language_code}"
         hash_obj = hashlib.md5(content.encode('utf-8'))
         return hash_obj.hexdigest()[:12]  # Use first 12 characters
-    
+
     def _generate_filename(self, text, voice_name, language_code, extension=".mp3"):
         """Generate filename based on content hash"""
         hash_str = self._generate_hash(text, voice_name, language_code)
         # Support both MP3 and WAV (Gemini uses WAV)
         return f"greeting_{hash_str}{extension}"
-    
+
     def get_cached_file(self, text, voice_name, language_code):
         """Get cached TTS file if exists - check both MP3 and WAV"""
         if not text or not text.strip():
@@ -87,9 +88,9 @@ class GreetingTTSCache:
                     logger.info(f"[TTS_CACHE] ✅ Cache HIT - Using cached file: {filename}")
                     return str(file_path)
 
-        logger.info(f"[TTS_CACHE] ❌ Cache MISS - Need to generate TTS")
+        logger.info("[TTS_CACHE] ❌ Cache MISS - Need to generate TTS")
         return None
-    
+
     def generate_and_save_tts(self, text, voice_name, language_code, force_regenerate=False):
         """Generate TTS via API and save the audio file to cache"""
         if not text or not text.strip():
@@ -109,9 +110,10 @@ class GreetingTTSCache:
 
         try:
             # Import TTS engine
-            from modules_server import tts_engine
-            import tempfile
             import glob
+            import tempfile
+
+            from modules_server import tts_engine
 
             # Detect file extension based on voice (Gemini uses WAV, others use MP3)
             is_gemini = voice_name and voice_name.startswith('Gemini-')
@@ -174,10 +176,10 @@ class GreetingTTSCache:
 
                     return str(cache_path)
                 else:
-                    logger.info(f"[TTS_CACHE] ⚠️ TTS generated but audio file not found")
+                    logger.info("[TTS_CACHE] ⚠️ TTS generated but audio file not found")
                     return None
             else:
-                logger.error(f"[TTS_CACHE] ❌ Failed to generate TTS")
+                logger.error("[TTS_CACHE] ❌ Failed to generate TTS")
                 return None
 
         except Exception as e:
@@ -190,7 +192,7 @@ class GreetingTTSCache:
     def generate_and_cache_tts(self, text, voice_name, language_code, force_regenerate=False):
         """Alias for generate_and_save_tts (backward compatibility)"""
         return self.generate_and_save_tts(text, voice_name, language_code, force_regenerate)
-    
+
     def play_from_cache_or_generate(self, text, voice_name, language_code, on_finished=None):
         """Smart TTS playback - use cache if available, otherwise generate and cache"""
         if not text or not text.strip():
@@ -204,7 +206,7 @@ class GreetingTTSCache:
 
         if cached_file:
             # CACHE HIT - Play from file (NO API CALL!)
-            logger.info(f"[TTS_CACHE] 💰 API SAVED! Playing from cache (no API call)")
+            logger.info("[TTS_CACHE] 💰 API SAVED! Playing from cache (no API call)")
 
             try:
                 # Get TTS engine to play the cached file
@@ -234,7 +236,7 @@ class GreetingTTSCache:
 
                     return True
                 else:
-                    logger.error(f"[TTS_CACHE] ⚠️ Failed to play cached file, will regenerate")
+                    logger.error("[TTS_CACHE] ⚠️ Failed to play cached file, will regenerate")
                     # Fall through to regeneration
 
             except Exception as e:
@@ -244,12 +246,12 @@ class GreetingTTSCache:
                 # Fall through to regeneration
 
         # CACHE MISS - Generate new TTS and save to cache
-        logger.info(f"[TTS_CACHE] 💸 API CALL - Generating NEW TTS and saving to cache")
+        logger.info("[TTS_CACHE] 💸 API CALL - Generating NEW TTS and saving to cache")
 
         cached_path = self.generate_and_save_tts(text, voice_name, language_code)
 
         if cached_path:
-            logger.info(f"[TTS_CACHE] ✅ Generated and cached successfully")
+            logger.info("[TTS_CACHE] ✅ Generated and cached successfully")
 
             # Execute callback if provided
             if on_finished and callable(on_finished):
@@ -260,53 +262,53 @@ class GreetingTTSCache:
 
             return True
         else:
-            logger.error(f"[TTS_CACHE] ❌ Failed to generate and cache TTS")
+            logger.error("[TTS_CACHE] ❌ Failed to generate and cache TTS")
             return False
 
     # Keep old method for backward compatibility
     def play_cached_tts(self, text, voice_name, language_code):
         """Alias for play_from_cache_or_generate (backward compatibility)"""
         return self.play_from_cache_or_generate(text, voice_name, language_code)
-    
+
     def cleanup_old_cache(self, max_age_days=30, max_unused_days=7):
         """Clean up old unused cache files"""
         try:
             current_time = datetime.now()
             cutoff_date = current_time - timedelta(days=max_age_days)
             unused_cutoff = current_time - timedelta(days=max_unused_days)
-            
+
             cleaned_count = 0
-            
+
             for hash_key, data in list(self.metadata.items()):
                 try:
                     created_date = datetime.fromisoformat(data["created"])
                     last_used_date = datetime.fromisoformat(data["last_used"])
-                    
+
                     # Remove if too old or unused for too long
                     if created_date < cutoff_date or last_used_date < unused_cutoff:
                         filename = data["filename"]
                         file_path = self.cache_dir / filename
-                        
+
                         if file_path.exists():
                             file_path.unlink()
                             logger.info(f"[TTS_CACHE] Cleaned old file: {filename}")
-                        
+
                         del self.metadata[hash_key]
                         cleaned_count += 1
-                        
+
                 except (ValueError, KeyError) as e:
                     logger.error(f"[TTS_CACHE] Error processing metadata entry: {e}")
                     # Remove corrupted metadata entry
                     del self.metadata[hash_key]
                     cleaned_count += 1
-            
+
             if cleaned_count > 0:
                 self._save_metadata()
                 logger.info(f"[TTS_CACHE] Cleaned {cleaned_count} old cache files")
-            
+
         except Exception as e:
             logger.error(f"[TTS_CACHE] Error during cleanup: {e}")
-    
+
     def play_greeting_with_cache(self, text: str, voice_name: str, language_code: str) -> bool:
         """
         Play greeting dengan cache — hemat API call.
@@ -343,8 +345,10 @@ class GreetingTTSCache:
     def _generate_audio_to_file(self, text: str, clean_voice: str, language_code: str, cache_path: Path) -> bool:
         """Generate TTS audio via API dan simpan langsung ke cache_path (tanpa playback)."""
         try:
-            import requests
             import base64
+
+            import requests
+
             from modules_server.tts_engine import get_tts_engine
 
             engine = get_tts_engine()
@@ -469,7 +473,7 @@ class GreetingTTSCache:
         Return new_files yang dipakai. Return [] jika new_files kosong.
         """
         if not new_files:
-            logger.info(f"[TTS_CACHE] swap_batch aborted — new_files kosong, batch lama dipertahankan")
+            logger.info("[TTS_CACHE] swap_batch aborted — new_files kosong, batch lama dipertahankan")
             return []
         if old_batch_id:
             self.cleanup_batch(old_batch_id)
@@ -499,11 +503,11 @@ class GreetingTTSCache:
         try:
             total_files = len(self.metadata)
             total_size = sum(data.get("file_size", 0) for data in self.metadata.values())
-            
+
             # Count files by age
             current_time = datetime.now()
             recent_count = 0  # Less than 7 days
-            
+
             for data in self.metadata.values():
                 try:
                     created_date = datetime.fromisoformat(data["created"])
@@ -511,14 +515,14 @@ class GreetingTTSCache:
                         recent_count += 1
                 except (ValueError, KeyError):
                     pass
-            
+
             return {
                 "total_files": total_files,
                 "total_size_mb": round(total_size / (1024 * 1024), 2),
                 "recent_files": recent_count,
                 "cache_dir": str(self.cache_dir)
             }
-            
+
         except Exception as e:
             logger.error(f"[TTS_CACHE] Error getting stats: {e}")
             return {
