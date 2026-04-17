@@ -61,7 +61,7 @@ def safe_attr_check(obj, attr_name):
     """Safely check if object has attribute"""
     try:
         return hasattr(obj, attr_name) and getattr(obj, attr_name) is not None
-    except:
+    except Exception:
         return False
 
 # SIMPLIFIED REPLY THREAD - Mengurangi kompleksitas
@@ -618,7 +618,7 @@ class SimpleTikTokListener(QThread):
                     # Try to stop client gracefully
                     try:
                         self.client.stop()
-                    except:
+                    except Exception:
                         pass
             except Exception as e:
                 # Ignore cleanup errors (common with TikTokLive on Windows)
@@ -635,7 +635,7 @@ class SimpleTikTokListener(QThread):
         # Quit thread
         try:
             self.quit()
-        except:
+        except Exception:
             pass
 
 # MAIN SIMPLIFIED COHOST CLASS
@@ -1545,9 +1545,9 @@ class CohostTabBasicSimplified(QWidget):
             scroll_area = self.comments_widget.parent()
             if hasattr(scroll_area, 'verticalScrollBar'):
                 scroll_area.verticalScrollBar().setValue(scroll_area.verticalScrollBar().maximum())
-        except:
+        except Exception:
             pass
-    
+
     def handle_comment(self, author, message):
         """Handle incoming comment - simplified"""
         self.comment_counter += 1
@@ -1860,11 +1860,11 @@ class CohostTabBasicSimplified(QWidget):
             # Check for excessive repeated characters
             if re.search(r'(.)\1{4,}', message):
                 return True
-            
+
             return False
-        except:
+        except Exception:
             return False
-    
+
     def is_toxic(self, message):
         """Simple toxic content filter"""
         try:
@@ -1877,11 +1877,11 @@ class CohostTabBasicSimplified(QWidget):
             for word in toxic_words:
                 if word.lower() in message_lower:
                     return True
-            
+
             return False
-        except:
+        except Exception:
             return False
-    
+
     def _cleanup_cooldowns(self):
         """Hapus viewer_cooldowns yang sudah expired — cegah memory leak di stream panjang"""
         try:

@@ -125,7 +125,7 @@ class LicenseEnforcer:
             app = QApplication.instance()
             if app:
                 app.quit()
-        except:
+        except Exception:
             pass
 
         # Nuclear option - force exit

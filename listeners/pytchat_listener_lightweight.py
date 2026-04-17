@@ -253,7 +253,7 @@ class ImprovedLightweightPytchatListener:
             if self.chat:
                 try:
                     self.chat.terminate()
-                except:
+                except Exception:
                     pass
             
             self.chat = pytchat.create(video_id=self.video_id)
