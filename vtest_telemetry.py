@@ -5,8 +5,6 @@ Jalankan: python vtest_telemetry.py
 """
 import sys
 import os
-import time
-import json
 import logging
 
 # Suppress posthog debug logs yang spam stdout

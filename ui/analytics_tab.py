@@ -8,12 +8,11 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QGroupBox, QTextEdit,
     QMessageBox, QFileDialog, QHeaderView, QTabWidget,
-    QScrollArea, QFrame, QProgressBar
+    QScrollArea, QFrame
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 from datetime import datetime
-from pathlib import Path
 import logging
 
 logger = logging.getLogger('VocaLive.AnalyticsTab')

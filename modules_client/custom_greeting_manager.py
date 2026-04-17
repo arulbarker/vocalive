@@ -2,9 +2,8 @@
 
 import time
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 from queue import PriorityQueue, Empty
-from pathlib import Path
 
 from modules_client.config_manager import ConfigManager
 from modules_client.greeting_tts_cache import get_greeting_cache

@@ -1,6 +1,5 @@
 # modules_client/greeting_tts_cache.py - TTS Cache Manager untuk Custom Greeting System
 
-import os
 import sys
 import json
 import hashlib
@@ -109,9 +108,6 @@ class GreetingTTSCache:
 
         try:
             # Import TTS engine
-            from modules_server import tts_engine
-            import tempfile
-            import glob
 
             # Detect file extension based on voice (Gemini uses WAV, others use MP3)
             is_gemini = voice_name and voice_name.startswith('Gemini-')

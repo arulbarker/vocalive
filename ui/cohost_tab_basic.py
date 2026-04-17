@@ -4,25 +4,22 @@
 import sys
 import os
 import time
-import threading
 import json
 import re
-import traceback
 import logging
-from datetime import datetime, timedelta
-from collections import deque, defaultdict
+from datetime import datetime
+from collections import deque
 
 logger = logging.getLogger('VocaLive.Cohost')
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QLineEdit, QCheckBox, QSpinBox, QComboBox,
-    QGroupBox, QScrollArea, QFrame, QSplitter, QTabWidget,
-    QProgressBar, QSlider, QApplication, QMessageBox, QTableWidget,
+    QTextEdit, QLineEdit, QSpinBox, QComboBox,
+    QGroupBox, QScrollArea, QApplication, QTableWidget,
     QTableWidgetItem, QHeaderView, QDoubleSpinBox
 )
-from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt, pyqtSlot
-from PyQt6.QtGui import QFont, QTextCursor, QPalette, QColor
+from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
+from PyQt6.QtGui import QTextCursor, QColor
 
 # SIMPLIFIED: Minimal imports untuk mengurangi dependency issues
 try:

@@ -5,7 +5,6 @@ Support: YouTube (pytchat) dan TikTok (TikTokLive)
 """
 
 import json
-import os
 import sys
 import threading
 from datetime import datetime

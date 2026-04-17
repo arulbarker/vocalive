@@ -7,7 +7,6 @@ import json
 import tempfile
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
 from modules_client.config_manager import config_manager
 
 logger = logging.getLogger('VocaLive')

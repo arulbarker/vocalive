@@ -91,10 +91,6 @@ try:
     qInstallMessageHandler(qt_message_handler)
 except ImportError:
     pass  # PyQt6 not loaded yet
-import json
-import time
-import importlib.util
-import threading
 from datetime import datetime
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
@@ -395,7 +391,6 @@ def validate_application_license():
             try:
                 # Create minimal QApplication for license dialog
                 from PyQt6.QtWidgets import QApplication
-                from PyQt6.QtCore import Qt
                 
                 # Create QApplication jika belum ada
                 app = QApplication.instance()

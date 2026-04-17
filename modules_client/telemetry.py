@@ -3,7 +3,6 @@ telemetry.py — Wrapper PostHog + Sentry untuk VocaLive.
 Semua calls dibungkus try/except — telemetry failure tidak boleh crash app.
 Device ID dibaca dari config/device_id.dat (sama dengan license system).
 """
-import os
 import sys
 import json
 import logging

@@ -5,9 +5,8 @@ ChatGPT AI Integration - OpenAI API
 """
 
 import requests
-import json
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 from modules_client.config_manager import config_manager
 
 logger = logging.getLogger('VocaLive')

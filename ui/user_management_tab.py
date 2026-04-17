@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import (
     QMessageBox, QFrame, QSplitter, QAbstractItemView, QFileDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
 
 logger = logging.getLogger("VocaLive.UserManagement")
 

@@ -27,7 +27,6 @@ except ImportError:
     sys.exit(1)
 
 import requests
-import time
 
 # ============================================================
 # KONFIGURASI — Update URL saat deploy AppScript baru

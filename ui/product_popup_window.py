@@ -15,7 +15,7 @@ import logging
 
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 from PyQt6.QtCore import Qt, QUrl, QPoint, QRect, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QPainter, QPen, QColor, QFont, QPixmap
+from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 
 logger = logging.getLogger('VocaLive')

@@ -7,8 +7,7 @@ import threading
 import time
 import gc
 import sys
-from pathlib import Path
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 logger = logging.getLogger('VocaLive')
 

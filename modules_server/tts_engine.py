@@ -5,16 +5,13 @@ VocaLive - Text-to-Speech Engine
 Google Cloud Text-to-Speech implementation with fallback to pyttsx3
 """
 
-import os
-import sys
 import json
 import time
 import base64
 import logging
-import tempfile
 import threading
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 try:
     import requests as _requests

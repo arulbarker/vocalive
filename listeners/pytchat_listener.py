@@ -1,7 +1,6 @@
 
 # ========== PYTCHAT IMPORT WITH PATH HANDLING ==========
 import sys
-import os
 from pathlib import Path
 
 # Handle pytchat import for both development and frozen executable

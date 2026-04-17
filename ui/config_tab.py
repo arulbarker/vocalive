@@ -23,15 +23,13 @@ _session.mount("http://", adapter)
 _session.mount("https://", adapter)
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-    QPushButton, QGroupBox, QTextEdit, QMessageBox, QFrame,
-    QProgressBar, QCheckBox, QComboBox, QFileDialog, QScrollArea,
-    QSpinBox
+    QPushButton, QGroupBox, QTextEdit, QMessageBox, QComboBox, QScrollArea
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont
 
 from modules_client.config_manager import ConfigManager
-from sales_templates import get_template_list, get_template
+from sales_templates import get_template
 
 try:
     from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
@@ -558,7 +556,6 @@ class ConfigTab(QWidget):
 
         from PyQt6.QtWidgets import (QGroupBox, QVBoxLayout, QHBoxLayout,
                                       QLabel, QPushButton, QCheckBox, QFrame)
-        from PyQt6.QtCore import Qt
 
         group = QGroupBox("Greeting AI")
         group_layout = QVBoxLayout(group)

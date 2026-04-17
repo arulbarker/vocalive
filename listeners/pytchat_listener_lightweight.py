@@ -2,14 +2,10 @@
 # 🚀 ENHANCED VERSION dengan stability fixes
 
 import sys
-import os
 from pathlib import Path
-import threading
 import time
-import json
 import queue
 from concurrent.futures import ThreadPoolExecutor
-import asyncio
 
 # Handle pytchat import
 try:

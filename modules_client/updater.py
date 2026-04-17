@@ -14,7 +14,6 @@ import sys
 import json
 import zipfile
 import tempfile
-import subprocess
 import logging
 from pathlib import Path
 from typing import Optional, Tuple

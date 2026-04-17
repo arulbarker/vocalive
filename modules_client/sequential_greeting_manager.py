@@ -1,6 +1,5 @@
 # modules_client/sequential_greeting_manager.py - AI-Powered Greeting System
 
-import time
 import threading
 import random
 from datetime import datetime

@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QGridLayout, QScrollArea, QFrame, QTextEdit
 )
 from PyQt6.QtCore import Qt, QUrl
-from PyQt6.QtGui import QFont, QPixmap, QDesktopServices
+from PyQt6.QtGui import QFont, QDesktopServices
 
 try:
     from ui.theme import (PRIMARY, SECONDARY, ACCENT, BG_BASE, BG_SURFACE, BG_ELEVATED,
