@@ -1540,7 +1540,8 @@ class ConfigTab(QWidget):
             # Telemetry: config saved
             try:
                 from modules_client.telemetry import capture as _tel_capture
-                _tel_capture("config_saved", {"provider": provider, "tts_voice": tts_voice if 'tts_voice' in dir() else ""})
+                current_voice = self.tts_voice_combo.currentText() if hasattr(self, 'tts_voice_combo') else ""
+                _tel_capture("config_saved", {"provider": provider, "tts_voice": current_voice})
             except Exception:
                 pass
 
