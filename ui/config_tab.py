@@ -609,22 +609,19 @@ class ConfigTab(QWidget):
         Dipindahkan dari Cohost tab supaya user punya satu source of truth
         di Config tab. Cohost tab sekarang pure operation (start/stop/log).
         """
-        group = QGroupBox("🔊 Output Suara & Bahasa")
+        group = QGroupBox(t("config.section.output_audio"))
         group_layout = QVBoxLayout(group)
         group_layout.setSpacing(12)
 
         # Info
-        info = QLabel(
-            "Setting ini berlaku untuk: AI reply ke komentar viewer, Greeting, "
-            "Preview suara di bawah, dan semua TTS output lainnya."
-        )
+        info = QLabel(t("config.output.info"))
         info.setWordWrap(True)
         info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
         group_layout.addWidget(info)
 
         # Language row
         lang_row = QHBoxLayout()
-        lang_label = QLabel("Bahasa Output:")
+        lang_label = QLabel(t("config.output.label.language"))
         lang_label.setMinimumWidth(130)
         lang_label.setStyleSheet("font-weight: bold; font-size: 13px;")
         lang_row.addWidget(lang_label)
@@ -640,7 +637,7 @@ class ConfigTab(QWidget):
 
         # Voice row
         voice_row = QHBoxLayout()
-        voice_label = QLabel("Voice (Gemini):")
+        voice_label = QLabel(t("config.output.label.voice"))
         voice_label.setMinimumWidth(130)
         voice_label.setStyleSheet("font-weight: bold; font-size: 13px;")
         voice_row.addWidget(voice_label)
@@ -649,7 +646,7 @@ class ConfigTab(QWidget):
         self.output_voice_combo.setMinimumWidth(280)
         voice_row.addWidget(self.output_voice_combo)
 
-        self.output_preview_btn = QPushButton("🔊 Preview")
+        self.output_preview_btn = QPushButton(t("config.output.btn.preview"))
         self.output_preview_btn.setFixedWidth(100)
         self.output_preview_btn.clicked.connect(self._on_output_preview_clicked)
         voice_row.addWidget(self.output_preview_btn)
@@ -714,32 +711,32 @@ class ConfigTab(QWidget):
         voice = self.output_voice_combo.currentText()
         lang = self.output_lang_combo.currentText()
         if not voice:
-            QMessageBox.warning(self, t("common.warning"), "Voice belum dipilih.")
+            QMessageBox.warning(self, t("common.warning"), t("config.output.err.no_voice"))
             return
         # Check Gemini API key
         api_key = self.cfg.get("api_keys", {}).get("GEMINI_API_KEY", "").strip()
         if not api_key:
             api_key = self.cfg.get("google_tts_api_key", "").strip()
         if not api_key:
-            QMessageBox.warning(self, t("common.error"),
-                "Gemini API Key belum diset.\nIsi di section AI Provider di atas.")
+            QMessageBox.warning(self, t("common.error"), t("config.output.err.no_api_key"))
             return
-        # Sample text per language
-        samples = {
-            "Indonesia": "Halo, ini adalah contoh suara untuk preview. Selamat datang!",
-            "Malaysia": "Helo, ini contoh suara untuk preview. Selamat datang!",
-            "English": "Hello, this is a voice preview sample. Welcome!"
-        }
+
+        # Sample text dari i18n — default Indonesian/English/Malaysian samples
+        # Kalau locale spesifik tidak ada sample terpisah, pakai generic sample
+        sample_en = "Hello, this is a voice preview sample. Welcome!"
+        sample_id = "Halo, ini adalah contoh suara untuk preview. Selamat datang!"
+        sample_ms = "Helo, ini contoh suara untuk preview. Selamat datang!"
+        samples = {"Indonesia": sample_id, "Malaysia": sample_ms, "English": sample_en}
         lang_codes = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}
         voice_model = voice.split('(')[0].strip()
-        sample = samples.get(lang, samples["Indonesia"])
+        sample = samples.get(lang, sample_id)
 
         self.output_preview_btn.setEnabled(False)
-        self.output_preview_btn.setText("⏳ Playing...")
+        self.output_preview_btn.setText(t("config.output.btn.playing"))
 
         def on_done():
             self.output_preview_btn.setEnabled(True)
-            self.output_preview_btn.setText("🔊 Preview")
+            self.output_preview_btn.setText(t("config.output.btn.preview"))
 
         try:
             from modules_server.tts_engine import speak
@@ -753,7 +750,7 @@ class ConfigTab(QWidget):
                 from modules_server.tts_engine import get_tts_engine
                 err = get_tts_engine().last_error or "Unknown error"
                 QMessageBox.warning(self, t("common.error"),
-                    f"Preview gagal:\n{voice}\n\n{err}")
+                    t("config.output.err.preview_failed", voice=voice, err=err))
         except Exception as e:
             on_done()
             QMessageBox.critical(self, t("common.error"), f"{type(e).__name__}: {e}")
@@ -1037,18 +1034,18 @@ class ConfigTab(QWidget):
         key_row = QHBoxLayout(self.tts_key_container)
         key_row.setContentsMargins(0, 0, 0, 0)
 
-        key_label = QLabel("Gemini API Key:")
+        key_label = QLabel(t("config.tts.label.gemini_key"))
         key_label.setMinimumWidth(120)
         key_label.setStyleSheet("font-weight: bold; font-size: 13px;")
         key_row.addWidget(key_label)
 
         self.tts_api_key_input = QLineEdit()
-        self.tts_api_key_input.setPlaceholderText("Masukkan Gemini API Key dari aistudio.google.com...")
+        self.tts_api_key_input.setPlaceholderText(t("config.tts.placeholder.gemini_key"))
         self.tts_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.tts_api_key_input.textChanged.connect(self._on_tts_gemini_key_changed)
         key_row.addWidget(self.tts_api_key_input)
 
-        show_btn = QPushButton("Lihat")
+        show_btn = QPushButton(t("config.btn.show_key"))
         show_btn.setProperty("class", "secondary")
         show_btn.setFixedWidth(70)
         show_btn.clicked.connect(lambda: self.toggle_password_visibility(self.tts_api_key_input))
@@ -1271,18 +1268,12 @@ class ConfigTab(QWidget):
         self.tts_key_container.setVisible(not is_gemini_ai)
 
         if is_gemini_ai:
-            self.tts_info_label.setText(
-                "✅ TTS menggunakan <b>Gemini API Key</b> yang sama dengan AI Provider di atas. "
-                "Tidak perlu isi key lagi di sini."
-            )
+            self.tts_info_label.setText(t("config.tts.info_provider_gemini"))
             # Sync TTS status dari AI key — kalau user sudah isi Gemini key di AI section,
             # TTS otomatis available karena sharing key
             self._sync_tts_status_to_ai_key()
         else:
-            self.tts_info_label.setText(
-                "🔑 AI Provider = <b>DeepSeek</b> → TTS tetap butuh <b>Gemini API Key</b> terpisah.<br/>"
-                "Isi Gemini key Anda di field di bawah ini (dari <i>aistudio.google.com</i>)."
-            )
+            self.tts_info_label.setText(t("config.tts.info_provider_deepseek"))
 
     def _sync_tts_status_to_ai_key(self):
         """Set tts_status berdasar AI key input (karena shared key untuk Gemini provider)."""

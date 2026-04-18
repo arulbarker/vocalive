@@ -2,6 +2,28 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🌐 BILINGUAL REQUIREMENT — WAJIB DIBACA
+
+**Aplikasi ini support 2 bahasa utama: Bahasa Indonesia + English.**
+
+**SETIAP string user-facing WAJIB di-translate ke kedua bahasa** via i18n system:
+- Label, tombol, dialog, QMessageBox, status indicator, notifikasi popup
+- Error message yang muncul di UI (bukan logger internal)
+- Template prompt yang user edit
+- Dropdown option labels (kecuali identifier teknis seperti voice names)
+
+**Pattern**: pakai `t("namespace.key")` dari `modules_client.i18n`, tambah key ke **kedua** `i18n/id.json` dan `i18n/en.json`.
+
+**Jangan hardcode string Indonesian** di UI code. Coverage test `tests/test_i18n.py::TestKeyCoverage` auto-fail kalau ada key yang digunakan tapi hilang di salah satu locale.
+
+Dua konsep bahasa yang TERPISAH (jangan di-mix):
+- **`ui_language`** (id/en) — UI chrome: label, tombol, dialog (user BACA di app)
+- **`output_language`** (Indonesia/Malaysia/English) — AI output + TTS voice (user/viewer DENGAR)
+
+Detail lengkap lihat section "Internationalization (i18n)" di bawah.
+
+---
+
 ## Branding Colors — Ocean Blue 🌊
 
 Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.**
