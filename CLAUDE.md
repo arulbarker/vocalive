@@ -44,8 +44,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.18** | 2026-04-18 | FIX CRITICAL: i18n onefile path resolution (sys._MEIPASS) — UI tidak lagi tampilkan raw keys di EXE, non-blocking update notification (hapus modal popup), update installer hide CMD + native Windows MessageBox |
 | **v1.0.19** | 2026-04-18 | FIX: include pyvirtualcam di EXE bundle — OBS Virtual Camera sekarang terdeteksi di EXE (sebelumnya excluded untuk save size, akibat OBS tidak detect) |
 | **v1.0.20** | 2026-04-18 | FIX: collect_all pyvirtualcam (.pyd native extensions) — v1.0.19 fix belum cukup, butuh binary bundling. Fix popup text: hapus backtick-n escape literal |
+| **v1.0.21** | 2026-04-18 | FIX ROOT CAUSE: numpy di-exclude dari bundle dengan asumsi salah 'optional'. pyvirtualcam hard-import numpy → ImportError → Backend 'Tidak ada'. Fix: include numpy di bundle. Tambah diagnostic logging di virtual_camera_manager. |
 
-**Versi saat ini: v1.0.20**
+**Versi saat ini: v1.0.21**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
