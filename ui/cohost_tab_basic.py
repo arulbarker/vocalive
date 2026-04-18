@@ -1258,8 +1258,9 @@ class CohostTabBasicSimplified(QWidget):
 
             # Check if this is a Gemini voice
             if voice_model.startswith('Gemini-'):
-                # Gemini voices are multilingual — use sample text sesuai bahasa yang dipilih user
-                current_lang = self.cfg.get("language", "Indonesia")
+                # Gemini voices are multilingual — use sample text sesuai output_language
+                # (bahasa yang akan AI omongkan ke viewer). Bukan ui_language.
+                current_lang = self.cfg.get("output_language", "Indonesia")
                 if current_lang == "Malaysia":
                     language_code = "ms-MY"
                     sample_text = "Helo, ini adalah contoh suara untuk preview. Selamat datang!"
