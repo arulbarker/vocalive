@@ -44,7 +44,12 @@ class GeminiAI:
         base_delay = 0.5 if fast_mode else 1.0
 
         user_context = config_manager.get("user_context", "")
-        ai_language = config_manager.get("ai_language", "indonesian")
+        # Derive ai_language: prefer explicit setting, fallback dari output_language
+        # (user mungkin pilih output_language="English" tanpa pernah toggle language_combo)
+        ai_language = config_manager.get("ai_language")
+        if not ai_language:
+            _out_lang = config_manager.get("output_language", "Indonesia")
+            ai_language = {"Indonesia": "indonesian", "Malaysia": "malaysian", "English": "english"}.get(_out_lang, "indonesian")
 
         language_prompts = {
             "indonesian": {

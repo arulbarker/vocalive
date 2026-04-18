@@ -198,9 +198,18 @@ class CustomGreetingManager:
 
             print(f"[GREETING] Playing greeting slot {slot_number}: {text[:50]}...")
 
-            # Get voice settings
+            # Get voice settings — derive language_code dari output_language (bukan hardcoded)
             voice_setting = self.cfg.get("tts_voice", "id-ID-Standard-B (MALE)")
-            language_code = "id-ID"  # Default Indonesian
+            voice_name = voice_setting.split("(")[0].strip() if "(" in voice_setting else voice_setting
+            if voice_name.startswith("Gemini-"):
+                # Multilingual — ikut output_language
+                output_lang = self.cfg.get("output_language", "Indonesia")
+                language_code = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}.get(output_lang, "id-ID")
+            elif "-" in voice_name:
+                parts = voice_name.split("-")
+                language_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "id-ID"
+            else:
+                language_code = "id-ID"
 
             # Play from cache
             success = self.cache.play_cached_tts(text, voice_setting, language_code)

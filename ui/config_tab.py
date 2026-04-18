@@ -185,32 +185,95 @@ class PolishKnowledgeThread(QThread):
             self.status_update.emit(t("config.polish.status_writing"))
             from modules_client.api import generate_reply
 
-            research_section = f"\n\nHasil riset produk dari internet:\n{research}" if research else ""
+            # Pilih prompt sesuai output_language (bahasa yang akan didengar viewer)
+            cfg = ConfigManager("config/settings.json")
+            output_lang = cfg.get("output_language", "Indonesia")
 
-            prompt = (
-                "Kamu adalah AI host live selling profesional yang sangat berpengalaman dan antusias. "
-                "Tugasmu: ubah teks pengetahuan produk berikut menjadi knowledge base lengkap "
-                "yang siap dipakai AI untuk menjawab pertanyaan penonton di TikTok Live.\n\n"
-                "INSTRUKSI OUTPUT — ikuti urutan ini PERSIS:\n\n"
-                "BAGIAN 1 — PERAN (wajib ada di paling atas):\n"
-                "Tulis blok definisi peran AI host, contoh format:\n"
-                "```\n"
-                "## PERAN AI HOST\n"
-                "Kamu adalah host live selling profesional yang menjual [sebutkan produk] di TikTok Live.\n"
-                "Selalu jawab komentar penonton sebagai penjual yang antusias, berpengetahuan, dan persuasif.\n"
-                "Bantu pembeli mengambil keputusan beli dengan cepat. Gunakan bahasa yang hangat dan energik.\n"
-                "Jangan pernah menyebutkan bahwa kamu adalah AI.\n"
-                "```\n\n"
-                "BAGIAN 2 — KNOWLEDGE PRODUK:\n"
-                "1. Pertahankan SEMUA info asli penjual (nomor keranjang, harga, promo)\n"
-                "2. Tambahkan spesifikasi teknis & keunggulan dari pengetahuanmu\n"
-                "3. Tambahkan benefit nyata buat pembeli\n"
-                "4. Sertakan contoh script balasan untuk pertanyaan umum penonton\n"
-                "5. Format rapi per produk, mudah dibaca AI\n\n"
-                f"Teks asli penjual:\n{self.text}"
-                f"{research_section}\n\n"
-                "Tulis HANYA output-nya langsung (mulai dari ## PERAN AI HOST). Tanpa intro atau penutup."
-            )
+            if output_lang == "English":
+                research_section = (
+                    f"\n\nProduct research from the internet:\n{research}" if research else ""
+                )
+                prompt = (
+                    "You are a highly experienced and enthusiastic professional live selling AI host. "
+                    "Your task: transform the following product knowledge text into a complete knowledge base "
+                    "ready for the AI to use when answering viewer questions on TikTok Live.\n\n"
+                    "OUTPUT INSTRUCTIONS — follow this order EXACTLY:\n\n"
+                    "SECTION 1 — ROLE (must appear at the very top):\n"
+                    "Write the AI host role definition block, example format:\n"
+                    "```\n"
+                    "## AI HOST ROLE\n"
+                    "You are a professional live selling host selling [mention the product] on TikTok Live.\n"
+                    "Always reply to viewer comments as an enthusiastic, knowledgeable, and persuasive seller.\n"
+                    "Help buyers make quick purchase decisions. Use warm and energetic language.\n"
+                    "Never mention that you are an AI.\n"
+                    "```\n\n"
+                    "SECTION 2 — PRODUCT KNOWLEDGE:\n"
+                    "1. Preserve ALL of the seller's original info (cart numbers, prices, promos)\n"
+                    "2. Add technical specs & strengths from your own knowledge\n"
+                    "3. Add real benefits for the buyer\n"
+                    "4. Include example reply scripts for common viewer questions\n"
+                    "5. Neatly formatted per product, easy for the AI to read\n\n"
+                    f"Seller's original text:\n{self.text}"
+                    f"{research_section}\n\n"
+                    "Write ONLY the output directly (starting from ## AI HOST ROLE). No intro or outro."
+                )
+            elif output_lang == "Malaysia":
+                research_section = (
+                    f"\n\nHasil kajian produk dari internet:\n{research}" if research else ""
+                )
+                prompt = (
+                    "Anda ialah AI host live selling profesional yang sangat berpengalaman dan bersemangat. "
+                    "Tugas anda: ubah teks pengetahuan produk berikut menjadi knowledge base lengkap "
+                    "yang sedia dipakai AI untuk menjawab soalan penonton di TikTok Live.\n\n"
+                    "ARAHAN OUTPUT — ikut urutan ini DENGAN TEPAT:\n\n"
+                    "BAHAGIAN 1 — PERANAN (wajib berada di paling atas):\n"
+                    "Tulis blok definisi peranan AI host, contoh format:\n"
+                    "```\n"
+                    "## PERANAN AI HOST\n"
+                    "Anda ialah host live selling profesional yang menjual [sebutkan produk] di TikTok Live.\n"
+                    "Sentiasa balas komen penonton sebagai penjual yang bersemangat, berpengetahuan, dan meyakinkan.\n"
+                    "Bantu pembeli buat keputusan beli dengan pantas. Gunakan bahasa yang mesra dan bertenaga.\n"
+                    "Jangan sesekali sebut bahawa anda ialah AI.\n"
+                    "```\n\n"
+                    "BAHAGIAN 2 — KNOWLEDGE PRODUK:\n"
+                    "1. Kekalkan SEMUA info asal penjual (nombor keranjang, harga, promosi)\n"
+                    "2. Tambah spesifikasi teknikal & kelebihan daripada pengetahuan anda\n"
+                    "3. Tambah manfaat sebenar untuk pembeli\n"
+                    "4. Sertakan contoh skrip balasan untuk soalan lazim penonton\n"
+                    "5. Format kemas setiap produk, mudah dibaca AI\n\n"
+                    f"Teks asal penjual:\n{self.text}"
+                    f"{research_section}\n\n"
+                    "Tulis HANYA outputnya terus (bermula dari ## PERANAN AI HOST). Tanpa intro atau penutup."
+                )
+            else:
+                # Indonesia (default)
+                research_section = (
+                    f"\n\nHasil riset produk dari internet:\n{research}" if research else ""
+                )
+                prompt = (
+                    "Kamu adalah AI host live selling profesional yang sangat berpengalaman dan antusias. "
+                    "Tugasmu: ubah teks pengetahuan produk berikut menjadi knowledge base lengkap "
+                    "yang siap dipakai AI untuk menjawab pertanyaan penonton di TikTok Live.\n\n"
+                    "INSTRUKSI OUTPUT — ikuti urutan ini PERSIS:\n\n"
+                    "BAGIAN 1 — PERAN (wajib ada di paling atas):\n"
+                    "Tulis blok definisi peran AI host, contoh format:\n"
+                    "```\n"
+                    "## PERAN AI HOST\n"
+                    "Kamu adalah host live selling profesional yang menjual [sebutkan produk] di TikTok Live.\n"
+                    "Selalu jawab komentar penonton sebagai penjual yang antusias, berpengetahuan, dan persuasif.\n"
+                    "Bantu pembeli mengambil keputusan beli dengan cepat. Gunakan bahasa yang hangat dan energik.\n"
+                    "Jangan pernah menyebutkan bahwa kamu adalah AI.\n"
+                    "```\n\n"
+                    "BAGIAN 2 — KNOWLEDGE PRODUK:\n"
+                    "1. Pertahankan SEMUA info asli penjual (nomor keranjang, harga, promo)\n"
+                    "2. Tambahkan spesifikasi teknis & keunggulan dari pengetahuanmu\n"
+                    "3. Tambahkan benefit nyata buat pembeli\n"
+                    "4. Sertakan contoh script balasan untuk pertanyaan umum penonton\n"
+                    "5. Format rapi per produk, mudah dibaca AI\n\n"
+                    f"Teks asli penjual:\n{self.text}"
+                    f"{research_section}\n\n"
+                    "Tulis HANYA output-nya langsung (mulai dari ## PERAN AI HOST). Tanpa intro atau penutup."
+                )
 
             result = generate_reply(prompt, max_tokens=800, fast_mode=False)
             self.finished.emit(result.strip() if result else "")
@@ -1379,9 +1442,11 @@ class ConfigTab(QWidget):
             # Pakai voice yang dipilih user di combo, bukan voice dari Cohost tab
             selected_voice = self.tts_voice_combo.currentText().split(' (')[0].strip()
             # Ekstrak lang code dari nama voice (misal "en-AU-Chirp3-..." → "en-AU")
-            # Gemini voices tidak punya lang prefix → default id-ID
+            # Gemini voices multilingual → derive lang_code dari output_language
             if selected_voice.startswith("Gemini-"):
-                lang_code = "id-ID"
+                output_lang = self.cfg.get("output_language", "Indonesia")
+                lang_map = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}
+                lang_code = lang_map.get(output_lang, "id-ID")
             else:
                 parts = selected_voice.split('-')
                 lang_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "id-ID"
@@ -1815,7 +1880,10 @@ class ConfigTab(QWidget):
 
                     # Get current voice setting
                     voice_setting = self.cfg.get("tts_voice", "id-ID-Standard-B (MALE)")
-                    language_code = "id-ID"  # Default Indonesian
+                    # Derive language_code dari output_language (bilingual-aware)
+                    output_lang = self.cfg.get("output_language", "Indonesia")
+                    lang_map = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}
+                    language_code = lang_map.get(output_lang, "id-ID")
 
                     # Play TTS
                     success = speak(

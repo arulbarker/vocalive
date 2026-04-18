@@ -233,19 +233,26 @@ class SequentialGreetingManager:
         return generate_greetings_with_ai()
 
     def _get_voice_params(self) -> tuple:
-        """Return (voice_name, language_code) dari settings."""
+        """Return (voice_name, language_code) dari settings.
+
+        Gemini voices are multilingual — language_code mengikuti output_language
+        (bahasa greeting yang akan didengar viewer), bukan hardcoded id-ID.
+        """
         voice_setting = self.cfg.get("tts_voice", "id-ID-Standard-A (FEMALE)")
         voice_name = voice_setting.split("(")[0].strip() if "(" in voice_setting else voice_setting
 
         if voice_name.startswith("Gemini-"):
-            language_code = "id-ID"
+            # Multilingual — pakai output_language mapping
+            output_lang = self.cfg.get("output_language", "Indonesia")
+            language_code = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}.get(output_lang, "id-ID")
         elif voice_name.startswith("ms-"):
             language_code = "ms-MY"
         elif voice_name.startswith("en-"):
             parts = voice_name.split("-")
             language_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else "en-US"
         else:
-            language_code = "id-ID"
+            parts = voice_name.split("-")
+            language_code = f"{parts[0]}-{parts[1]}" if len(parts) >= 2 and "-" in voice_name else "id-ID"
 
         return voice_name, language_code
 
