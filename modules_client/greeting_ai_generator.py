@@ -92,18 +92,29 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
 
     user_context = config_manager.get("user_context", "").strip()
 
-    # SPECIAL CASE: Greeting AI prompt follows `output_language` (bahasa AI ke viewer),
-    # NOT `ui_language`. Greeting yang dihasilkan untuk viewer TikTok — harus sesuai
-    # bahasa viewer, bukan bahasa UI aplikasi.
-    output_lang = config_manager.get("output_language", "Indonesia")
+    # Greeting AI mengikuti ui_language (bahasa sistem/utama) — user expectation:
+    # "install English → semuanya English". Malaysia specific user bisa override via
+    # output_language (viewer-facing AI reply) yang dicheck sebagai secondary.
+    from modules_client import i18n
+    ui_lang = i18n.current_language()  # "id" | "en"
+    # Map ui_language → template key. Check output_language sebagai override untuk
+    # case user sengaja pilih Malaysia di output (ui tidak punya opsi Malaysia).
+    output_lang_raw = config_manager.get("output_language", "Indonesia")
+    if output_lang_raw == "Malaysia":
+        output_lang = "Malaysia"
+    elif ui_lang == "en":
+        output_lang = "English"
+    else:
+        output_lang = "Indonesia"
 
     prompt_templates = {
         "Indonesia": {
             "context_with": "Sesuai konteks berikut: {context}",
             "context_default": "untuk live streaming jualan online Indonesia",
             "body": (
-                "Buatkan 10 variasi sapaan untuk live streaming TikTok {context_line}\n"
+                "Buatkan 10 variasi sapaan DALAM BAHASA INDONESIA untuk live streaming TikTok {context_line}\n"
                 "Syarat ketat:\n"
+                "- BAHASA WAJIB: Indonesia 100 persen abaikan bahasa konteks kalau berbeda\n"
                 "- Setiap sapaan 1 sampai 2 kalimat natural dan percakapan\n"
                 "- Semua 10 sapaan berbeda satu sama lain dalam variasi kata gaya dan panjang\n"
                 "- JANGAN gunakan tanda baca apapun termasuk titik koma tanda seru tanda tanya tanda kutip\n"
@@ -117,8 +128,9 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
             "context_with": "Based on the following context: {context}",
             "context_default": "for an online shopping live stream",
             "body": (
-                "Generate 10 varied greetings for a TikTok live stream {context_line}\n"
+                "Generate 10 varied greetings IN ENGLISH for a TikTok live stream {context_line}\n"
                 "Strict requirements:\n"
+                "- LANGUAGE MUST be English 100 percent. Even if the context above is in another language ignore its language and respond only in English\n"
                 "- Each greeting is 1 to 2 natural, conversational sentences\n"
                 "- All 10 greetings differ from one another in word choice, style, and length\n"
                 "- DO NOT use any punctuation including periods commas exclamation marks question marks or quotes\n"
@@ -132,8 +144,9 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
             "context_with": "Berdasarkan konteks berikut: {context}",
             "context_default": "untuk siaran langsung jualan online",
             "body": (
-                "Buatkan 10 variasi sapaan untuk siaran langsung TikTok {context_line} dalam bahasa Melayu\n"
+                "Buatkan 10 variasi sapaan DALAM BAHASA MELAYU untuk siaran langsung TikTok {context_line}\n"
                 "Syarat ketat:\n"
+                "- BAHASA WAJIB: Melayu 100 peratus abaikan bahasa konteks kalau berbeza\n"
                 "- Setiap sapaan 1 hingga 2 ayat natural dan perbualan\n"
                 "- Semua 10 sapaan berbeza antara satu sama lain dalam pilihan kata gaya dan panjang\n"
                 "- JANGAN gunakan sebarang tanda baca termasuk titik koma tanda seru tanda tanya tanda petik\n"

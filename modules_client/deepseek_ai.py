@@ -101,14 +101,21 @@ class DeepSeekAI:
                     "temperature": 0.7
                 }
 
-                # PERFORMANCE: Dynamic timeout based on mode
+                # PERFORMANCE: Dynamic timeout based on mode + max_tokens.
+                # DeepSeek streaming rate ~30 tok/s → big prompts (Polish Knowledge
+                # max_tokens=800) perlu 30-40s. Timeout fixed 15s selalu timeout untuk
+                # request besar.
                 if fast_mode:
                     # Fast mode: aggressive timeout for OBS triggers
                     timeout = 5  # 5s max for fast response
+                elif max_tokens > 300:
+                    # Long output (Polish, knowledge building): scale dengan max_tokens
+                    # Rule of thumb: 20s base + ~50ms per token, retry lebih lama
+                    base = max(30, 20 + int(max_tokens * 0.05))
+                    timeout = base if attempt == 0 else base + 30
                 else:
-                    # Normal mode: progressive timeout
-                    # First attempt: 10s, retry: 15s (reduced from 15s/20s)
-                    timeout = 10 if attempt == 0 else 15
+                    # Normal chat reply (max_tokens ≤ 300): progressive timeout
+                    timeout = 15 if attempt == 0 else 25
 
                 response = requests.post(
                     f"{self.base_url}/chat/completions",
