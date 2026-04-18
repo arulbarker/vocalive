@@ -184,20 +184,13 @@ class PolishKnowledgeThread(QThread):
 
             self.status_update.emit(t("config.polish.status_writing"))
             from modules_client.api import generate_reply
-            from modules_client import i18n
 
-            # Pilih prompt mengikut ui_language (bahasa sistem/utama). User expectation:
-            # install English → polish output English. Malaysia override via output_language
-            # (untuk user yang memang menargetkan viewer Melayu).
+            # Polish output = AI output untuk user_context → WAJIB follow output_language
+            # (master control dari Cohost tab). Architecture final:
+            #   - ui_language (di Konfigurasi tab) → HANYA UI chrome: label, tombol, dialog
+            #   - output_language (di Cohost tab) → SEMUA AI output + TTS voice + greeting
             cfg = ConfigManager("config/settings.json")
-            ui_lang = i18n.current_language()  # "id" | "en"
-            output_lang_raw = cfg.get("output_language", "Indonesia")
-            if output_lang_raw == "Malaysia":
-                output_lang = "Malaysia"
-            elif ui_lang == "en":
-                output_lang = "English"
-            else:
-                output_lang = "Indonesia"
+            output_lang = cfg.get("output_language", "Indonesia")
 
             if output_lang == "English":
                 research_section = (
