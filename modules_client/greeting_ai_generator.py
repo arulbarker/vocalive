@@ -92,10 +92,20 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
 
     user_context = config_manager.get("user_context", "").strip()
 
-    # SPECIAL CASE: Greeting AI prompt follows `output_language` (bahasa AI ke viewer),
-    # NOT `ui_language`. Greeting yang dihasilkan untuk viewer TikTok — harus sesuai
-    # bahasa viewer, bukan bahasa UI aplikasi.
-    output_lang = config_manager.get("output_language", "Indonesia")
+    # Greeting AI mengikuti ui_language (bahasa sistem/utama) — user expectation:
+    # "install English → semuanya English". Malaysia specific user bisa override via
+    # output_language (viewer-facing AI reply) yang dicheck sebagai secondary.
+    from modules_client import i18n
+    ui_lang = i18n.current_language()  # "id" | "en"
+    # Map ui_language → template key. Check output_language sebagai override untuk
+    # case user sengaja pilih Malaysia di output (ui tidak punya opsi Malaysia).
+    output_lang_raw = config_manager.get("output_language", "Indonesia")
+    if output_lang_raw == "Malaysia":
+        output_lang = "Malaysia"
+    elif ui_lang == "en":
+        output_lang = "English"
+    else:
+        output_lang = "Indonesia"
 
     prompt_templates = {
         "Indonesia": {

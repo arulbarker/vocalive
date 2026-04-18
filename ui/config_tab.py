@@ -184,10 +184,20 @@ class PolishKnowledgeThread(QThread):
 
             self.status_update.emit(t("config.polish.status_writing"))
             from modules_client.api import generate_reply
+            from modules_client import i18n
 
-            # Pilih prompt sesuai output_language (bahasa yang akan didengar viewer)
+            # Pilih prompt mengikut ui_language (bahasa sistem/utama). User expectation:
+            # install English → polish output English. Malaysia override via output_language
+            # (untuk user yang memang menargetkan viewer Melayu).
             cfg = ConfigManager("config/settings.json")
-            output_lang = cfg.get("output_language", "Indonesia")
+            ui_lang = i18n.current_language()  # "id" | "en"
+            output_lang_raw = cfg.get("output_language", "Indonesia")
+            if output_lang_raw == "Malaysia":
+                output_lang = "Malaysia"
+            elif ui_lang == "en":
+                output_lang = "English"
+            else:
+                output_lang = "Indonesia"
 
             if output_lang == "English":
                 research_section = (
