@@ -91,19 +91,67 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
         return FALLBACK_GREETINGS.copy()
 
     user_context = config_manager.get("user_context", "").strip()
-    context_line = f"Sesuai konteks berikut: {user_context}" if user_context else "untuk live streaming jualan online Indonesia"
 
-    prompt = (
-        f"Buatkan 10 variasi sapaan untuk live streaming TikTok {context_line}\n"
-        "Syarat ketat:\n"
-        "- Setiap sapaan 1 sampai 2 kalimat natural dan percakapan\n"
-        "- Semua 10 sapaan berbeda satu sama lain dalam variasi kata gaya dan panjang\n"
-        "- JANGAN gunakan tanda baca apapun termasuk titik koma tanda seru tanda tanya tanda kutip\n"
-        "- JANGAN gunakan simbol markdown seperti bintang garis bawah pagar atau tanda kurung\n"
-        "- Hanya huruf biasa dan spasi\n"
-        'Format respons: JSON array dengan tepat 10 string\n'
-        '["sapaan1", "sapaan2", "sapaan3", ...]'
+    # SPECIAL CASE: Greeting AI prompt follows `output_language` (bahasa AI ke viewer),
+    # NOT `ui_language`. Greeting yang dihasilkan untuk viewer TikTok — harus sesuai
+    # bahasa viewer, bukan bahasa UI aplikasi.
+    output_lang = config_manager.get("output_language", "Indonesia")
+
+    prompt_templates = {
+        "Indonesia": {
+            "context_with": "Sesuai konteks berikut: {context}",
+            "context_default": "untuk live streaming jualan online Indonesia",
+            "body": (
+                "Buatkan 10 variasi sapaan untuk live streaming TikTok {context_line}\n"
+                "Syarat ketat:\n"
+                "- Setiap sapaan 1 sampai 2 kalimat natural dan percakapan\n"
+                "- Semua 10 sapaan berbeda satu sama lain dalam variasi kata gaya dan panjang\n"
+                "- JANGAN gunakan tanda baca apapun termasuk titik koma tanda seru tanda tanya tanda kutip\n"
+                "- JANGAN gunakan simbol markdown seperti bintang garis bawah pagar atau tanda kurung\n"
+                "- Hanya huruf biasa dan spasi\n"
+                'Format respons: JSON array dengan tepat 10 string\n'
+                '["sapaan1", "sapaan2", "sapaan3", ...]'
+            ),
+        },
+        "English": {
+            "context_with": "Based on the following context: {context}",
+            "context_default": "for an online shopping live stream",
+            "body": (
+                "Generate 10 varied greetings for a TikTok live stream {context_line}\n"
+                "Strict requirements:\n"
+                "- Each greeting is 1 to 2 natural, conversational sentences\n"
+                "- All 10 greetings differ from one another in word choice, style, and length\n"
+                "- DO NOT use any punctuation including periods commas exclamation marks question marks or quotes\n"
+                "- DO NOT use markdown symbols like asterisks underscores hashes or parentheses\n"
+                "- Only plain letters and spaces\n"
+                "Response format: JSON array with exactly 10 strings\n"
+                '["greeting1", "greeting2", "greeting3", ...]'
+            ),
+        },
+        "Malaysia": {
+            "context_with": "Berdasarkan konteks berikut: {context}",
+            "context_default": "untuk siaran langsung jualan online",
+            "body": (
+                "Buatkan 10 variasi sapaan untuk siaran langsung TikTok {context_line} dalam bahasa Melayu\n"
+                "Syarat ketat:\n"
+                "- Setiap sapaan 1 hingga 2 ayat natural dan perbualan\n"
+                "- Semua 10 sapaan berbeza antara satu sama lain dalam pilihan kata gaya dan panjang\n"
+                "- JANGAN gunakan sebarang tanda baca termasuk titik koma tanda seru tanda tanya tanda petik\n"
+                "- JANGAN gunakan simbol markdown seperti bintang garis bawah pagar atau kurungan\n"
+                "- Hanya huruf biasa dan ruang\n"
+                "Format respons: JSON array dengan tepat 10 string\n"
+                '["sapaan1", "sapaan2", "sapaan3", ...]'
+            ),
+        },
+    }
+
+    template = prompt_templates.get(output_lang, prompt_templates["Indonesia"])
+    context_line = (
+        template["context_with"].format(context=user_context)
+        if user_context
+        else template["context_default"]
     )
+    prompt = template["body"].format(context_line=context_line)
 
     headers = {
         "x-goog-api-key": api_key,

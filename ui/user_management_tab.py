@@ -25,6 +25,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from modules_client.i18n import t
+
 logger = logging.getLogger("VocaLive.UserManagement")
 
 try:
@@ -122,7 +124,7 @@ class UserManagementTab(QWidget):
         main_layout.addWidget(self._create_header())
 
         if not USER_LIST_AVAILABLE:
-            err = QLabel("⚠️ User List Manager module tidak tersedia")
+            err = QLabel(t("users.err.unavailable"))
             err.setStyleSheet(f"color: {ERROR}; font-size: 14px; padding: 20px;")
             err.setAlignment(Qt.AlignmentFlag.AlignCenter)
             main_layout.addWidget(err)
@@ -152,26 +154,26 @@ class UserManagementTab(QWidget):
         """)
         layout = QHBoxLayout()
 
-        title = QLabel("👥 User Management")
+        title = QLabel(t("users.header.title"))
         title.setStyleSheet(label_title())
         layout.addWidget(title)
         layout.addStretch()
 
         # Import CSV
-        import_btn = QPushButton("📂 Import CSV")
-        import_btn.setToolTip("Import daftar username dari file CSV (satu username per baris)")
+        import_btn = QPushButton(t("users.btn.import_csv"))
+        import_btn.setToolTip(t("users.tooltip.import_csv"))
         import_btn.clicked.connect(self._import_csv)
         import_btn.setStyleSheet(btn_ghost())
         layout.addWidget(import_btn)
 
         # Export CSV
-        export_btn = QPushButton("💾 Export CSV")
-        export_btn.setToolTip("Export blacklist & whitelist ke file CSV")
+        export_btn = QPushButton(t("users.btn.export_csv"))
+        export_btn.setToolTip(t("users.tooltip.export_csv"))
         export_btn.clicked.connect(self._export_csv)
         export_btn.setStyleSheet(btn_ghost())
         layout.addWidget(export_btn)
 
-        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn = QPushButton(t("users.btn.refresh"))
         refresh_btn.clicked.connect(self._load_lists)
         refresh_btn.setStyleSheet(btn_ghost())
         layout.addWidget(refresh_btn)
@@ -191,16 +193,11 @@ class UserManagementTab(QWidget):
         """)
         layout = QVBoxLayout()
 
-        title = QLabel("ℹ️ Cara Kerja & Cara Set VIP:")
+        title = QLabel(t("users.info.title"))
         title.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 12px;")
         layout.addWidget(title)
 
-        info = QLabel(
-            "• 🚫 <b>Blacklist</b>: User diblokir sepenuhnya — komentar mereka diabaikan, tidak di-reply\n"
-            "• ⭐ <b>VIP (Whitelist)</b>: User VIP <b>selalu dibalas</b> tanpa cooldown — cocok untuk reseller, admin, atau pelanggan setia\n"
-            "• 📝 <b>Cara set VIP</b>: Ketik username TikTok (tanpa @) di kolom kanan → klik '+ Tambah VIP'\n"
-            "      Tips: Copy nama dari log komentar di tab Cohost, paste langsung ke sini"
-        )
+        info = QLabel(t("users.info.body"))
         info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px;")
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -210,12 +207,12 @@ class UserManagementTab(QWidget):
 
     def _create_list_section(self, is_blacklist: bool):
         if is_blacklist:
-            title = "🚫 Blacklist (Blokir)"
-            desc  = "Komentar dari user ini diabaikan sepenuhnya"
+            title = t("users.blacklist.title")
+            desc  = t("users.blacklist.desc")
             color = ERROR
         else:
-            title = "⭐ Whitelist / VIP"
-            desc  = "User VIP selalu dibalas tanpa cooldown"
+            title = t("users.whitelist.title")
+            desc  = t("users.whitelist.desc")
             color = SUCCESS
 
         group = QGroupBox(title)
@@ -246,23 +243,23 @@ class UserManagementTab(QWidget):
         input_row = QHBoxLayout()
         if is_blacklist:
             self.blacklist_input = QLineEdit()
-            self.blacklist_input.setPlaceholderText("Username (tanpa @)...")
+            self.blacklist_input.setPlaceholderText(t("users.placeholder.blacklist_input"))
             self.blacklist_input.setStyleSheet(_INPUT_STYLE(ERROR))
             self.blacklist_input.returnPressed.connect(self._add_to_blacklist)
             input_row.addWidget(self.blacklist_input)
 
-            add_btn = QPushButton("+ Tambah")
+            add_btn = QPushButton(t("users.btn.add"))
             add_btn.clicked.connect(self._add_to_blacklist)
             add_btn.setStyleSheet(btn_danger())
             input_row.addWidget(add_btn)
         else:
             self.whitelist_input = QLineEdit()
-            self.whitelist_input.setPlaceholderText("Username VIP (tanpa @)...")
+            self.whitelist_input.setPlaceholderText(t("users.placeholder.whitelist_input"))
             self.whitelist_input.setStyleSheet(_INPUT_STYLE(SUCCESS))
             self.whitelist_input.returnPressed.connect(self._add_to_whitelist)
             input_row.addWidget(self.whitelist_input)
 
-            add_btn = QPushButton("+ Tambah VIP")
+            add_btn = QPushButton(t("users.btn.add_vip"))
             add_btn.clicked.connect(self._add_to_whitelist)
             add_btn.setStyleSheet(btn_success())
             input_row.addWidget(add_btn)
@@ -276,13 +273,13 @@ class UserManagementTab(QWidget):
 
         if is_blacklist:
             self.blacklist_search = QLineEdit()
-            self.blacklist_search.setPlaceholderText("Cari di blacklist...")
+            self.blacklist_search.setPlaceholderText(t("users.placeholder.search_blacklist"))
             self.blacklist_search.setStyleSheet(_INPUT_STYLE(BORDER))
             self.blacklist_search.textChanged.connect(self._filter_blacklist)
             search_row.addWidget(self.blacklist_search)
         else:
             self.whitelist_search = QLineEdit()
-            self.whitelist_search.setPlaceholderText("Cari di whitelist...")
+            self.whitelist_search.setPlaceholderText(t("users.placeholder.search_whitelist"))
             self.whitelist_search.setStyleSheet(_INPUT_STYLE(BORDER))
             self.whitelist_search.textChanged.connect(self._filter_whitelist)
             search_row.addWidget(self.whitelist_search)
@@ -296,7 +293,7 @@ class UserManagementTab(QWidget):
             self.blacklist_widget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             layout.addWidget(self.blacklist_widget)
 
-            remove_btn = QPushButton("🗑️ Hapus Terpilih")
+            remove_btn = QPushButton(t("users.btn.remove_selected"))
             remove_btn.clicked.connect(self._remove_from_blacklist)
             remove_btn.setStyleSheet(btn_danger())
             layout.addWidget(remove_btn)
@@ -306,7 +303,7 @@ class UserManagementTab(QWidget):
             self.whitelist_widget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
             layout.addWidget(self.whitelist_widget)
 
-            remove_btn = QPushButton("🗑️ Hapus VIP Terpilih")
+            remove_btn = QPushButton(t("users.btn.remove_vip_selected"))
             remove_btn.clicked.connect(self._remove_from_whitelist)
             remove_btn.setStyleSheet(btn_ghost())
             layout.addWidget(remove_btn)
@@ -326,13 +323,13 @@ class UserManagementTab(QWidget):
         """)
         layout = QHBoxLayout()
 
-        self.blacklist_count_label = QLabel("🚫 Blacklist: 0 users")
+        self.blacklist_count_label = QLabel(t("users.stats.blacklist", count=0))
         self.blacklist_count_label.setStyleSheet(f"color: {ERROR}; font-weight: bold;")
         layout.addWidget(self.blacklist_count_label)
 
         layout.addStretch()
 
-        self.whitelist_count_label = QLabel("⭐ VIP: 0 users")
+        self.whitelist_count_label = QLabel(t("users.stats.whitelist", count=0))
         self.whitelist_count_label.setStyleSheet(f"color: {SUCCESS}; font-weight: bold;")
         layout.addWidget(self.whitelist_count_label)
 
@@ -349,13 +346,13 @@ class UserManagementTab(QWidget):
 
         self.blacklist_widget.clear()
         for username in sorted(self.user_manager.get_blacklist()):
-            item = QListWidgetItem(f"🚫 {username}")
+            item = QListWidgetItem(t("users.item.blacklist", username=username))
             item.setData(Qt.ItemDataRole.UserRole, username)
             self.blacklist_widget.addItem(item)
 
         self.whitelist_widget.clear()
         for username in sorted(self.user_manager.get_whitelist()):
-            item = QListWidgetItem(f"⭐ {username}")
+            item = QListWidgetItem(t("users.item.whitelist", username=username))
             item.setData(Qt.ItemDataRole.UserRole, username)
             self.whitelist_widget.addItem(item)
 
@@ -368,8 +365,8 @@ class UserManagementTab(QWidget):
         if not self.user_manager:
             return
         stats = self.user_manager.get_stats()
-        self.blacklist_count_label.setText(f"🚫 Blacklist: {stats['blacklist_count']} users")
-        self.whitelist_count_label.setText(f"⭐ VIP: {stats['whitelist_count']} users")
+        self.blacklist_count_label.setText(t("users.stats.blacklist", count=stats['blacklist_count']))
+        self.whitelist_count_label.setText(t("users.stats.whitelist", count=stats['whitelist_count']))
 
     def _add_to_blacklist(self):
         username = self.blacklist_input.text().strip().lstrip("@")
@@ -438,7 +435,10 @@ class UserManagementTab(QWidget):
             return
 
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export User List", "user_lists.csv", "CSV Files (*.csv)"
+            self,
+            t("users.dialog.export_title"),
+            t("users.dialog.export_default_name"),
+            t("users.dialog.export_filter"),
         )
         if not file_path:
             return
@@ -454,13 +454,18 @@ class UserManagementTab(QWidget):
                 writer.writerows(rows)
 
             QMessageBox.information(
-                self, "Export Berhasil",
-                f"✅ {len(rows)} username diekspor ke:\n{file_path}"
+                self,
+                t("users.msg.export_success_title"),
+                t("users.msg.export_success", count=len(rows), path=file_path),
             )
             logger.info(f"Exported {len(rows)} users to {file_path}")
 
         except Exception as e:
-            QMessageBox.warning(self, "Export Gagal", f"Error: {e}")
+            QMessageBox.warning(
+                self,
+                t("users.err.export_failed_title"),
+                t("users.err.export_failed", reason=str(e)),
+            )
 
     def _import_csv(self):
         """Import username dari CSV — support format: username saja, atau username,list_type"""
@@ -468,7 +473,10 @@ class UserManagementTab(QWidget):
             return
 
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Import User List", "", "CSV Files (*.csv);;Text Files (*.txt)"
+            self,
+            t("users.dialog.import_title"),
+            "",
+            t("users.dialog.import_filter"),
         )
         if not file_path:
             return
@@ -503,13 +511,20 @@ class UserManagementTab(QWidget):
             self.listsUpdated.emit()
 
             QMessageBox.information(
-                self, "Import Berhasil",
-                f"✅ Import selesai:\n"
-                f"• {added_black} ditambah ke Blacklist\n"
-                f"• {added_white} ditambah ke VIP\n"
-                f"• {skipped} dilewati (sudah ada / duplikat)"
+                self,
+                t("users.msg.import_success_title"),
+                t(
+                    "users.msg.import_success",
+                    added_black=added_black,
+                    added_white=added_white,
+                    skipped=skipped,
+                ),
             )
             logger.info(f"Imported: {added_black} blacklist, {added_white} whitelist, {skipped} skipped")
 
         except Exception as e:
-            QMessageBox.warning(self, "Import Gagal", f"Error membaca file:\n{e}")
+            QMessageBox.warning(
+                self,
+                t("users.err.import_failed_title"),
+                t("users.err.import_failed", reason=str(e)),
+            )

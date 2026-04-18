@@ -32,6 +32,8 @@ except ImportError:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
     from modules_client.updater import CURRENT_VERSION, DownloadThread, install_update
 
+from modules_client.i18n import t
+
 # Ocean Blue palette
 C_BG       = "#0F1623"
 C_SURFACE  = "#162032"
@@ -54,7 +56,7 @@ class UpdateDialog(QDialog):
         self.download_thread: Optional[DownloadThread] = None
         self.zip_path: Optional[str] = None
 
-        self.setWindowTitle("VocaLive — Update Tersedia")
+        self.setWindowTitle(t("update.dialog.title"))
         self.setFixedSize(480, 420)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         self.setModal(True)
@@ -82,13 +84,13 @@ class UpdateDialog(QDialog):
 
         ver_col = QVBoxLayout()
         ver_col.setSpacing(2)
-        ver_title = QLabel("Update Tersedia!")
+        ver_title = QLabel(t("update.label.title"))
         ver_title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         ver_title.setStyleSheet(f"color: {C_ACCENT};")
         ver_col.addWidget(ver_title)
 
         latest = self.update_info.get("latest", "?")
-        ver_sub = QLabel(f"v{CURRENT_VERSION}  →  v{latest}")
+        ver_sub = QLabel(t("update.label.version_arrow", current=CURRENT_VERSION, latest=latest))
         ver_sub.setFont(QFont("Segoe UI", 10))
         ver_sub.setStyleSheet(f"color: {C_MUTED};")
         ver_col.addWidget(ver_sub)
@@ -97,7 +99,7 @@ class UpdateDialog(QDialog):
         top_row.addStretch()
         hl.addLayout(top_row)
 
-        notes_lbl = QLabel("Apa yang baru:")
+        notes_lbl = QLabel(t("update.label.changelog"))
         notes_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Medium))
         notes_lbl.setStyleSheet(f"color: {C_MUTED}; margin-top: 4px;")
         hl.addWidget(notes_lbl)
@@ -145,7 +147,7 @@ class UpdateDialog(QDialog):
         """)
         pl.addWidget(self.progress_bar)
 
-        self.progress_label = QLabel("Mengunduh update...")
+        self.progress_label = QLabel(t("update.label.downloading_init"))
         self.progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.progress_label.setFont(QFont("Segoe UI", 9))
         self.progress_label.setStyleSheet(f"color: {C_MUTED};")
@@ -160,7 +162,7 @@ class UpdateDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
-        self.btn_later = QPushButton("Nanti Saja")
+        self.btn_later = QPushButton(t("update.btn.later"))
         self.btn_later.setMinimumHeight(40)
         self.btn_later.setFont(QFont("Segoe UI", 10))
         self.btn_later.setStyleSheet(f"""
@@ -173,7 +175,7 @@ class UpdateDialog(QDialog):
         self.btn_later.clicked.connect(self.reject)
         btn_row.addWidget(self.btn_later)
 
-        self.btn_update = QPushButton("⬇️  Update Sekarang")
+        self.btn_update = QPushButton(t("update.btn.update_now"))
         self.btn_update.setMinimumHeight(40)
         self.btn_update.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.btn_update.setStyleSheet(f"""
@@ -203,7 +205,7 @@ class UpdateDialog(QDialog):
     def _start_download(self):
         url = self.update_info.get("url", "")
         if not url:
-            self._set_status("URL download tidak tersedia.", error=True)
+            self._set_status(t("update.err.no_url"), error=True)
             return
 
         self.btn_update.setEnabled(False)
@@ -222,26 +224,23 @@ class UpdateDialog(QDialog):
 
     def _on_progress(self, pct: int):
         self.progress_bar.setValue(pct)
-        self.progress_label.setText(f"Mengunduh... {pct}%")
+        self.progress_label.setText(t("update.msg.downloading", progress=pct))
 
     def _on_download_done(self, zip_path: str):
-        self.progress_label.setText("Download selesai. Menginstall...")
+        self.progress_label.setText(t("update.msg.installing"))
         self.progress_bar.setValue(100)
         ok = install_update(zip_path)
         if ok:
-            self.progress_label.setText(
-                "✅ Update berhasil!\n"
-                "Aplikasi akan ditutup. Silakan buka kembali VocaLive secara manual."
-            )
+            self.progress_label.setText(t("update.msg.done"))
             self.progress_label.setStyleSheet(f"color: {C_SUCCESS}; font-weight: bold;")
             # Beri waktu user membaca pesan sebelum quit
             QTimer.singleShot(3000, self._quit_for_update)
         else:
-            self._set_status("Gagal install. Coba jalankan sebagai Administrator.", error=True)
+            self._set_status(t("update.err.install_failed"), error=True)
             self.btn_later.setEnabled(True)
 
     def _on_error(self, msg: str):
-        self._set_status(f"Error: {msg}", error=True)
+        self._set_status(t("update.err.generic", reason=msg), error=True)
         self.btn_update.setEnabled(True)
         self.btn_later.setEnabled(True)
 

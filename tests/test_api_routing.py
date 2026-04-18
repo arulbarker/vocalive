@@ -24,6 +24,21 @@ if str(ROOT_DIR) not in sys.path:
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture(autouse=True)
+def _i18n_id_loaded(monkeypatch):
+    """Load real id.json translations agar t() di api.py return nilai asli,
+    bukan raw key. Tanpa ini, err.api.* key akan di-return as-is."""
+    import json
+
+    from modules_client import i18n
+
+    i18n_path = Path(__file__).parent.parent / "i18n" / "id.json"
+    translations = json.loads(i18n_path.read_text(encoding="utf-8"))
+    monkeypatch.setattr(i18n, "_current_lang", "id")
+    monkeypatch.setattr(i18n, "_translations", translations)
+    monkeypatch.setattr(i18n, "_reference_translations", translations)
+
+
 def _make_cfg_mock(ai_provider: str = "gemini", gemini_key: str = "fake-key", deepseek_key: str = "fake-key"):
     """Return MagicMock yang mensimulasikan ConfigManager class.
 

@@ -110,6 +110,12 @@ else:
     # Running as regular Python script
     ROOT = os.path.dirname(os.path.abspath(__file__))
 
+# ========== CAPTURE FRESH INSTALL STATUS ==========
+# HARUS di-capture SEBELUM setup_validator / i18n / license sempat menyentuh settings.json.
+# Path resolution konsisten dengan pattern di modules_client/config_manager.py:12-16.
+_settings_path = Path(ROOT) / "config" / "settings.json"
+IS_FRESH_INSTALL = not _settings_path.exists()
+
 # Setup logging system SEBELUM import lainnya
 LOG_DIR = Path(ROOT) / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -465,6 +471,17 @@ def main():
     print(f"[INFO] Mode: {APP_MODE}")
     print(f"[INFO] Root directory: {ROOT}")
 
+    # ========== I18N INITIALIZATION ==========
+    # Initialize i18n SEBELUM license dialog supaya dialog bilingual dari first launch.
+    # IS_FRESH_INSTALL di-capture di module-level sebelum setup_validator run.
+    try:
+        from modules_client import i18n
+        i18n.init(fresh_install=IS_FRESH_INSTALL)
+        logger.info("[STARTUP] i18n initialized, lang=%s (fresh_install=%s)",
+                    i18n.current_language(), IS_FRESH_INSTALL)
+    except Exception as e:
+        logger.error(f"[STARTUP] i18n init failed (non-fatal): {e}")
+
     # ========== LICENSE VALIDATION ==========
     print("[LICENSE] Validating application license...")
     _license_is_valid = validate_application_license()
@@ -498,7 +515,11 @@ def main():
     from modules_client.telemetry import set_user_context
     telemetry_init(POSTHOG_PROJECT_KEY, SENTRY_DSN, _APP_VERSION)
     logger.info("[STARTUP] Telemetry initialized")
-    set_user_context({"platform": "windows", "app_mode": APP_MODE})
+    try:
+        _ui_lang = i18n.current_language()
+    except Exception:
+        _ui_lang = "id"
+    set_user_context({"platform": "windows", "app_mode": APP_MODE, "ui_language": _ui_lang})
     telemetry_capture("app_launched")
 
     # LAUNCH GUI APPLICATION

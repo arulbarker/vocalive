@@ -13,11 +13,24 @@ pytest.importorskip("pytestqt")
 
 
 @pytest.fixture
-def config_tab(qtbot):
+def config_tab(qtbot, monkeypatch):
     """Instantiate ConfigTab dengan ConfigManager di-mock.
 
     Mock returns sensible defaults agar load_saved_keys() tidak crash.
+    i18n di-load dari i18n/id.json agar UI strings sesuai dengan yang dikirim ke user.
     """
+    import json
+    from pathlib import Path
+
+    from modules_client import i18n
+
+    # Load real id.json translations supaya label / placeholder dapat nilai asli
+    i18n_path = Path(__file__).parent.parent / "i18n" / "id.json"
+    translations = json.loads(i18n_path.read_text(encoding="utf-8"))
+    monkeypatch.setattr(i18n, "_current_lang", "id")
+    monkeypatch.setattr(i18n, "_translations", translations)
+    monkeypatch.setattr(i18n, "_reference_translations", translations)
+
     mock_cfg_data = {
         "ai_provider": "deepseek",
         "api_keys": {
@@ -207,3 +220,36 @@ class TestCloseEvent:
 
         mock_thread.quit.assert_not_called()
         event.accept.assert_called_once()
+
+
+class TestUILanguageCombo:
+    """Test UI language switcher di Config Tab."""
+
+    def test_ui_lang_combo_exists(self, qtbot, mocker):
+        mocker.patch("modules_client.i18n.current_language", return_value="id")
+        mocker.patch("modules_client.config_manager.ConfigManager")
+        from ui.config_tab import ConfigTab
+        tab = ConfigTab()
+        qtbot.addWidget(tab)
+        assert hasattr(tab, "ui_lang_combo")
+        assert tab.ui_lang_combo.count() == 2
+
+    def test_ui_lang_combo_reflects_current_language(self, qtbot, mocker):
+        mocker.patch("modules_client.i18n.current_language", return_value="en")
+        mocker.patch("modules_client.config_manager.ConfigManager")
+        from ui.config_tab import ConfigTab
+        tab = ConfigTab()
+        qtbot.addWidget(tab)
+        assert tab.ui_lang_combo.itemData(tab.ui_lang_combo.currentIndex()) == "en"
+
+    def test_ui_lang_change_calls_set_language(self, qtbot, mocker):
+        mocker.patch("modules_client.i18n.current_language", return_value="id")
+        mocker.patch("modules_client.config_manager.ConfigManager")
+        set_lang = mocker.patch("modules_client.i18n.set_language")
+        mocker.patch("ui.config_tab.QMessageBox.information")
+        from ui.config_tab import ConfigTab
+        tab = ConfigTab()
+        qtbot.addWidget(tab)
+        # Switch ke index EN
+        tab.ui_lang_combo.setCurrentIndex(1)
+        set_lang.assert_called_once_with("en")
