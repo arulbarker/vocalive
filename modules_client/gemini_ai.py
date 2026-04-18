@@ -92,7 +92,16 @@ class GeminiAI:
         for attempt in range(max_retries):
             try:
                 url = f"{GEMINI_API_BASE}/{self.model}:generateContent"
-                timeout = 5 if fast_mode else (10 if attempt == 0 else 15)
+                # Dynamic timeout: fast mode 5s, long output (max_tokens>300) scale,
+                # normal chat reply 10-15s. Mencegah timeout pada request besar seperti
+                # Polish Knowledge (max_tokens=800).
+                if fast_mode:
+                    timeout = 5
+                elif max_tokens > 300:
+                    base = max(30, 20 + int(max_tokens * 0.05))
+                    timeout = base if attempt == 0 else base + 30
+                else:
+                    timeout = 10 if attempt == 0 else 15
                 resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
 
                 if resp.status_code == 200:
