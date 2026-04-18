@@ -29,6 +29,8 @@ from PyQt6.QtWidgets import (
 
 logger = logging.getLogger('VocaLive.AnalyticsTab')
 
+from modules_client.i18n import t
+
 try:
     from modules_client.analytics_manager import get_analytics_manager
     ANALYTICS_AVAILABLE = True
@@ -126,7 +128,7 @@ class AnalyticsTab(QWidget):
 
         # Check if analytics available
         if not ANALYTICS_AVAILABLE:
-            error_label = QLabel("⚠️ Analytics Manager tidak tersedia")
+            error_label = QLabel(t("analytics.err.unavailable"))
             error_label.setStyleSheet(f"color: {ERROR}; font-size: 14px; padding: 20px;")
             error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             main_layout.addWidget(error_label)
@@ -156,24 +158,24 @@ class AnalyticsTab(QWidget):
 
         # Tab 1: Real-time Overview
         self.overview_tab = self._create_overview_tab()
-        self.tabs.addTab(self.overview_tab, "📊 Live Overview")
+        self.tabs.addTab(self.overview_tab, t("analytics.tab.overview"))
 
         # Tab 2: Top Viewers
         self.viewers_tab = self._create_viewers_tab()
-        self.tabs.addTab(self.viewers_tab, "👥 Top Viewers")
+        self.tabs.addTab(self.viewers_tab, t("analytics.tab.viewers"))
 
         # Tab 3: Keywords
         self.keywords_tab = self._create_keywords_tab()
-        self.tabs.addTab(self.keywords_tab, "🔥 Popular Keywords")
+        self.tabs.addTab(self.keywords_tab, t("analytics.tab.keywords"))
 
         # Tab 4: History
         self.history_tab = self._create_history_tab()
-        self.tabs.addTab(self.history_tab, "📜 Session History")
+        self.tabs.addTab(self.history_tab, t("analytics.tab.history"))
 
         # Tab 5: Charts (if pyqtgraph available)
         if CHARTS_AVAILABLE:
             self.charts_tab = self._create_charts_tab()
-            self.tabs.addTab(self.charts_tab, "📈 Charts")
+            self.tabs.addTab(self.charts_tab, t("analytics.tab.charts"))
 
         # Initialize chart data lists for real-time updates
         self.chart_time_data = []
@@ -202,7 +204,7 @@ class AnalyticsTab(QWidget):
         layout = QHBoxLayout()
 
         # Title
-        title = QLabel("📈 Live Analytics Dashboard")
+        title = QLabel(t("analytics.header.title"))
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {PRIMARY};")
         layout.addWidget(title)
@@ -210,24 +212,24 @@ class AnalyticsTab(QWidget):
         layout.addStretch()
 
         # Session info
-        self.session_label = QLabel("No active session")
+        self.session_label = QLabel(t("analytics.session.none"))
         self.session_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
         layout.addWidget(self.session_label)
 
         # Export CSV button
-        export_btn = QPushButton("📥 Export CSV")
+        export_btn = QPushButton(t("analytics.btn.export_csv"))
         export_btn.clicked.connect(self.export_current_session)
         export_btn.setStyleSheet(btn_success())
         layout.addWidget(export_btn)
 
         # Export PDF button
-        pdf_btn = QPushButton("📄 Export PDF")
+        pdf_btn = QPushButton(t("analytics.btn.export_pdf"))
         pdf_btn.clicked.connect(self.export_to_pdf)
         pdf_btn.setStyleSheet(btn_ghost())
         layout.addWidget(pdf_btn)
 
         # Clear data button
-        clear_btn = QPushButton("🗑️ Clear All Data")
+        clear_btn = QPushButton(t("analytics.btn.clear_all"))
         clear_btn.clicked.connect(self.clear_all_data)
         clear_btn.setStyleSheet(btn_danger())
         layout.addWidget(clear_btn)
@@ -268,25 +270,37 @@ class AnalyticsTab(QWidget):
         stats_layout = QHBoxLayout()
 
         # Card 1: Comments
-        self.comments_card = self._create_stat_card("💬 Comments", "0", "0 replied")
+        self.comments_card = self._create_stat_card(
+            t("analytics.card.comments"), "0", t("analytics.card.comments_sub_initial")
+        )
         stats_layout.addWidget(self.comments_card)
 
         # Card 2: Viewers
-        self.viewers_card = self._create_stat_card("👥 Viewers", "0", "Peak: 0")
+        self.viewers_card = self._create_stat_card(
+            t("analytics.card.viewers"), "0", t("analytics.card.viewers_sub_initial")
+        )
         stats_layout.addWidget(self.viewers_card)
 
         # Card 3: Engagement
-        self.engagement_card = self._create_stat_card("⚡ Engagement", "0%", "Reply rate")
+        self.engagement_card = self._create_stat_card(
+            t("analytics.card.engagement"),
+            t("analytics.card.engagement_value_initial"),
+            t("analytics.card.engagement_sub"),
+        )
         stats_layout.addWidget(self.engagement_card)
 
         # Card 4: Duration
-        self.duration_card = self._create_stat_card("⏱️ Duration", "0 min", "Active")
+        self.duration_card = self._create_stat_card(
+            t("analytics.card.duration"),
+            t("analytics.card.duration_value_initial"),
+            t("analytics.card.duration_sub_active"),
+        )
         stats_layout.addWidget(self.duration_card)
 
         layout.addLayout(stats_layout)
 
         # Additional stats
-        stats_group = QGroupBox("📊 Detailed Statistics")
+        stats_group = QGroupBox(t("analytics.group.detailed_stats"))
         stats_group.setStyleSheet(f"""
             QGroupBox {{
                 color: {ACCENT};
@@ -311,10 +325,10 @@ class AnalyticsTab(QWidget):
         # Stats labels
         self.stats_labels = {}
         stat_items = [
-            ("total_gifts", "💝 Total Gifts/Donations", "Rp 0"),
-            ("total_shares", "📤 Total Shares", "0"),
-            ("total_likes", "❤️ Total Likes", "0"),
-            ("total_follows", "➕ New Follows", "0"),
+            ("total_gifts", t("analytics.stat.total_gifts"), t("analytics.stat.total_gifts_value")),
+            ("total_shares", t("analytics.stat.total_shares"), t("analytics.stat.value_zero")),
+            ("total_likes", t("analytics.stat.total_likes"), t("analytics.stat.value_zero")),
+            ("total_follows", t("analytics.stat.total_follows"), t("analytics.stat.value_zero")),
         ]
 
         for key, label, default in stat_items:
@@ -336,7 +350,7 @@ class AnalyticsTab(QWidget):
         layout.addWidget(stats_group)
 
         # Timeline
-        timeline_group = QGroupBox("📅 Session Timeline")
+        timeline_group = QGroupBox(t("analytics.group.session_timeline"))
         timeline_group.setStyleSheet(stats_group.styleSheet())
         timeline_layout = QVBoxLayout()
 
@@ -386,7 +400,7 @@ class AnalyticsTab(QWidget):
         layout = QVBoxLayout()
 
         # Description
-        desc = QLabel("🏆 Viewers ranked by engagement")
+        desc = QLabel(t("analytics.viewers.desc"))
         desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
 
@@ -394,7 +408,13 @@ class AnalyticsTab(QWidget):
         self.viewers_table = QTableWidget()
         self.viewers_table.setColumnCount(7)
         self.viewers_table.setHorizontalHeaderLabels([
-            "Rank", "Username", "Comments", "Replied", "Gifts", "Shares", "Likes"
+            t("analytics.viewers.col.rank"),
+            t("analytics.viewers.col.username"),
+            t("analytics.viewers.col.comments"),
+            t("analytics.viewers.col.replied"),
+            t("analytics.viewers.col.gifts"),
+            t("analytics.viewers.col.shares"),
+            t("analytics.viewers.col.likes"),
         ])
 
         # Table styling
@@ -437,7 +457,7 @@ class AnalyticsTab(QWidget):
         layout = QVBoxLayout()
 
         # Description
-        desc = QLabel("🔥 Most mentioned keywords and topics")
+        desc = QLabel(t("analytics.keywords.desc"))
         desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
 
@@ -445,7 +465,9 @@ class AnalyticsTab(QWidget):
         self.keywords_table = QTableWidget()
         self.keywords_table.setColumnCount(3)
         self.keywords_table.setHorizontalHeaderLabels([
-            "Rank", "Keyword", "Mentions"
+            t("analytics.keywords.col.rank"),
+            t("analytics.keywords.col.keyword"),
+            t("analytics.keywords.col.mentions"),
         ])
 
         self.keywords_table.setStyleSheet(self.viewers_table.styleSheet())
@@ -456,7 +478,7 @@ class AnalyticsTab(QWidget):
         layout.addWidget(self.keywords_table)
 
         # Action suggestions
-        suggestions_group = QGroupBox("💡 Suggested Actions")
+        suggestions_group = QGroupBox(t("analytics.group.suggested_actions"))
         suggestions_group.setStyleSheet(f"""
             QGroupBox {{
                 color: {ACCENT};
@@ -496,7 +518,7 @@ class AnalyticsTab(QWidget):
         layout = QVBoxLayout()
 
         # Description
-        desc = QLabel("📜 Past live session analytics")
+        desc = QLabel(t("analytics.history.desc"))
         desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
 
@@ -504,7 +526,12 @@ class AnalyticsTab(QWidget):
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(6)
         self.history_table.setHorizontalHeaderLabels([
-            "Session ID", "Platform", "Duration", "Comments", "Viewers", "Gifts"
+            t("analytics.history.col.session_id"),
+            t("analytics.history.col.platform"),
+            t("analytics.history.col.duration"),
+            t("analytics.history.col.comments"),
+            t("analytics.history.col.viewers"),
+            t("analytics.history.col.gifts"),
         ])
 
         self.history_table.setStyleSheet(self.viewers_table.styleSheet())
@@ -517,7 +544,7 @@ class AnalyticsTab(QWidget):
         # Buttons
         btn_layout = QHBoxLayout()
 
-        refresh_btn = QPushButton("🔄 Refresh History")
+        refresh_btn = QPushButton(t("analytics.btn.refresh_history"))
         refresh_btn.clicked.connect(self.refresh_history)
         refresh_btn.setStyleSheet(f"""
             QPushButton {{
@@ -548,12 +575,12 @@ class AnalyticsTab(QWidget):
         layout = QVBoxLayout()
 
         # Description
-        desc = QLabel("📈 Real-time charts showing session performance over time")
+        desc = QLabel(t("analytics.charts.desc"))
         desc.setStyleSheet(f"color: {TEXT_MUTED}; margin-bottom: 10px;")
         layout.addWidget(desc)
 
         # Chart 1: Viewers over time
-        viewers_group = QGroupBox("👥 Viewers Over Time")
+        viewers_group = QGroupBox(t("analytics.group.viewers_chart"))
         viewers_group.setStyleSheet(f"""
             QGroupBox {{
                 color: {ACCENT};
@@ -569,8 +596,8 @@ class AnalyticsTab(QWidget):
 
         self.viewers_chart = PlotWidget()
         self.viewers_chart.setBackground(BG_ELEVATED)
-        self.viewers_chart.setLabel('left', 'Viewers', color=PRIMARY)
-        self.viewers_chart.setLabel('bottom', 'Time (minutes)', color=TEXT_MUTED)
+        self.viewers_chart.setLabel('left', t("analytics.charts.axis.viewers"), color=PRIMARY)
+        self.viewers_chart.setLabel('bottom', t("analytics.charts.axis.time"), color=TEXT_MUTED)
         self.viewers_chart.showGrid(x=True, y=True, alpha=0.3)
         self.viewers_chart.setMinimumHeight(150)
         self.viewers_plot = self.viewers_chart.plot([], [], pen=pg.mkPen(PRIMARY, width=2), symbol='o', symbolSize=5, symbolBrush=PRIMARY)
@@ -580,14 +607,14 @@ class AnalyticsTab(QWidget):
         layout.addWidget(viewers_group)
 
         # Chart 2: Comments over time
-        comments_group = QGroupBox("💬 Comments Over Time")
+        comments_group = QGroupBox(t("analytics.group.comments_chart"))
         comments_group.setStyleSheet(viewers_group.styleSheet())
         comments_layout = QVBoxLayout()
 
         self.comments_chart = PlotWidget()
         self.comments_chart.setBackground(BG_ELEVATED)
-        self.comments_chart.setLabel('left', 'Comments', color=SUCCESS)
-        self.comments_chart.setLabel('bottom', 'Time (minutes)', color=TEXT_MUTED)
+        self.comments_chart.setLabel('left', t("analytics.charts.axis.comments"), color=SUCCESS)
+        self.comments_chart.setLabel('bottom', t("analytics.charts.axis.time"), color=TEXT_MUTED)
         self.comments_chart.showGrid(x=True, y=True, alpha=0.3)
         self.comments_chart.setMinimumHeight(150)
         self.comments_plot = self.comments_chart.plot([], [], pen=pg.mkPen(SUCCESS, width=2), symbol='o', symbolSize=5, symbolBrush=SUCCESS)
@@ -599,7 +626,7 @@ class AnalyticsTab(QWidget):
         # Clear charts button
         btn_layout = QHBoxLayout()
 
-        clear_btn = QPushButton("🗑️ Clear Charts")
+        clear_btn = QPushButton(t("analytics.btn.clear_charts"))
         clear_btn.clicked.connect(self._clear_charts)
         clear_btn.setStyleSheet(f"""
             QPushButton {{
@@ -667,10 +694,12 @@ class AnalyticsTab(QWidget):
         if stats.get("is_active"):
             platform = stats.get("platform", "").upper()
             session_id = stats.get("session_id", "")
-            self.session_label.setText(f"🔴 LIVE - {platform} | {session_id}")
+            self.session_label.setText(
+                t("analytics.session.live", platform=platform, session_id=session_id)
+            )
             self.session_label.setStyleSheet(f"color: {SUCCESS}; font-size: 12px; font-weight: bold;")
         else:
-            self.session_label.setText("⚫ No active session")
+            self.session_label.setText(t("analytics.session.offline"))
             self.session_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
 
         # Update overview cards
@@ -691,26 +720,40 @@ class AnalyticsTab(QWidget):
         total_comments = stats.get("total_comments", 0)
         replied_comments = stats.get("total_comments_replied", 0)
         self.comments_card.findChild(QLabel, "value").setText(str(total_comments))
-        self.comments_card.findChild(QLabel, "subtitle").setText(f"{replied_comments} replied")
+        self.comments_card.findChild(QLabel, "subtitle").setText(
+            t("analytics.card.comments_sub", count=replied_comments)
+        )
 
         # Viewers card
         unique_viewers = stats.get("unique_viewers", 0)
         peak_viewers = stats.get("peak_viewers", 0)
         self.viewers_card.findChild(QLabel, "value").setText(str(unique_viewers))
-        self.viewers_card.findChild(QLabel, "subtitle").setText(f"Peak: {peak_viewers}")
+        self.viewers_card.findChild(QLabel, "subtitle").setText(
+            t("analytics.card.viewers_sub", peak=peak_viewers)
+        )
 
         # Engagement card
         if total_comments > 0:
             reply_rate = (replied_comments / total_comments) * 100
         else:
             reply_rate = 0
-        self.engagement_card.findChild(QLabel, "value").setText(f"{reply_rate:.1f}%")
-        self.engagement_card.findChild(QLabel, "subtitle").setText("Reply rate")
+        self.engagement_card.findChild(QLabel, "value").setText(
+            t("analytics.card.engagement_value", rate=reply_rate)
+        )
+        self.engagement_card.findChild(QLabel, "subtitle").setText(
+            t("analytics.card.engagement_sub")
+        )
 
         # Duration card
         duration = self.analytics.get_session_duration()
-        self.duration_card.findChild(QLabel, "value").setText(f"{duration:.0f} min")
-        status = "Active" if stats.get("is_active") else "Ended"
+        self.duration_card.findChild(QLabel, "value").setText(
+            t("analytics.card.duration_value", minutes=duration)
+        )
+        status = (
+            t("analytics.card.duration_sub_active")
+            if stats.get("is_active")
+            else t("analytics.card.duration_sub_ended")
+        )
         self.duration_card.findChild(QLabel, "subtitle").setText(status)
 
         # Additional stats
@@ -805,27 +848,33 @@ class AnalyticsTab(QWidget):
     def _generate_suggestions(self, top_keywords):
         """Generate actionable suggestions based on keywords"""
         if not top_keywords:
-            return "No data yet - start your live session to get insights!"
+            return t("analytics.suggest.empty")
 
         suggestions = []
 
         # Check for price mentions
         for keyword, count in top_keywords[:10]:
             if keyword == "_price_mention":
-                suggestions.append(f"💰 Many viewers asking about prices ({count}x) - consider showing price clearly")
+                suggestions.append(t("analytics.suggest.price", count=count))
             elif keyword in ["harga", "stock", "ready"]:
-                suggestions.append(f"📦 '{keyword}' mentioned {count}x - viewers want to know availability")
+                suggestions.append(
+                    t("analytics.suggest.availability", keyword=keyword, count=count)
+                )
             elif keyword in ["diskon", "promo"]:
-                suggestions.append(f"🔥 '{keyword}' is hot ({count}x) - good time for flash sale!")
+                suggestions.append(
+                    t("analytics.suggest.promo", keyword=keyword, count=count)
+                )
 
         # Check for product names
         product_keywords = ["hijab", "gamis", "dress", "baju"]
         for keyword, count in top_keywords[:10]:
             if keyword in product_keywords:
-                suggestions.append(f"🛍️ '{keyword}' trending ({count}x) - make sure stock is ready!")
+                suggestions.append(
+                    t("analytics.suggest.product", keyword=keyword, count=count)
+                )
 
         if not suggestions:
-            suggestions.append("✅ No specific action needed - engagement looks good!")
+            suggestions.append(t("analytics.suggest.all_good"))
 
         return "\n".join(suggestions[:5])  # Max 5 suggestions
 
@@ -853,7 +902,9 @@ class AnalyticsTab(QWidget):
             self.history_table.setItem(i, 1, platform_item)
 
             # Duration
-            duration_item = QTableWidgetItem(f"{summary['duration_minutes']:.0f} min")
+            duration_item = QTableWidgetItem(
+                t("analytics.duration_minutes", minutes=summary["duration_minutes"])
+            )
             duration_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.history_table.setItem(i, 2, duration_item)
 
@@ -875,21 +926,28 @@ class AnalyticsTab(QWidget):
     def export_current_session(self):
         """Export current session to CSV"""
         if not ANALYTICS_AVAILABLE or not self.analytics:
-            QMessageBox.warning(self, "Export Failed", "Analytics manager not available")
+            QMessageBox.warning(
+                self, t("analytics.export.fail_title"), t("analytics.export.no_manager")
+            )
             return
 
         stats = self.analytics.get_current_stats()
         if not stats.get("is_active") and not stats.get("session_id"):
-            QMessageBox.warning(self, "Export Failed", "No session data to export")
+            QMessageBox.warning(
+                self, t("analytics.export.fail_title"), t("analytics.export.no_data")
+            )
             return
 
         # Ask for save location
-        default_name = f"{stats.get('session_id', 'session')}_analytics.csv"
+        default_name = t(
+            "analytics.export.csv_default_name",
+            session_id=stats.get("session_id", "session"),
+        )
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Export Analytics",
+            t("analytics.export.csv_dialog_title"),
             default_name,
-            "CSV Files (*.csv)"
+            t("analytics.export.csv_filter"),
         )
 
         if not file_path:
@@ -901,22 +959,22 @@ class AnalyticsTab(QWidget):
         if result_path:
             QMessageBox.information(
                 self,
-                "Export Success",
-                f"Analytics exported to:\n{result_path}"
+                t("analytics.export.success_title"),
+                t("analytics.export.csv_success", path=result_path),
             )
         else:
             QMessageBox.warning(
                 self,
-                "Export Failed",
-                f"Failed to export:\n{message}"
+                t("analytics.export.fail_title"),
+                t("analytics.export.csv_failed", reason=message),
             )
 
     def clear_all_data(self):
         """Clear all analytics data"""
         reply = QMessageBox.question(
             self,
-            "Confirm Clear Data",
-            "Are you sure you want to delete ALL analytics data?\nThis action cannot be undone!",
+            t("analytics.clear.confirm_title"),
+            t("analytics.clear.confirm_text"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -926,7 +984,11 @@ class AnalyticsTab(QWidget):
                 self.analytics.clear_all_data()
                 self.refresh_analytics()
                 self.refresh_history()
-                QMessageBox.information(self, "Success", "All analytics data has been cleared")
+                QMessageBox.information(
+                    self,
+                    t("analytics.clear.success_title"),
+                    t("analytics.clear.success_text"),
+                )
 
     def showEvent(self, event):
         """Called when tab is shown"""
@@ -937,17 +999,27 @@ class AnalyticsTab(QWidget):
     def export_to_pdf(self):
         """Export analytics ke PDF menggunakan QPrinter built-in PyQt6 — tanpa library tambahan"""
         if not ANALYTICS_AVAILABLE or not self.analytics:
-            QMessageBox.warning(self, "Export Gagal", "Analytics manager tidak tersedia")
+            QMessageBox.warning(
+                self, t("analytics.export.fail_title"), t("analytics.export.no_manager")
+            )
             return
 
         stats = self.analytics.get_current_stats()
         if not stats.get("is_active") and not stats.get("session_id"):
-            QMessageBox.warning(self, "Export Gagal", "Tidak ada data sesi untuk diekspor")
+            QMessageBox.warning(
+                self, t("analytics.export.fail_title"), t("analytics.export.no_data")
+            )
             return
 
-        default_name = f"{stats.get('session_id', 'session')}_report.pdf"
+        default_name = t(
+            "analytics.export.pdf_default_name",
+            session_id=stats.get("session_id", "session"),
+        )
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export Laporan PDF", default_name, "PDF Files (*.pdf)"
+            self,
+            t("analytics.export.pdf_dialog_title"),
+            default_name,
+            t("analytics.export.pdf_filter"),
         )
         if not file_path:
             return
@@ -979,6 +1051,9 @@ class AnalyticsTab(QWidget):
                 for i, (kw, cnt) in enumerate(top_keywords)
             )
 
+            no_data_html_4col = f'<tr><td colspan="4">{t("analytics.pdf.no_data")}</td></tr>'
+            no_data_html_3col = f'<tr><td colspan="3">{t("analytics.pdf.no_data")}</td></tr>'
+
             html = f"""
             <html><head><style>
                 body {{ font-family: Arial, sans-serif; color: #111; margin: 24px; }}
@@ -993,38 +1068,38 @@ class AnalyticsTab(QWidget):
                 .stat-lbl {{ font-size: 11px; color: #666; }}
                 .footer {{ color: #999; font-size: 10px; margin-top: 32px; border-top: 1px solid #ddd; padding-top: 8px; }}
             </style></head><body>
-            <h1>VocaLive — Laporan Analitik Live</h1>
-            <p><b>Sesi:</b> {stats.get('session_id','N/A')} &nbsp;|&nbsp;
-               <b>Platform:</b> {stats.get('platform','N/A').upper()} &nbsp;|&nbsp;
-               <b>Durasi:</b> {duration:.0f} menit &nbsp;|&nbsp;
-               <b>Dibuat:</b> {datetime.now().strftime('%d %b %Y %H:%M')}</p>
+            <h1>{t("analytics.pdf.report_title")}</h1>
+            <p><b>{t("analytics.pdf.session")}:</b> {stats.get('session_id','N/A')} &nbsp;|&nbsp;
+               <b>{t("analytics.pdf.platform")}:</b> {stats.get('platform','N/A').upper()} &nbsp;|&nbsp;
+               <b>{t("analytics.pdf.duration")}:</b> {duration:.0f} {t("analytics.pdf.minutes")} &nbsp;|&nbsp;
+               <b>{t("analytics.pdf.created")}:</b> {datetime.now().strftime('%d %b %Y %H:%M')}</p>
 
-            <h2>Statistik Sesi</h2>
+            <h2>{t("analytics.pdf.section_stats")}</h2>
             <table>
-                <tr><th>Metrik</th><th>Nilai</th></tr>
-                <tr><td>Total Komentar</td><td>{total}</td></tr>
-                <tr><td>Komentar Dibalas</td><td>{replied} ({reply_rate})</td></tr>
-                <tr><td>Penonton Unik</td><td>{stats.get('unique_viewers',0)}</td></tr>
-                <tr><td>Puncak Penonton</td><td>{stats.get('peak_viewers',0)}</td></tr>
-                <tr><td>Total Gift</td><td>Rp {stats.get('total_gifts_value',0):,}</td></tr>
-                <tr><td>Share</td><td>{stats.get('total_shares',0)}</td></tr>
-                <tr><td>Like</td><td>{stats.get('total_likes',0)}</td></tr>
-                <tr><td>Follower Baru</td><td>{stats.get('total_follows',0)}</td></tr>
+                <tr><th>{t("analytics.pdf.col.metric")}</th><th>{t("analytics.pdf.col.value")}</th></tr>
+                <tr><td>{t("analytics.pdf.stat.total_comments")}</td><td>{total}</td></tr>
+                <tr><td>{t("analytics.pdf.stat.replied")}</td><td>{replied} ({reply_rate})</td></tr>
+                <tr><td>{t("analytics.pdf.stat.unique_viewers")}</td><td>{stats.get('unique_viewers',0)}</td></tr>
+                <tr><td>{t("analytics.pdf.stat.peak_viewers")}</td><td>{stats.get('peak_viewers',0)}</td></tr>
+                <tr><td>{t("analytics.pdf.stat.total_gifts")}</td><td>Rp {stats.get('total_gifts_value',0):,}</td></tr>
+                <tr><td>{t("analytics.pdf.stat.shares")}</td><td>{stats.get('total_shares',0)}</td></tr>
+                <tr><td>{t("analytics.pdf.stat.likes")}</td><td>{stats.get('total_likes',0)}</td></tr>
+                <tr><td>{t("analytics.pdf.stat.new_follows")}</td><td>{stats.get('total_follows',0)}</td></tr>
             </table>
 
-            <h2>Top Penonton</h2>
+            <h2>{t("analytics.pdf.section_top_viewers")}</h2>
             <table>
-                <tr><th>Rank</th><th>Username</th><th>Komentar</th><th>Dibalas</th></tr>
-                {viewer_rows if viewer_rows else '<tr><td colspan="4">Belum ada data</td></tr>'}
+                <tr><th>{t("analytics.pdf.col.rank")}</th><th>{t("analytics.pdf.col.username")}</th><th>{t("analytics.pdf.col.comments")}</th><th>{t("analytics.pdf.col.replied")}</th></tr>
+                {viewer_rows if viewer_rows else no_data_html_4col}
             </table>
 
-            <h2>Kata Populer</h2>
+            <h2>{t("analytics.pdf.section_top_keywords")}</h2>
             <table>
-                <tr><th>Rank</th><th>Kata</th><th>Sebutan</th></tr>
-                {keyword_rows if keyword_rows else '<tr><td colspan="3">Belum ada data</td></tr>'}
+                <tr><th>{t("analytics.pdf.col.rank")}</th><th>{t("analytics.pdf.col.keyword")}</th><th>{t("analytics.pdf.col.mentions")}</th></tr>
+                {keyword_rows if keyword_rows else no_data_html_3col}
             </table>
 
-            <p class="footer">Dibuat oleh VocaLive &mdash; {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p class="footer">{t("analytics.pdf.footer", timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}</p>
             </body></html>
             """
 
@@ -1040,12 +1115,14 @@ class AnalyticsTab(QWidget):
             doc.print_(printer)
 
             QMessageBox.information(
-                self, "Export Berhasil",
-                f"Laporan PDF disimpan ke:\n{file_path}"
+                self,
+                t("analytics.export.success_title"),
+                t("analytics.export.pdf_success", path=file_path),
             )
 
         except Exception as e:
             QMessageBox.warning(
-                self, "Export Gagal",
-                f"Gagal membuat PDF:\n{str(e)}"
+                self,
+                t("analytics.export.fail_title"),
+                t("analytics.export.pdf_failed", reason=str(e)),
             )
