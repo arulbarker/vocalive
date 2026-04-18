@@ -89,13 +89,20 @@ VSVersionInfo(
     # ── Buat spec file ───────────────────────────────────────────────
     spec_content = '''# -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_all
+
+# Collect semua file pyvirtualcam (Python modules + native .pyd + data).
+# Critical: tanpa collect_all, .pyd extension (_native_windows_obs.*.pyd)
+# tidak terdeteksi otomatis → runtime "No module named pyvirtualcam._native..."
+# → Camera() fail → Backend "Tidak ada".
+_pv_datas, _pv_binaries, _pv_hiddenimports = collect_all("pyvirtualcam")
 
 block_cipher = None
 
 a = Analysis(
     ["main.py"],
     pathex=["."],
-    binaries=[],
+    binaries=_pv_binaries,
     datas=[
         ("config/settings_default.json", "config"),
         ("config/voices.json",           "config"),
@@ -104,7 +111,7 @@ a = Analysis(
         # i18n translation files — WAJIB include untuk bilingual support
         ("i18n/id.json", "i18n"),
         ("i18n/en.json", "i18n"),
-    ],
+    ] + _pv_datas,
     hiddenimports=[
         # network
         "requests", "urllib3", "certifi",
@@ -137,9 +144,10 @@ a = Analysis(
         # TikTok Live
         "TikTokLive", "TikTokLive.client", "TikTokLive.events",
         "betterproto",
-        # Virtual Camera (Cohost Tab & Virtual Camera Tab)
-        "pyvirtualcam", "pyvirtualcam.camera",
-    ],
+        # Virtual Camera (Cohost Tab & Virtual Camera Tab).
+        # NOTE: submodules + .pyd native akan di-inject juga via collect_all() di atas.
+        "pyvirtualcam", "pyvirtualcam.camera", "pyvirtualcam.util",
+    ] + _pv_hiddenimports,
     hookspath=[],
     runtime_hooks=[],
     excludes=[
