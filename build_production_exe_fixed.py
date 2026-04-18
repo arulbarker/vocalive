@@ -137,6 +137,8 @@ a = Analysis(
         # TikTok Live
         "TikTokLive", "TikTokLive.client", "TikTokLive.events",
         "betterproto",
+        # Virtual Camera (Cohost Tab & Virtual Camera Tab)
+        "pyvirtualcam", "pyvirtualcam.camera",
     ],
     hookspath=[],
     runtime_hooks=[],
@@ -151,9 +153,11 @@ a = Analysis(
         "pyqtgraph", "IPython", "jupyter", "notebook",
         # thirdparty dead code (Wav2Lip, dwpose, dll)
         "cv2", "opencv", "onnxruntime", "onnx", "triton",
-        "pyvirtualcam", "OpenGL",
+        "OpenGL",
         # pytchat (dead code — app pakai TikTokLive)
         "pytchat",
+        # NOTE: pyvirtualcam WAJIB ada untuk Virtual Camera tab.
+        # Sebelumnya di-exclude untuk save size → bug: OBS tidak ter-deteksi di EXE.
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -178,7 +182,7 @@ _BLOAT_PATTERNS = (
     "Wav2Lip", "dwpose", "sd-vae",
     "pyqtgraph",
     "pytchat",
-    "pyvirtualcam",
+    # pyvirtualcam removed — required untuk Virtual Camera tab
 )
 
 def _is_bloat(name):
