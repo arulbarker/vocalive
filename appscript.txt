@@ -242,9 +242,9 @@ function doGet(e) {
     if (action === "version") {
       var VERSION_INFO = {
         "vocalive": {
-          "latest": "1.0.21",
-          "notes": "- FIX ROOT CAUSE: OBS Virtual Camera FINALLY works (v1.0.19/v1.0.20 tidak cukup - numpy missing di bundle)\n- FIX: Popup update berhasil - text clean tanpa karakter aneh\n- FIX CRITICAL: UI label tampilkan teks benar (sebelumnya raw keys di v1.0.17)\n- FIX: Notifikasi update tidak modal - tombol kuning kapan saja\n- FIX: Update installer tanpa CMD window\n- Bilingual UI Indonesia / English + auto-deteksi locale",
-          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.21/VocaLive-v1.0.21.zip"
+          "latest": "1.0.22",
+          "notes": "- FIX: Virtual Camera Play button sekarang jalan (cv2 missing di v1.0.21)\n- FIX: OBS Virtual Camera terdeteksi (numpy missing fix di v1.0.21)\n- FIX: Popup update text clean tanpa karakter aneh\n- FIX CRITICAL: UI label tampilkan teks benar (v1.0.17 raw keys)\n- FIX: Notifikasi update non-modal - tombol kuning kapan saja\n- FIX: Update installer tanpa CMD window, native Windows popup\n- Bilingual UI Indonesia / English",
+          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.22/VocaLive-v1.0.22.zip"
         },
         "tikdance": {
           "latest": "1.1.3",

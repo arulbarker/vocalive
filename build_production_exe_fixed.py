@@ -161,8 +161,10 @@ a = Analysis(
         "langchain", "langchain_community", "langchain_core",
         "openai", "anthropic", "chromadb", "faiss",
         "pyqtgraph", "IPython", "jupyter", "notebook",
-        # thirdparty dead code (Wav2Lip, dwpose, dll)
-        "cv2", "opencv", "onnxruntime", "onnx", "triton",
+        # thirdparty dead code (Wav2Lip, dwpose, dll).
+        # NOTE: cv2/opencv WAJIB include — virtual_camera_manager pakai cv2 untuk
+        # read frame video + BGR→RGB. Tanpa cv2: klik Play tidak jalan (silent fail).
+        "onnxruntime", "onnx", "triton",
         "OpenGL",
         # pytchat (dead code — app pakai TikTokLive)
         "pytchat",
@@ -180,7 +182,7 @@ a = Analysis(
 _BLOAT_PATTERNS = (
     "torch", "cuda", "cublas", "cudnn", "nvrtc", "nvinfer", "nvidia",
     "triton", "caffe2",
-    "cv2", "opencv",
+    # cv2/opencv removed — WAJIB include untuk Virtual Camera tab playback
     "OpenGL", "opengl",
     "onnx", "onnxruntime",
     "transformers", "tokenizers", "huggingface",
