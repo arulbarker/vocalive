@@ -168,22 +168,54 @@ class SimpleReplyThread(QThread):
                 # For greetings, use the message as direct prompt (already formatted in handle_viewer_greeting)
                 prompt = self.message  # This is the greeting prompt like "Sapa penonton baru bernama X dengan singkat..."
             else:
-                # Regular comment handling with full context
+                # Regular comment handling with full context.
+                # Prompt wrapper ikut self.language (output_language) — bukan hardcoded ID —
+                # supaya AI diinstruksi sesuai bahasa viewer, menghindari mixed-language output.
                 if user_context and user_context.strip():
-                    prompt = f"""Context: {user_context.strip()}
+                    prompt_with_context_templates = {
+                        "Indonesia": f"""Context: {user_context.strip()}
 
 Penonton bernama {self.author} berkomentar: "{self.message}"
 
 Sebagai karakter sesuai context di atas, jawab komentar dari {self.author} dengan natural dan interaktif.
 
-PENTING: Berikan respons yang SINGKAT, PADAT, dan LANGSUNG TO THE POINT (maksimal 2-3 kalimat pendek, sekitar 200-250 karakter). Jangan bertele-tele! Sebut nama {self.author} secara natural. Fokus pada 1 poin utama saja."""
+PENTING: Berikan respons yang SINGKAT, PADAT, dan LANGSUNG TO THE POINT (maksimal 2-3 kalimat pendek, sekitar 200-250 karakter). Jangan bertele-tele! Sebut nama {self.author} secara natural. Fokus pada 1 poin utama saja.""",
+                        "English": f"""Context: {user_context.strip()}
+
+A viewer named {self.author} commented: "{self.message}"
+
+Staying in character per the context above, reply to {self.author} naturally and interactively.
+
+IMPORTANT: Keep your response SHORT, CONCISE, and STRAIGHT TO THE POINT (max 2-3 short sentences, around 200-250 characters). Don't ramble! Mention {self.author}'s name naturally. Focus on 1 main point only.""",
+                        "Malaysia": f"""Context: {user_context.strip()}
+
+Penonton bernama {self.author} komen: "{self.message}"
+
+Sebagai watak mengikut konteks di atas, balas komen dari {self.author} dengan natural dan interaktif.
+
+PENTING: Beri respons yang RINGKAS, PADAT, dan TERUS KEPADA POKOK (maksimum 2-3 ayat pendek, sekitar 200-250 aksara). Jangan berleter! Sebut nama {self.author} secara semula jadi. Fokus pada 1 poin utama sahaja."""
+                    }
+                    prompt = prompt_with_context_templates.get(self.language, prompt_with_context_templates["Indonesia"])
                 else:
-                    # Fallback jika tidak ada context - tetap sertakan nama untuk interaksi yang lebih personal
-                    prompt = f"""Penonton bernama {self.author} berkomentar: "{self.message}"
+                    # Fallback jika tidak ada context - tetap sertakan nama untuk interaksi personal
+                    prompt_no_context_templates = {
+                        "Indonesia": f"""Penonton bernama {self.author} berkomentar: "{self.message}"
 
 Jawab komentar dari {self.author} dengan natural dan ramah.
 
-PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, sekitar 150-200 karakter). Jangan panjang lebar! Sebut nama {self.author} dalam respons."""
+PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, sekitar 150-200 karakter). Jangan panjang lebar! Sebut nama {self.author} dalam respons.""",
+                        "English": f"""A viewer named {self.author} commented: "{self.message}"
+
+Reply to {self.author}'s comment naturally and friendly.
+
+IMPORTANT: Keep your response SHORT and DIRECT (max 2 short sentences, around 150-200 characters). Don't be lengthy! Mention {self.author}'s name in the response.""",
+                        "Malaysia": f"""Penonton bernama {self.author} komen: "{self.message}"
+
+Balas komen daripada {self.author} secara natural dan mesra.
+
+PENTING: Beri respons yang RINGKAS dan TERUS (maksimum 2 ayat pendek, sekitar 150-200 aksara). Jangan panjang-panjang! Sebut nama {self.author} dalam respons."""
+                    }
+                    prompt = prompt_no_context_templates.get(self.language, prompt_no_context_templates["Indonesia"])
 
             # API call dengan context-aware prompt
             # PERFORMANCE: Use fast_mode for chat replies (5s timeout, 80 tokens)
@@ -212,7 +244,13 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
                     else:  # Indonesia (default)
                         reply = f"Halo {self.author}, selamat datang! Yuk lihat-lihat produk kita!"
                 else:
-                    reply = f"Hai {self.author}, terima kasih komentarnya!"
+                    # Non-greeting fallback — ikut self.language supaya tidak ID di UI EN
+                    non_greeting_fallback = {
+                        "Indonesia": f"Hai {self.author}, terima kasih komentarnya!",
+                        "English": f"Hi {self.author}, thanks for your comment!",
+                        "Malaysia": f"Hai {self.author}, terima kasih atas komen anda!",
+                    }
+                    reply = non_greeting_fallback.get(self.language, non_greeting_fallback["Indonesia"])
 
             # Different truncation limits for greetings vs regular comments
             # IMPORTANT: Keep responses SHORT for fast TTS playback!
@@ -239,7 +277,13 @@ PENTING: Berikan respons yang SINGKAT dan LANGSUNG (maksimal 2 kalimat pendek, s
                 else:  # Indonesia (default)
                     fallback_reply = f"Halo {self.author}, selamat datang! Yuk lihat-lihat produk kita!"
             else:
-                fallback_reply = f"Hai {self.author}, terima kasih!"
+                # Exception fallback — ikut self.language
+                exception_fallback = {
+                    "Indonesia": f"Hai {self.author}, terima kasih!",
+                    "English": f"Hi {self.author}, thanks!",
+                    "Malaysia": f"Hai {self.author}, terima kasih!",
+                }
+                fallback_reply = exception_fallback.get(self.language, exception_fallback["Indonesia"])
             self.finished.emit(self.author, self.message, fallback_reply, 0)
             print(f"[SimpleReplyThread] Error: {e}")
 
