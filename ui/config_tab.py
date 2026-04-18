@@ -748,7 +748,7 @@ class ConfigTab(QWidget):
             if not success:
                 on_done()
                 from modules_server.tts_engine import get_tts_engine
-                err = get_tts_engine().last_error or "Unknown error"
+                err = getattr(get_tts_engine(), 'last_error', '') or "Unknown error (check logs/system.log)"
                 QMessageBox.warning(self, t("common.error"),
                     t("config.output.err.preview_failed", voice=voice, err=err))
         except Exception as e:

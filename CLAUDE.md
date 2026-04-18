@@ -16,9 +16,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Jangan hardcode string Indonesian** di UI code. Coverage test `tests/test_i18n.py::TestKeyCoverage` auto-fail kalau ada key yang digunakan tapi hilang di salah satu locale.
 
-Dua konsep bahasa yang TERPISAH (jangan di-mix):
-- **`ui_language`** (id/en) — UI chrome: label, tombol, dialog (user BACA di app)
-- **`output_language`** (Indonesia/Malaysia/English) — AI output + TTS voice (user/viewer DENGAR)
+### 🚨 DUA SETTING BAHASA YANG TERPISAH — JANGAN DI-MIX
+
+VocaLive punya **dua setting bahasa yang independen** dan kontrol area yang berbeda:
+
+| Setting | Lokasi UI | Nilai | Kontrol |
+|---------|-----------|-------|---------|
+| **`ui_language`** | Konfigurasi tab (switch UI) | `"id"` / `"en"` | UI **CHROME**: label, tombol, dialog, QMessageBox, placeholder input, tooltip |
+| **`output_language`** | Konfigurasi tab (top section "Output Suara & Bahasa") | `"Indonesia"` / `"Malaysia"` / `"English"` | Audio/AI **OUTPUT**: AI reply ke viewer, TTS voice + sample, greeting, Polish Knowledge output, sales template content, greeting AI generator prompt |
+
+**Rule sederhana:**
+- Yang user **BACA di app** → ikut `ui_language` → pakai `t()` i18n JSON
+- Yang user / viewer **DENGAR** (audio) atau AI produce untuk viewer → ikut `output_language` → pakai dict lookup by output_language
+
+**Jangan salah tertukar**. Pernah terjadi (v1.0.17): polish knowledge di-wire ke ui_language → user complain "semua output harus ikut output_language". v1.0.23 revert + v1.0.26 finalize. Current architecture final: `output_language` **master** untuk semua audio, `ui_language` master untuk UI chrome.
 
 Detail lengkap lihat section "Internationalization (i18n)" di bawah.
 
