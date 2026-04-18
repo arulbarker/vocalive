@@ -515,7 +515,11 @@ def main():
     from modules_client.telemetry import set_user_context
     telemetry_init(POSTHOG_PROJECT_KEY, SENTRY_DSN, _APP_VERSION)
     logger.info("[STARTUP] Telemetry initialized")
-    set_user_context({"platform": "windows", "app_mode": APP_MODE})
+    try:
+        _ui_lang = i18n.current_language()
+    except Exception:
+        _ui_lang = "id"
+    set_user_context({"platform": "windows", "app_mode": APP_MODE, "ui_language": _ui_lang})
     telemetry_capture("app_launched")
 
     # LAUNCH GUI APPLICATION
