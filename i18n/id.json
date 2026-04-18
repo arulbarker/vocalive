@@ -171,7 +171,7 @@
   "update.btn.later": "Nanti Saja",
   "update.msg.downloading": "Mengunduh... {progress}%",
   "update.msg.installing": "Download selesai. Menginstall...",
-  "update.msg.done": "✅ Update berhasil!\nAplikasi akan ditutup. Silakan buka kembali VocaLive secara manual.",
+  "update.msg.done": "✅ Update sedang diinstal di background.\n\nAplikasi akan tertutup dalam beberapa detik.\nTunggu notifikasi 'Update berhasil' muncul,\nlalu buka VocaLive dari desktop atau Start menu.",
   "update.err.no_url": "URL download tidak tersedia.",
   "update.err.install_failed": "Gagal install. Coba jalankan sebagai Administrator.",
   "update.err.generic": "Error: {reason}",
