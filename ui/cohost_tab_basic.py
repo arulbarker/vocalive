@@ -1283,9 +1283,35 @@ class CohostTabBasicSimplified(QWidget):
         """Preview the currently selected voice with sample text"""
         try:
             selected_voice = self.voice_combo.currentText()
+            out_lang = self.cfg.get("output_language", "Indonesia")
+            is_en = out_lang == "English"
+
             if not selected_voice:
                 self.log_message("WARN", t("cohost.log.no_voice_preview"))
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, t("common.warning"),
+                    "No voice selected. Pick a voice from the dropdown first." if is_en
+                    else "Voice belum dipilih. Pilih voice dari dropdown dulu.")
                 return
+
+            # Pre-flight: cek API key yang relevan (Gemini voice butuh GEMINI_API_KEY,
+            # Google Cloud voice butuh google_tts_api_key)
+            voice_model_preflight = selected_voice.split('(')[0].strip()
+            if voice_model_preflight.startswith('Gemini-'):
+                api_key = self.cfg.get("api_keys", {}).get("GEMINI_API_KEY", "")
+                key_name = "Gemini API Key"
+            else:
+                api_key = self.cfg.get("google_tts_api_key", "")
+                key_name = "Google TTS API Key"
+
+            if not api_key:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, t("common.error"),
+                    f"{key_name} not configured.\nOpen Settings tab → fill the API key." if is_en
+                    else f"{key_name} belum diset.\nBuka tab Konfigurasi → isi API key.")
+                return
+
+            logger.info(f"[PREVIEW] voice={selected_voice}, out_lang={out_lang}, key_type={key_name}")
 
             # Disable preview button during playback
             self.preview_voice_btn.setEnabled(False)
@@ -1350,11 +1376,20 @@ class CohostTabBasicSimplified(QWidget):
             if not success:
                 self.log_message("ERROR", t("cohost.log.voice_preview_failed", voice=selected_voice))
                 on_preview_finished()  # Re-enable button
+                # Visible error ke user — bukan cuma log viewer text
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, t("common.error"),
+                    f"Voice preview failed for:\n{selected_voice}\n\nPossible causes: invalid API key, API key restrictions (Generative Language API not enabled for Gemini), or incompatible voice.\n\nCheck logs/system.log for details."
+                    if is_en else
+                    f"Preview suara gagal untuk voice:\n{selected_voice}\n\nKemungkinan: API key tidak valid, restriksi API key (Generative Language API belum di-enable untuk Gemini), atau voice tidak kompatibel.\n\nCek logs/system.log untuk detail.")
 
         except Exception as e:
+            logger.error(f"[PREVIEW] Exception: {type(e).__name__}: {e}")
             self.log_message("ERROR", t("cohost.log.voice_preview_error", reason=str(e)))
             self.preview_voice_btn.setEnabled(True)
             self.preview_voice_btn.setText(t("cohost.btn.preview"))
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, t("common.error"), f"{type(e).__name__}: {e}")
 
     def save_trigger_settings(self):
         """Save trigger words and cooldown settings with max 5 limit"""
