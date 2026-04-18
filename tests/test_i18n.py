@@ -302,6 +302,6 @@ class TestKeyCoverage:
             en_ph = set(placeholder_re.findall(en_data[key]))
             if id_ph != en_ph:
                 mismatches.append((key, id_ph, en_ph))
-        assert not mismatches, f"Placeholder mismatch:\n" + "\n".join(
+        assert not mismatches, "Placeholder mismatch:\n" + "\n".join(
             f"  {k}: id={sorted(i)}, en={sorted(e)}" for k, i, e in mismatches
         )
