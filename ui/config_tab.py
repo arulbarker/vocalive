@@ -384,6 +384,8 @@ class ConfigTab(QWidget):
 
         # AI Provider Section
         self.create_ai_provider_section(layout)
+        # v1.0.26: TTS section langsung di bawah AI provider (per user request)
+        self.create_google_tts_section(layout)
 
         # Viewer Greeting Section
         self.create_viewer_greeting_section(layout)
@@ -391,8 +393,8 @@ class ConfigTab(QWidget):
         # Sales Template Section
         self.create_sales_template_section(layout)
 
-        # Google TTS Section
-        self.create_google_tts_section(layout)
+        # NOTE: Google TTS Section sudah dipanggil langsung setelah AI provider (line 388).
+        # Tidak panggil lagi di sini untuk hindari duplicate widget.
 
         # Status Section
         self.create_status_section(layout)
@@ -838,33 +840,53 @@ class ConfigTab(QWidget):
         layout.addWidget(group)
 
     def create_google_tts_section(self, layout):
-        """TTS section — simplified per v1.0.26.
+        """TTS section — conditional Gemini API key input berdasar AI provider.
 
-        Gemini API key unified dengan AI section (kalau provider=Gemini),
-        atau user isi separately kalau provider=DeepSeek. TTS langsung
-        baca api_keys.GEMINI_API_KEY — tidak ada field terpisah di sini.
+        Rules (per v1.0.26):
+        - AI Provider = Gemini → TTS pakai same key dari AI section (tidak ada input di TTS)
+        - AI Provider = DeepSeek → TTS butuh Gemini key terpisah (input muncul di TTS section)
+
+        Input `tts_api_key_input` dinamis visible/hidden via _update_tts_key_visibility()
+        yang dipanggil dari on_provider_changed.
         """
         group = QGroupBox(t("config.section.tts"))
         group_layout = QVBoxLayout(group)
         group_layout.setSpacing(12)
 
-        # Info: TTS pakai key Gemini dari section AI
-        info_label = QLabel(
-            "🔑 TTS menggunakan <b>Gemini API Key</b> yang sama dengan AI Provider di atas.<br/>"
-            "• Kalau AI Provider = <b>Gemini</b> → 1 key cukup untuk AI + TTS<br/>"
-            "• Kalau AI Provider = <b>DeepSeek</b> → isi juga Gemini key (dipakai TTS saja)"
-        )
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet(
+        # Info label — konten berubah dinamis via _update_tts_key_visibility()
+        self.tts_info_label = QLabel()
+        self.tts_info_label.setWordWrap(True)
+        self.tts_info_label.setStyleSheet(
             f"color: {ACCENT}; font-size: 12px; padding: 8px; "
             f"background-color: {BG_ELEVATED}; border-radius: 6px;"
         )
-        group_layout.addWidget(info_label)
+        group_layout.addWidget(self.tts_info_label)
 
-        # Hidden attributes kept for backward-compat code paths (tidak visible di UI)
-        # Beberapa method lain (_detect_key_type, on_tts_api_key_changed, load_saved_keys) reference ini
+        # Conditional API key input — visible hanya kalau AI=DeepSeek
+        self.tts_key_container = QWidget()
+        key_row = QHBoxLayout(self.tts_key_container)
+        key_row.setContentsMargins(0, 0, 0, 0)
+
+        key_label = QLabel("Gemini API Key:")
+        key_label.setMinimumWidth(120)
+        key_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        key_row.addWidget(key_label)
+
         self.tts_api_key_input = QLineEdit()
-        self.tts_api_key_input.setVisible(False)
+        self.tts_api_key_input.setPlaceholderText("Masukkan Gemini API Key dari aistudio.google.com...")
+        self.tts_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.tts_api_key_input.textChanged.connect(self._on_tts_gemini_key_changed)
+        key_row.addWidget(self.tts_api_key_input)
+
+        show_btn = QPushButton("Lihat")
+        show_btn.setProperty("class", "secondary")
+        show_btn.setFixedWidth(70)
+        show_btn.clicked.connect(lambda: self.toggle_password_visibility(self.tts_api_key_input))
+        key_row.addWidget(show_btn)
+
+        group_layout.addWidget(self.tts_key_container)
+
+        # Hidden legacy widgets — tidak visible tapi di-reference method lain
         self.tts_detect_btn = QPushButton()
         self.tts_detect_btn.setVisible(False)
         self.tts_key_type_label = QLabel()
@@ -1062,7 +1084,48 @@ class ConfigTab(QWidget):
             self.api_key_input.setPlaceholderText(t("config.placeholder.deepseek_key"))
         elif provider == "Gemini Flash Lite":
             self.api_key_input.setPlaceholderText(t("config.placeholder.gemini_key"))
+        # v1.0.26: toggle TTS API key input visibility
+        self._update_tts_key_visibility(provider)
         self.update_status_overview()
+
+    def _update_tts_key_visibility(self, provider: str):
+        """Show/hide Gemini API Key input di TTS section berdasar AI provider.
+
+        - AI=Gemini → key sudah di AI section, TTS pakai same → hide input, info-only
+        - AI=DeepSeek → butuh Gemini key terpisah untuk TTS → show input
+        """
+        if not hasattr(self, 'tts_key_container'):
+            return  # TTS section belum di-create
+
+        is_gemini_ai = provider == "Gemini Flash Lite"
+        self.tts_key_container.setVisible(not is_gemini_ai)
+
+        if is_gemini_ai:
+            self.tts_info_label.setText(
+                "✅ TTS menggunakan <b>Gemini API Key</b> yang sama dengan AI Provider di atas. "
+                "Tidak perlu isi key lagi di sini."
+            )
+        else:
+            self.tts_info_label.setText(
+                "🔑 AI Provider = <b>DeepSeek</b> → TTS tetap butuh <b>Gemini API Key</b> terpisah.<br/>"
+                "Isi Gemini key Anda di field di bawah ini (dari <i>aistudio.google.com</i>)."
+            )
+
+    def _on_tts_gemini_key_changed(self):
+        """Auto-save Gemini TTS key ke api_keys.GEMINI_API_KEY saat user ketik."""
+        new_key = self.tts_api_key_input.text().strip()
+        if not new_key:
+            return
+        try:
+            cfg = self.cfg.get_all_settings()
+            if "api_keys" not in cfg:
+                cfg["api_keys"] = {}
+            cfg["api_keys"]["GEMINI_API_KEY"] = new_key
+            config_path = Path("config/settings.json")
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Failed to save Gemini TTS key: {e}")
 
     def on_api_key_changed(self):
         """Handle API key input change"""
@@ -1661,7 +1724,6 @@ class ConfigTab(QWidget):
         """Load saved API keys and context"""
         try:
             api_keys = self.cfg.get("api_keys", {})
-            tts_api_key = self.cfg.get("google_tts_api_key", "")
             user_context = self.cfg.get("user_context", "")
 
             # Load AI API key berdasarkan ai_provider yang tersimpan
@@ -1673,9 +1735,19 @@ class ConfigTab(QWidget):
                 self.provider_combo.setCurrentText("DeepSeek")
                 self.api_key_input.setText(api_keys["DEEPSEEK_API_KEY"])
 
-            # Load Google TTS API Key
-            if tts_api_key and hasattr(self, 'tts_api_key_input'):
-                self.tts_api_key_input.setText(tts_api_key)
+            # v1.0.26: Gemini TTS key (dipakai kalau provider=DeepSeek)
+            # Populate input dengan GEMINI_API_KEY dari api_keys, bukan google_tts_api_key
+            if hasattr(self, 'tts_api_key_input'):
+                gemini_tts_key = api_keys.get("GEMINI_API_KEY", "")
+                # Fallback: legacy google_tts_api_key untuk backward-compat
+                if not gemini_tts_key:
+                    gemini_tts_key = self.cfg.get("google_tts_api_key", "")
+                self.tts_api_key_input.setText(gemini_tts_key)
+
+            # Set visibility TTS key berdasar current provider
+            if hasattr(self, '_update_tts_key_visibility'):
+                current_provider = self.provider_combo.currentText()
+                self._update_tts_key_visibility(current_provider)
                 self.tts_test_btn.setEnabled(True)
 
             # Load existing context
