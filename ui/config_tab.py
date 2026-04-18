@@ -838,68 +838,37 @@ class ConfigTab(QWidget):
         layout.addWidget(group)
 
     def create_google_tts_section(self, layout):
-        """Create Google TTS section with API Key only (simplified)"""
+        """TTS section — simplified per v1.0.26.
+
+        Gemini API key unified dengan AI section (kalau provider=Gemini),
+        atau user isi separately kalau provider=DeepSeek. TTS langsung
+        baca api_keys.GEMINI_API_KEY — tidak ada field terpisah di sini.
+        """
         group = QGroupBox(t("config.section.tts"))
         group_layout = QVBoxLayout(group)
-        group_layout.setSpacing(15)
+        group_layout.setSpacing(12)
 
-        # Description with better styling
-        desc = QLabel(t("config.tts.desc"))
-        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
-        group_layout.addWidget(desc)
-
-        # Info about Gemini Flash TTS
-        gemini_info = QLabel(t("config.tts.info_gemini"))
-        gemini_info.setStyleSheet(f"color: {INFO}; font-size: 11px; font-style: italic; padding: 5px; background-color: {BG_ELEVATED}; border-radius: 4px;")
-        group_layout.addWidget(gemini_info)
-
-        # Baris 1: API Key input + tombol Lihat
-        api_key_container = QHBoxLayout()
-        api_key_label = QLabel(t("config.label.api_key"))
-        api_key_label.setMinimumWidth(80)
-        api_key_label.setStyleSheet("font-weight: bold; font-size: 13px;")
-        api_key_container.addWidget(api_key_label)
-
-        self.tts_api_key_input = QLineEdit()
-        self.tts_api_key_input.setPlaceholderText(t("config.tts.placeholder"))
-        self.tts_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.tts_api_key_input.textChanged.connect(self.on_tts_api_key_changed)
-        api_key_container.addWidget(self.tts_api_key_input)
-
-        show_api_btn = QPushButton(t("config.btn.show"))
-        show_api_btn.setProperty("class", "secondary")
-        show_api_btn.setMinimumWidth(70)
-        show_api_btn.setMaximumWidth(90)
-        show_api_btn.setToolTip(t("config.tooltip.show_api_key"))
-        show_api_btn.clicked.connect(lambda: self.toggle_password_visibility(self.tts_api_key_input))
-        api_key_container.addWidget(show_api_btn)
-        group_layout.addLayout(api_key_container)
-
-        # Baris 2: tombol Deteksi Tipe (baris sendiri agar tidak terpotong)
-        detect_row = QHBoxLayout()
-        self.tts_detect_btn = QPushButton(t("config.btn.detect_key_type"))
-        self.tts_detect_btn.setMinimumWidth(180)
-        self.tts_detect_btn.setMaximumWidth(220)
-        self.tts_detect_btn.setFixedHeight(32)
-        self.tts_detect_btn.setToolTip(t("config.tooltip.detect_key"))
-        self.tts_detect_btn.setEnabled(False)
-        self.tts_detect_btn.clicked.connect(self._detect_key_type)
-        detect_row.addWidget(self.tts_detect_btn)
-        detect_row.addStretch()
-        group_layout.addLayout(detect_row)
-
-        # Key type detection result label
-        self.tts_key_type_label = QLabel(t("config.tts.key_type_undetected"))
-        self.tts_key_type_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 3px 5px;")
-        group_layout.addWidget(self.tts_key_type_label)
-
-        # Info singkat
-        info_label = QLabel(t("config.tts.info_compat"))
+        # Info: TTS pakai key Gemini dari section AI
+        info_label = QLabel(
+            "🔑 TTS menggunakan <b>Gemini API Key</b> yang sama dengan AI Provider di atas.<br/>"
+            "• Kalau AI Provider = <b>Gemini</b> → 1 key cukup untuk AI + TTS<br/>"
+            "• Kalau AI Provider = <b>DeepSeek</b> → isi juga Gemini key (dipakai TTS saja)"
+        )
+        info_label.setWordWrap(True)
         info_label.setStyleSheet(
-            f"color: {ACCENT}; font-size: 11px; padding: 5px 5px; "
-            f"background-color: {BG_ELEVATED}; border-radius: 4px;"
+            f"color: {ACCENT}; font-size: 12px; padding: 8px; "
+            f"background-color: {BG_ELEVATED}; border-radius: 6px;"
         )
         group_layout.addWidget(info_label)
+
+        # Hidden attributes kept for backward-compat code paths (tidak visible di UI)
+        # Beberapa method lain (_detect_key_type, on_tts_api_key_changed, load_saved_keys) reference ini
+        self.tts_api_key_input = QLineEdit()
+        self.tts_api_key_input.setVisible(False)
+        self.tts_detect_btn = QPushButton()
+        self.tts_detect_btn.setVisible(False)
+        self.tts_key_type_label = QLabel()
+        self.tts_key_type_label.setVisible(False)
 
         # Voice selector for test
         voice_row = QHBoxLayout()
@@ -1400,10 +1369,20 @@ class ConfigTab(QWidget):
         logger.info(f"[TTS_DETECT] gemini={supports_gemini}, cloud={supports_cloud} → key_type={key_type}")
 
     def test_google_tts(self):
-        """Test Google TTS API Key"""
-        api_key = self.tts_api_key_input.text().strip()
+        """Test TTS pakai unified GEMINI_API_KEY (per v1.0.26).
+
+        Tidak ada input field terpisah — key dibaca dari api_keys.GEMINI_API_KEY.
+        User isi key di section AI Provider di atas.
+        """
+        api_key = self.cfg.get("api_keys", {}).get("GEMINI_API_KEY", "").strip()
+        # Fallback: legacy google_tts_api_key untuk backward-compat
+        if not api_key:
+            api_key = self.cfg.get("google_tts_api_key", "").strip()
 
         if not api_key:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, t("common.error"),
+                "Gemini API Key belum diisi.\nIsi di section 'AI Provider' di atas.")
             self.tts_status.setText(t("config.tts.status_no_key_err"))
             self.tts_status.setStyleSheet(status_badge(ERROR))
             return
@@ -1621,13 +1600,9 @@ class ConfigTab(QWidget):
                 elif provider == "Gemini Flash Lite":
                     config["api_keys"]["GEMINI_API_KEY"] = api_key
 
-            # Save Google TTS API Key only
-            if tts_api_key:
-                config["google_tts_api_key"] = tts_api_key
-            else:
-                # Remove API key if empty
-                if "google_tts_api_key" in config:
-                    del config["google_tts_api_key"]
+            # Per v1.0.26: TTS pakai unified GEMINI_API_KEY — tidak ada field terpisah.
+            # Legacy google_tts_api_key di settings.json tidak diubah di save (backward-compat).
+            # tts_api_key always empty sekarang (input hidden), jadi save ini skip.
 
             # Save to file
             config_path = Path("config/settings.json")
