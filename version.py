@@ -11,7 +11,7 @@
 # import dari sini — tidak ada hardcode versi di tempat lain.
 # ============================================================
 
-VERSION = "1.0.21"
+VERSION = "1.0.22"
 
 # Pecahan untuk kemudahan
 _parts = VERSION.split(".")

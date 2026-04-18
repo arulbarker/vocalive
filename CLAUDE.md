@@ -45,8 +45,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.19** | 2026-04-18 | FIX: include pyvirtualcam di EXE bundle — OBS Virtual Camera sekarang terdeteksi di EXE (sebelumnya excluded untuk save size, akibat OBS tidak detect) |
 | **v1.0.20** | 2026-04-18 | FIX: collect_all pyvirtualcam (.pyd native extensions) — v1.0.19 fix belum cukup, butuh binary bundling. Fix popup text: hapus backtick-n escape literal |
 | **v1.0.21** | 2026-04-18 | FIX ROOT CAUSE: numpy di-exclude dari bundle dengan asumsi salah 'optional'. pyvirtualcam hard-import numpy → ImportError → Backend 'Tidak ada'. Fix: include numpy di bundle. Tambah diagnostic logging di virtual_camera_manager. |
+| **v1.0.22** | 2026-04-18 | FIX: cv2 (opencv) juga include di bundle — Play button Virtual Camera tidak respon karena cv2 None. virtual_camera_manager pakai cv2 untuk read video frame. |
 
-**Versi saat ini: v1.0.21**
+**Versi saat ini: v1.0.22**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
