@@ -621,7 +621,11 @@ class MainWindow(QMainWindow):
         logger.warning(f"Update check error: {msg}")
 
     def _on_update_found(self, info: dict):
-        """Update ditemukan — tampilkan tombol + popup notifikasi prominent."""
+        """Update ditemukan — tampilkan tombol kuning di toolbar (non-blocking).
+
+        Tidak ada modal popup yang memaksa user respond. User update kapan saja
+        via tombol '⬆️ Update Tersedia!' di toolbar.
+        """
         self._update_info = info
         latest = info.get("latest", "?")
 
@@ -629,36 +633,10 @@ class MainWindow(QMainWindow):
         self.check_update_btn.setEnabled(True)
         self.check_update_btn.setText(t("main.btn.check_update"))
 
-        # Tampilkan tombol kuning di status bar
+        # Tampilkan tombol kuning di toolbar — user klik kapan saja untuk update
         self.update_btn.setText(t("main.btn.update_available_version", version=latest))
         self.update_btn.show()
-        logger.info(f"Update tersedia: v{latest}")
-
-        # Popup notifikasi yang tidak bisa diabaikan
-        from modules_client.updater import CURRENT_VERSION
-        notes = info.get("notes", "")
-        notes_preview = "\n".join(notes.split("\n")[:4]) if notes else "-"
-
-        msg = QMessageBox(self)
-        msg.setWindowTitle(t("main.update.popup.title"))
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setText(
-            t(
-                "main.update.popup.body",
-                current=CURRENT_VERSION,
-                latest=latest,
-                notes=notes_preview.replace(chr(10), "<br>"),
-            )
-        )
-        msg.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        msg.button(QMessageBox.StandardButton.Yes).setText(t("main.update.popup.update_now"))
-        msg.button(QMessageBox.StandardButton.No).setText(t("main.update.popup.later"))
-        msg.setDefaultButton(QMessageBox.StandardButton.Yes)
-
-        if msg.exec() == QMessageBox.StandardButton.Yes:
-            self._on_update_btn_clicked()
+        logger.info(f"Update tersedia: v{latest} — tombol 'Update Tersedia' ditampilkan di toolbar")
 
     def _on_update_btn_clicked(self):
         """Buka dialog update."""

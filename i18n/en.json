@@ -171,7 +171,7 @@
   "update.btn.later": "Later",
   "update.msg.downloading": "Downloading... {progress}%",
   "update.msg.installing": "Download complete. Installing...",
-  "update.msg.done": "✅ Update successful!\nThe app will close. Please open VocaLive manually.",
+  "update.msg.done": "✅ Update is installing in background.\n\nThe app will close in a few seconds.\nWait for the 'Update successful' notification to appear,\nthen open VocaLive from your desktop or Start menu.",
   "update.err.no_url": "Download URL not available.",
   "update.err.install_failed": "Install failed. Try running as Administrator.",
   "update.err.generic": "Error: {reason}",

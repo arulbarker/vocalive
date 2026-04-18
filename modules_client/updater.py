@@ -201,56 +201,85 @@ def install_update(zip_path: str) -> bool:
         current_exe = sys.executable
         exe_name    = Path(current_exe).name   # "VocaLive.exe"
 
-        # Taruh batch di folder yang sama dengan EXE (bukan temp dir)
+        # Taruh batch + VBS di folder yang sama dengan EXE (bukan temp dir)
         # agar working dir batch = folder EXE saat di-startfile
         bat_path = str(Path(current_exe).parent / "_vocalive_update.bat")
+        vbs_path = str(Path(current_exe).parent / "_vocalive_update_run.vbs")
 
+        # Resolve UI language untuk pesan GUI akhir (batch jalan setelah app quit,
+        # jadi kita embed string langsung ke batch saat tulis)
+        try:
+            from modules_client import i18n
+            _ui_lang = i18n.current_language()
+        except Exception:
+            _ui_lang = "id"
+
+        if _ui_lang == "en":
+            success_title = "VocaLive"
+            success_msg = "Update installed successfully.`nPlease open VocaLive from your desktop or Start menu."
+            fail_title = "VocaLive Update"
+            fail_msg = "Update copy failed after multiple attempts.`nPlease reinstall VocaLive manually."
+        else:
+            success_title = "VocaLive"
+            success_msg = "Update berhasil diinstal.`nSilakan buka VocaLive dari desktop atau Start menu."
+            fail_title = "VocaLive Update"
+            fail_msg = "Gagal menyalin file update setelah beberapa percobaan.`nSilakan install ulang VocaLive manual."
+
+        # Batch script — TIDAK ada auto-launch, GUI popup di akhir via PowerShell MessageBox.
+        # PowerShell dipanggil dengan WindowStyle Hidden supaya tidak flash console window.
         bat_content = (
             "@echo off\n"
-            "echo ================================\n"
-            "echo  VocaLive Update Installer\n"
-            "echo ================================\n"
-            "echo.\n"
-            "echo Menunggu aplikasi selesai...\n"
+            "setlocal\n"
             # Tunggu 5 detik — app quit langsung (100ms), PyInstaller cleanup _MEI ~1-2s.
-            # 5 detik memberi margin aman agar _MEI sudah bersih sebelum copy + start.
             "timeout /t 5 /nobreak > nul\n"
             # Force-kill sisa proses jika entah kenapa belum mati
             f'taskkill /f /im "{exe_name}" > nul 2>&1\n'
             "timeout /t 1 /nobreak > nul\n"
-            "\n"
-            # Bersihkan _MEI* lama sebagai safety net (jika graceful cleanup gagal)
+            # Bersihkan _MEI* lama sebagai safety net
             'for /d %%D in ("%TEMP%\\_MEI*") do rd /s /q "%%D" 2>nul\n'
-            "\n"
-            "echo Menginstall update...\n"
+            # Copy EXE baru — retry kalau masih locked (max 5 attempts)
+            "set /a attempts=0\n"
             ":retry\n"
+            "set /a attempts+=1\n"
             f'copy /y "{new_exe}" "{current_exe}" > nul 2>&1\n'
             "if errorlevel 1 (\n"
+            "    if %attempts% geq 5 goto fail\n"
             "    timeout /t 2 /nobreak > nul\n"
             "    goto retry\n"
             ")\n"
-            "\n"
-            "echo.\n"
-            "echo ================================\n"
-            "echo  Update berhasil!\n"
-            "echo  Silakan buka VocaLive secara manual.\n"
-            "echo ================================\n"
-            "echo.\n"
-            "timeout /t 3 /nobreak > nul\n"
-            "\n"
-            ":: Cleanup\n"
+            # SUCCESS: show native Windows MessageBox via PowerShell (bukan CMD echo)
+            "powershell -WindowStyle Hidden -Command "
+            '"Add-Type -AssemblyName PresentationFramework; '
+            f"[System.Windows.MessageBox]::Show('{success_msg}', '{success_title}', 'OK', 'Information') | Out-Null\" > nul 2>&1\n"
+            "goto cleanup\n"
+            ":fail\n"
+            # FAIL: show error dialog
+            "powershell -WindowStyle Hidden -Command "
+            '"Add-Type -AssemblyName PresentationFramework; '
+            f"[System.Windows.MessageBox]::Show('{fail_msg}', '{fail_title}', 'OK', 'Error') | Out-Null\" > nul 2>&1\n"
+            ":cleanup\n"
             f'del /f /q "{new_exe}" > nul 2>&1\n'
             f'rd /s /q "{temp_dir}" > nul 2>&1\n'
+            f'del /f /q "{vbs_path}" > nul 2>&1\n'
             'del /f /q "%~f0"\n'
         )
 
         with open(bat_path, 'w', encoding='utf-8') as f:
             f.write(bat_content)
 
-        # KEY FIX: os.startfile = ShellExecute = detached total dari Python process.
-        # subprocess.Popen mewarisi file handle ke EXE → EXE tetap locked walau PID hilang.
-        # os.startfile tidak mewarisi handle apapun → copy langsung berhasil.
-        os.startfile(bat_path)
+        # VBS wrapper untuk run batch HIDDEN (0 = window hidden).
+        # Tanpa ini, os.startfile(.bat) akan open cmd.exe dengan visible window.
+        vbs_content = (
+            'Set WshShell = CreateObject("WScript.Shell")\r\n'
+            f'WshShell.Run """{bat_path}""", 0, False\r\n'
+        )
+        with open(vbs_path, 'w', encoding='utf-8') as f:
+            f.write(vbs_content)
+
+        # KEY: os.startfile(.vbs) = ShellExecute → wscript.exe runs VBS → Run batch hidden.
+        # wscript.exe tidak inherit handle ke EXE kita, dan window=0 bikin CMD invisible.
+        # Output: user tidak pernah lihat CMD window; hanya lihat native popup di akhir.
+        os.startfile(vbs_path)
 
         # Send PostHog event
         try:
