@@ -112,8 +112,9 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
             "context_with": "Sesuai konteks berikut: {context}",
             "context_default": "untuk live streaming jualan online Indonesia",
             "body": (
-                "Buatkan 10 variasi sapaan untuk live streaming TikTok {context_line}\n"
+                "Buatkan 10 variasi sapaan DALAM BAHASA INDONESIA untuk live streaming TikTok {context_line}\n"
                 "Syarat ketat:\n"
+                "- BAHASA WAJIB: Indonesia 100 persen abaikan bahasa konteks kalau berbeda\n"
                 "- Setiap sapaan 1 sampai 2 kalimat natural dan percakapan\n"
                 "- Semua 10 sapaan berbeda satu sama lain dalam variasi kata gaya dan panjang\n"
                 "- JANGAN gunakan tanda baca apapun termasuk titik koma tanda seru tanda tanya tanda kutip\n"
@@ -127,8 +128,9 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
             "context_with": "Based on the following context: {context}",
             "context_default": "for an online shopping live stream",
             "body": (
-                "Generate 10 varied greetings for a TikTok live stream {context_line}\n"
+                "Generate 10 varied greetings IN ENGLISH for a TikTok live stream {context_line}\n"
                 "Strict requirements:\n"
+                "- LANGUAGE MUST be English 100 percent. Even if the context above is in another language ignore its language and respond only in English\n"
                 "- Each greeting is 1 to 2 natural, conversational sentences\n"
                 "- All 10 greetings differ from one another in word choice, style, and length\n"
                 "- DO NOT use any punctuation including periods commas exclamation marks question marks or quotes\n"
@@ -142,8 +144,9 @@ def generate_greetings_with_ai(retry_on_fail: bool = True) -> List[str]:
             "context_with": "Berdasarkan konteks berikut: {context}",
             "context_default": "untuk siaran langsung jualan online",
             "body": (
-                "Buatkan 10 variasi sapaan untuk siaran langsung TikTok {context_line} dalam bahasa Melayu\n"
+                "Buatkan 10 variasi sapaan DALAM BAHASA MELAYU untuk siaran langsung TikTok {context_line}\n"
                 "Syarat ketat:\n"
+                "- BAHASA WAJIB: Melayu 100 peratus abaikan bahasa konteks kalau berbeza\n"
                 "- Setiap sapaan 1 hingga 2 ayat natural dan perbualan\n"
                 "- Semua 10 sapaan berbeza antara satu sama lain dalam pilihan kata gaya dan panjang\n"
                 "- JANGAN gunakan sebarang tanda baca termasuk titik koma tanda seru tanda tanya tanda petik\n"
