@@ -18,8 +18,12 @@ from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
+from modules_client.i18n import t
+
 logger = logging.getLogger('VocaLive')
 
+# Window capture identifier — harus persis "VocaLive Product Display" supaya
+# TikTok Live Studio Window Capture bisa mengenali window ini. JANGAN di-i18n.
 WINDOW_TITLE = "VocaLive Product Display"
 RESIZE_MARGIN = 10
 MIN_WIDTH = 200
@@ -89,7 +93,7 @@ class ProductPopupWindow(QWidget):
         tb_layout = QHBoxLayout(self._title_bar)
         tb_layout.setContentsMargins(10, 0, 6, 0)
         tb_layout.setSpacing(0)
-        lbl = QLabel("🎬  VocaLive Product Display", self._title_bar)
+        lbl = QLabel(t("popup.title_label"), self._title_bar)
         lbl.setStyleSheet(
             "color: #60A5FA; font-size: 11px; font-weight: 600; "
             "background: transparent; border: none;"
@@ -101,6 +105,7 @@ class ProductPopupWindow(QWidget):
         self._btn_close = QPushButton("✕", self)
         self._btn_close.setFixedSize(32, 28)
         self._btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_close.setToolTip(t("popup.tooltip.close"))
         self._btn_close.setStyleSheet(
             "QPushButton { background-color: rgba(14,22,35,210); color: #93C5FD; "
             "border: 1px solid #1E3A5F; font-size: 14px; font-weight: bold; border-radius: 4px; }"
