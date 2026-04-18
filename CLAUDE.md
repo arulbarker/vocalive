@@ -91,7 +91,7 @@ python vtest_telemetry.py
 
 **WAJIB: Setiap perubahan file harus diikuti `python -m pytest tests/ -v --tb=short`.** Jika ada test FAIL, fix dulu sebelum lanjut. Jangan commit jika ada test gagal.
 
-Test suite: **213 tests di 20 files** (`tests/`). Empat tier:
+Test suite: **243 tests di 21 files** (`tests/`). Empat tier:
 - **Tier 1** = pure logic (version, templates, theme, logger) — tidak butuh external
 - **Tier 2** = mocked I/O (config, user_list, product_scene, analytics, greeting, updater, validator, tiktok_listener, virtual_camera_manager)
 - **Tier 3** = mocked SDK (telemetry, TTS, API routing dengan isolation ConfigManager patch)
@@ -557,12 +557,40 @@ Selalu sertakan fallback di blok `except ImportError` dengan nilai Ocean Blue (b
 
 `check_dependencies()` di `main.py` dan `excludes` di spec file **harus sinkron**. Jika sebuah library ada di `excludes` PyInstaller, jangan masukkan ke `required_modules` di `check_dependencies()` — EXE akan silent exit sebelum window muncul karena `return 1` terjadi tanpa dialog apapun (`console=False`).
 
-Build script punya **dua lapis filter** untuk menjaga ukuran EXE kecil (~236MB):
+Build script punya **dua lapis filter** untuk menjaga ukuran EXE manageable (~306MB post v1.0.22):
 
-1. **`excludes`** — mencegah PyInstaller trace import: `torch`, `transformers`, `tensorflow`, `scipy`, `numpy`, `cv2`, `OpenGL`, `langchain`, `sklearn`, `pyqtgraph`, `pytchat`, `pyvirtualcam`, dll.
-2. **Post-Analysis bloat filter** (`_is_bloat()`) — menghapus binary/data/pure yang lolos dari excludes via transitive deps. Pattern: `torch`, `cuda`, `nvidia`, `OpenGL`, `cv2`, `onnx`, `transformers`, `langchain`, `Wav2Lip`, `dwpose`, dll.
+1. **`excludes`** — mencegah PyInstaller trace import: `torch`, `transformers`, `tensorflow`, `scipy`, `langchain`, `sklearn`, `pyqtgraph`, `pytchat`, `OpenGL`, `onnxruntime`, `onnx`, `triton`, dll.
+2. **Post-Analysis bloat filter** (`_is_bloat()`) — menghapus binary/data/pure yang lolos dari excludes via transitive deps. Pattern: `torch`, `cuda`, `nvidia`, `OpenGL`, `onnx`, `transformers`, `langchain`, `Wav2Lip`, `dwpose`, dll.
 
-Library yang wajib ada di `hiddenimports`: `cryptography.hazmat.primitives.*` (license), `pygame.mixer`, `keyboard`, `posthog`, `sentry_sdk.*`, `TikTokLive`, `betterproto`.
+### ⚠️ Virtual Camera Dependency Chain — WAJIB Bundle Trio
+
+**Jangan sekali-kali tambah ke `excludes` atau `_BLOAT_PATTERNS`:**
+- **`pyvirtualcam`** — send frame ke OBS Virtual Camera (via COM/DirectShow)
+- **`numpy`** — hard-imported di `pyvirtualcam/camera.py:8`
+- **`cv2`** (opencv) — dipakai `virtual_camera_manager.py` untuk `VideoCapture`, `resize`, `cvtColor(BGR→RGB)`
+
+**Chain of failures (pelajaran v1.0.19-v1.0.22)**:
+- Exclude `pyvirtualcam` → module None → Backend "Tidak ada" (v1.0.19 fix)
+- Include pyvirtualcam tapi exclude `numpy` → ImportError saat `import pyvirtualcam` → pyvirtualcam None → same symptom (v1.0.21 fix)
+- Include numpy tapi exclude `cv2` → detect OK tapi Play silent fail (v1.0.22 fix)
+
+**Setiap dependency harus dihapus dari KEDUA lapis filter** — `excludes` AND `_BLOAT_PATTERNS`. Remove hanya dari satu → dependency tetap hilang.
+
+Library yang wajib ada di `hiddenimports`: `cryptography.hazmat.primitives.*` (license), `pygame.mixer`, `keyboard`, `posthog`, `sentry_sdk.*`, `TikTokLive`, `betterproto`, `pyvirtualcam.*`.
+
+**Library dengan native `.pyd` extension** (pyvirtualcam punya `_native_windows_obs.pyd`): gunakan `collect_all("package_name")` di top spec — manual hiddenimports tidak cukup untuk include `.pyd`.
+
+### Verify Bundle Setelah Build — `pyinstxtractor_ng`
+
+Setelah build, verify dependency critical ada di bundle **sebelum** release:
+
+```bash
+pip install pyinstxtractor-ng
+cd /tmp && python -m pyinstxtractor_ng "dist/VocaLive.exe"
+ls /tmp/VocaLive.exe_extracted/ | grep -E "^(pyvirtualcam|numpy|cv2|i18n)$"
+```
+
+Kalau ada module critical yang hilang → update build script + rebuild. Pelajaran v1.0.19-v1.0.22: 3 iterasi fix tanpa verify = cycle wasted.
 
 **Jangan tambah ke `datas`** folder source code (`ui/`, `modules_client/`, dll) — PyInstaller sudah collect `.py` via Analysis. Menambah folder ke `datas` menyebabkan duplikasi dan size bloat.
 
@@ -699,6 +727,29 @@ Untuk tindakan berikut, **WAJIB tanya user dulu**:
 - Mengubah authentication / license logic
 
 Format tanya: `"⚠️ Saya akan [tindakan]. Ini akan mempengaruhi [dampak]. Boleh lanjut?"`
+
+## Systematic Debugging — 3-Fix Rule
+
+**Pelajaran v1.0.19-v1.0.22 (4 attempts, 3 fail)**: kalau 3+ fix gagal untuk satu bug, **stop guessing, gather evidence dulu**.
+
+Pattern salah (yang terjadi):
+1. Fix #1: remove library X dari excludes → ship → still broken
+2. Fix #2: add X ke hiddenimports → ship → still broken
+3. Fix #3: `collect_all("X")` → ship → still broken
+4. (seharusnya sudah stop di #2)
+
+Pattern benar:
+1. Fix #1 fail → Fix #2 fail
+2. **STOP** — extract EXE via `pyinstxtractor_ng`, inspect bundle
+3. Identify missing dependency (ternyata `numpy` + `cv2`, bukan `pyvirtualcam`)
+4. Fix root cause, single commit
+
+**Red flags** yang memicu pause:
+- "One more fix attempt" after 2+ failures → tidak boleh
+- Each fix reveals new symptom di tempat berbeda → architecture problem
+- Build script fixes tanpa verify output → evidence-less cycle
+
+**Use `superpowers:systematic-debugging` skill** saat debug. Phase 1 (evidence) wajib selesai sebelum Phase 4 (implementation).
 
 ## Larangan Keras
 
