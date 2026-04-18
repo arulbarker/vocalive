@@ -1105,11 +1105,32 @@ class ConfigTab(QWidget):
                 "✅ TTS menggunakan <b>Gemini API Key</b> yang sama dengan AI Provider di atas. "
                 "Tidak perlu isi key lagi di sini."
             )
+            # Sync TTS status dari AI key — kalau user sudah isi Gemini key di AI section,
+            # TTS otomatis available karena sharing key
+            self._sync_tts_status_to_ai_key()
         else:
             self.tts_info_label.setText(
                 "🔑 AI Provider = <b>DeepSeek</b> → TTS tetap butuh <b>Gemini API Key</b> terpisah.<br/>"
                 "Isi Gemini key Anda di field di bawah ini (dari <i>aistudio.google.com</i>)."
             )
+
+    def _sync_tts_status_to_ai_key(self):
+        """Set tts_status berdasar AI key input (karena shared key untuk Gemini provider)."""
+        if not hasattr(self, 'tts_status') or not hasattr(self, 'api_key_input'):
+            return
+        ai_key = self.api_key_input.text().strip()
+        if ai_key:
+            self.tts_status.setText(t("config.tts.status_ready"))
+            self.tts_status.setProperty("class", "status-warning")
+            self.tts_status.setStyleSheet(status_badge(WARNING))
+            if hasattr(self, 'tts_test_btn'):
+                self.tts_test_btn.setEnabled(True)
+        else:
+            self.tts_status.setText(t("config.tts.status_no_key"))
+            self.tts_status.setProperty("class", "status-info")
+            self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
+            if hasattr(self, 'tts_test_btn'):
+                self.tts_test_btn.setEnabled(False)
 
     def _on_tts_gemini_key_changed(self):
         """Auto-save Gemini TTS key ke api_keys.GEMINI_API_KEY saat user ketik."""
@@ -1140,6 +1161,11 @@ class ConfigTab(QWidget):
             self.ai_status.setText(t("config.status.no_api_key"))
             self.ai_status.setProperty("class", "status-info")
             self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
+
+        # v1.0.26: Kalau provider=Gemini, key ini juga dipakai TTS → sync TTS status
+        provider = self.provider_combo.currentText() if hasattr(self, 'provider_combo') else ""
+        if provider == "Gemini Flash Lite":
+            self._sync_tts_status_to_ai_key()
 
         self.update_status_overview()
 
@@ -1298,6 +1324,22 @@ class ConfigTab(QWidget):
             self.ai_status.setText(t("config.status.api_key_empty"))
             self.ai_status.setStyleSheet(status_badge(ERROR))
             return
+
+        # v1.0.26: Auto-save key ke settings SEBELUM test supaya TTS reinit
+        # (di on_test_result on success) bisa baca key yang benar.
+        try:
+            cfg = self.cfg.get_all_settings()
+            if "api_keys" not in cfg:
+                cfg["api_keys"] = {}
+            key_field = "GEMINI_API_KEY" if provider == "Gemini Flash Lite" else "DEEPSEEK_API_KEY"
+            cfg["api_keys"][key_field] = api_key
+            cfg["ai_provider"] = "gemini" if provider == "Gemini Flash Lite" else "deepseek"
+            config_path = Path("config/settings.json")
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+            logger.info(f"[CONFIG] Auto-saved {key_field} before test")
+        except Exception as e:
+            logger.warning(f"Auto-save before test failed: {e}")
 
         self.ai_test_btn.setText(t("config.btn.testing"))
         self.ai_test_btn.setEnabled(False)
@@ -1544,6 +1586,19 @@ class ConfigTab(QWidget):
             self.ai_status.setText(t("config.status.prefix", message=message))
             self.ai_status.setProperty("class", "status-success")
             self.ai_status.setStyleSheet(status_badge(SUCCESS))
+            # v1.0.26: Kalau provider=Gemini, AI test sukses = TTS juga valid (same key)
+            provider = self.provider_combo.currentText() if hasattr(self, 'provider_combo') else ""
+            if provider == "Gemini Flash Lite" and hasattr(self, 'tts_status'):
+                self.tts_status.setText(t("config.tts.status_ok"))
+                self.tts_status.setProperty("class", "status-success")
+                self.tts_status.setStyleSheet(status_badge(SUCCESS))
+                # Reinit TTS engine supaya load key baru
+                try:
+                    from modules_server.tts_engine import reinitialize_tts_engine
+                    reinitialize_tts_engine()
+                    logger.info("[CONFIG] TTS engine reinitialized after AI Gemini test success")
+                except Exception as e:
+                    logger.warning(f"TTS reinit skipped: {e}")
         else:
             self.ai_status.setText(t("config.status.prefix", message=message))
             self.ai_status.setProperty("class", "status-error")
@@ -1663,20 +1718,29 @@ class ConfigTab(QWidget):
                 elif provider == "Gemini Flash Lite":
                     config["api_keys"]["GEMINI_API_KEY"] = api_key
 
-            # Per v1.0.26: TTS pakai unified GEMINI_API_KEY — tidak ada field terpisah.
-            # Legacy google_tts_api_key di settings.json tidak diubah di save (backward-compat).
-            # tts_api_key always empty sekarang (input hidden), jadi save ini skip.
+            # v1.0.26: Simpan Gemini TTS key (kalau provider=DeepSeek, ada input terpisah)
+            # Kalau provider=Gemini, tts_api_key sengaja kosong (input hidden) — TTS pakai
+            # api_key (AI key) yang sudah disimpan di GEMINI_API_KEY di atas.
+            if tts_api_key and provider == "DeepSeek":
+                config["api_keys"]["GEMINI_API_KEY"] = tts_api_key
 
             # Save to file
             config_path = Path("config/settings.json")
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
 
-            # IMPORTANT: Reinitialize TTS engine to load new API key
-            if tts_api_key:
+            # IMPORTANT: Reinitialize TTS engine setelah GEMINI_API_KEY berubah.
+            # Dulu hanya reinit kalau tts_api_key diisi — tapi sekarang GEMINI_API_KEY bisa
+            # datang dari AI section (provider=Gemini) atau TTS input (provider=DeepSeek).
+            # Reinit kalau salah satu sumber menghasilkan key baru.
+            should_reinit_tts = (
+                (provider == "Gemini Flash Lite" and api_key) or  # AI Gemini → key shared
+                (provider == "DeepSeek" and tts_api_key)           # DeepSeek → separate Gemini key
+            )
+            if should_reinit_tts:
                 try:
                     from modules_server.tts_engine import reinitialize_tts_engine
-                    logger.info("[CONFIG] Reinitializing TTS engine with new API key...")
+                    logger.info("[CONFIG] Reinitializing TTS engine with new GEMINI_API_KEY...")
                     if reinitialize_tts_engine():
                         logger.info("[CONFIG] ✅ TTS engine reinitialized successfully")
                     else:
