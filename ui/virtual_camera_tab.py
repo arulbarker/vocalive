@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from modules_client.i18n import t
+
 try:
     from ui.theme import (
         ACCENT,
@@ -67,7 +69,6 @@ except ImportError:
 
 logger = logging.getLogger("VocaLive")
 
-VIDEO_FILTER = "Video Files (*.mp4 *.avi *.mkv *.mov *.wmv);;All Files (*)"
 MAX_PLAYLIST = 10
 
 
@@ -96,11 +97,11 @@ class VirtualCameraTab(QWidget):
         header_layout = QVBoxLayout(header_frame)
         header_layout.setContentsMargins(16, 12, 16, 12)
 
-        title = QLabel("Virtual Camera")
+        title = QLabel(t("camera.title"))
         title.setStyleSheet(label_title(16))
         header_layout.addWidget(title)
 
-        subtitle = QLabel("Kelola playlist video untuk virtual camera streaming")
+        subtitle = QLabel(t("camera.subtitle"))
         subtitle.setStyleSheet(label_subtitle(11))
         header_layout.addWidget(subtitle)
 
@@ -112,21 +113,21 @@ class VirtualCameraTab(QWidget):
         status_layout = QHBoxLayout(status_card)
         status_layout.setContentsMargins(16, 12, 16, 12)
 
-        status_label = QLabel("Status:")
+        status_label = QLabel(t("camera.label.status"))
         status_label.setStyleSheet(f"color: {TEXT_MUTED}; font-weight: 600; background: transparent;")
         status_layout.addWidget(status_label)
 
-        self.status_indicator = QLabel("Stopped")
+        self.status_indicator = QLabel(t("camera.status.stopped"))
         self.status_indicator.setStyleSheet(status_badge(TEXT_MUTED, size=13))
         status_layout.addWidget(self.status_indicator)
 
         status_layout.addStretch()
 
-        backend_label = QLabel("Backend:")
+        backend_label = QLabel(t("camera.label.backend"))
         backend_label.setStyleSheet(f"color: {TEXT_MUTED}; font-weight: 600; background: transparent;")
         status_layout.addWidget(backend_label)
 
-        self.backend_indicator = QLabel("Detecting...")
+        self.backend_indicator = QLabel(t("camera.status.detecting"))
         self.backend_indicator.setStyleSheet(status_badge(ACCENT, size=13))
         status_layout.addWidget(self.backend_indicator)
 
@@ -140,13 +141,11 @@ class VirtualCameraTab(QWidget):
         driver_layout = QVBoxLayout(self.driver_panel)
         driver_layout.setContentsMargins(16, 12, 16, 12)
 
-        driver_title = QLabel("Virtual Camera Driver Tidak Terdeteksi")
+        driver_title = QLabel(t("camera.driver.title"))
         driver_title.setStyleSheet(f"font-size: 13px; font-weight: 700; color: {WARNING}; background: transparent;")
         driver_layout.addWidget(driver_title)
 
-        driver_desc = QLabel(
-            "Install OBS Virtual Camera atau UnityCapture untuk menggunakan fitur ini."
-        )
+        driver_desc = QLabel(t("camera.driver.desc"))
         driver_desc.setStyleSheet(f"font-size: 11px; color: {TEXT_MUTED}; background: transparent;")
         driver_desc.setWordWrap(True)
         driver_layout.addWidget(driver_desc)
@@ -161,13 +160,13 @@ class VirtualCameraTab(QWidget):
         playlist_layout.setContentsMargins(12, 12, 12, 12)
 
         playlist_header = QHBoxLayout()
-        playlist_title = QLabel("Playlist Video")
+        playlist_title = QLabel(t("camera.playlist.title"))
         playlist_title.setStyleSheet(f"font-size: 13px; font-weight: 700; color: {TEXT_PRIMARY}; background: transparent;")
         playlist_header.addWidget(playlist_title)
 
         playlist_header.addStretch()
 
-        self.btn_add_video = QPushButton("Tambah Video")
+        self.btn_add_video = QPushButton(t("camera.btn.add_video"))
         self.btn_add_video.setStyleSheet(btn_primary("font-size: 12px;"))
         self.btn_add_video.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_add_video.clicked.connect(self._add_videos)
@@ -176,7 +175,11 @@ class VirtualCameraTab(QWidget):
         playlist_layout.addLayout(playlist_header)
 
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["No", "Video", "Hapus"])
+        self.table.setHorizontalHeaderLabels([
+            t("camera.table.col.no"),
+            t("camera.table.col.video"),
+            t("camera.table.col.remove"),
+        ])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
@@ -197,16 +200,16 @@ class VirtualCameraTab(QWidget):
 
         # -- Mode selection --
         mode_layout = QHBoxLayout()
-        mode_label = QLabel("Mode Playback:")
+        mode_label = QLabel(t("camera.label.play_mode"))
         mode_label.setStyleSheet(f"color: {TEXT_MUTED}; font-weight: 600; background: transparent;")
         mode_layout.addWidget(mode_label)
 
-        self.radio_sequential = QRadioButton("Berurutan")
+        self.radio_sequential = QRadioButton(t("camera.mode.sequential"))
         self.radio_sequential.setChecked(True)
         self.radio_sequential.setStyleSheet(f"QRadioButton {{ color: {TEXT_PRIMARY}; background: transparent; }}")
         mode_layout.addWidget(self.radio_sequential)
 
-        self.radio_random = QRadioButton("Acak")
+        self.radio_random = QRadioButton(t("camera.mode.random"))
         self.radio_random.setStyleSheet(f"QRadioButton {{ color: {TEXT_PRIMARY}; background: transparent; }}")
         mode_layout.addWidget(self.radio_random)
 
@@ -221,20 +224,20 @@ class VirtualCameraTab(QWidget):
         # -- Control buttons --
         ctrl_layout = QHBoxLayout()
 
-        self.btn_play = QPushButton("Play")
+        self.btn_play = QPushButton(t("camera.btn.play"))
         self.btn_play.setStyleSheet(btn_success("font-size: 13px; padding: 10px 24px;"))
         self.btn_play.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play.clicked.connect(self._on_play)
         ctrl_layout.addWidget(self.btn_play)
 
-        self.btn_stop = QPushButton("Stop")
+        self.btn_stop = QPushButton(t("camera.btn.stop"))
         self.btn_stop.setStyleSheet(btn_danger("font-size: 13px; padding: 10px 24px;"))
         self.btn_stop.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self._on_stop)
         ctrl_layout.addWidget(self.btn_stop)
 
-        self.btn_next = QPushButton("Next")
+        self.btn_next = QPushButton(t("camera.btn.next"))
         self.btn_next.setStyleSheet(btn_primary("font-size: 13px; padding: 10px 24px;"))
         self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_next.setEnabled(False)
@@ -264,15 +267,16 @@ class VirtualCameraTab(QWidget):
 
     def _detect_backend_on_init(self):
         if self.manager is None:
-            self.backend_indicator.setText("No manager")
+            self.backend_indicator.setText(t("camera.status.no_manager"))
             return
         backend = self.manager.detect_backend()
         if backend:
+            # Backend id (internal: "obs"/"unity") displayed uppercase — technical value, not translated
             self.backend_indicator.setText(backend.upper())
             self.backend_indicator.setStyleSheet(status_badge(SUCCESS, size=13))
             self.driver_panel.setVisible(False)
         else:
-            self.backend_indicator.setText("None")
+            self.backend_indicator.setText(t("camera.status.none"))
             self.backend_indicator.setStyleSheet(status_badge(ERROR, size=13))
             self.driver_panel.setVisible(True)
 
@@ -296,7 +300,7 @@ class VirtualCameraTab(QWidget):
             self.table.setItem(i, 1, QTableWidgetItem(filename))
 
             # Delete button
-            btn_del = QPushButton("Hapus")
+            btn_del = QPushButton(t("camera.btn.remove"))
             btn_del.setStyleSheet(btn_danger("font-size: 11px; padding: 4px 8px;"))
             btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_del.clicked.connect(lambda checked, idx=i: self._remove_video(idx))
@@ -307,16 +311,20 @@ class VirtualCameraTab(QWidget):
     # -----------------------------------------------------------------
 
     def _on_status_changed(self, status: str):
+        # Status string di-emit manager (bahasa internal, belum lewat i18n).
+        # Substring check berdasarkan keyword internal — aman meski string diterjemahkan
+        # di masa depan karena label tetap menampilkan raw status text dari manager.
         self.status_indicator.setText(status)
-        if "aktif" in status.lower() or "streaming" in status.lower():
+        lower = status.lower()
+        if "aktif" in lower or "streaming" in lower or "running" in lower:
             self.status_indicator.setStyleSheet(status_badge(SUCCESS, size=13))
-        elif "stop" in status.lower():
+        elif "stop" in lower:
             self.status_indicator.setStyleSheet(status_badge(TEXT_MUTED, size=13))
         else:
             self.status_indicator.setStyleSheet(status_badge(ACCENT, size=13))
 
     def _on_error(self, error_msg: str):
-        self.status_indicator.setText(f"Error: {error_msg}")
+        self.status_indicator.setText(t("camera.status.error", message=error_msg))
         self.status_indicator.setStyleSheet(status_badge(ERROR, size=13))
         if "no_driver" in error_msg.lower() or "backend" in error_msg.lower():
             self.driver_panel.setVisible(True)
@@ -338,7 +346,7 @@ class VirtualCameraTab(QWidget):
         self.btn_play.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.btn_next.setEnabled(False)
-        self.status_indicator.setText("Stopped")
+        self.status_indicator.setText(t("camera.status.stopped"))
         self.status_indicator.setStyleSheet(status_badge(TEXT_MUTED, size=13))
 
     def _on_play(self):
@@ -368,7 +376,7 @@ class VirtualCameraTab(QWidget):
             return
 
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Pilih Video", "", VIDEO_FILTER
+            self, t("camera.dialog.pick_video"), "", t("camera.dialog.video_filter")
         )
         if not files:
             return
