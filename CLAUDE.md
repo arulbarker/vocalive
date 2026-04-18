@@ -43,8 +43,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.17** | 2026-04-18 | Fix DeepSeek timeout untuk Polish Knowledge (scale dengan max_tokens), Polish + Greeting AI follow ui_language (bahasa utama), strengthen greeting prompt force output language |
 | **v1.0.18** | 2026-04-18 | FIX CRITICAL: i18n onefile path resolution (sys._MEIPASS) — UI tidak lagi tampilkan raw keys di EXE, non-blocking update notification (hapus modal popup), update installer hide CMD + native Windows MessageBox |
 | **v1.0.19** | 2026-04-18 | FIX: include pyvirtualcam di EXE bundle — OBS Virtual Camera sekarang terdeteksi di EXE (sebelumnya excluded untuk save size, akibat OBS tidak detect) |
+| **v1.0.20** | 2026-04-18 | FIX: collect_all pyvirtualcam (.pyd native extensions) — v1.0.19 fix belum cukup, butuh binary bundling. Fix popup text: hapus backtick-n escape literal |
 
-**Versi saat ini: v1.0.19**
+**Versi saat ini: v1.0.20**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
