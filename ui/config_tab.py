@@ -1285,7 +1285,15 @@ class ConfigTab(QWidget):
         self.test_thread.start()
 
     def _populate_tts_voice_combo(self, key_type: str = "all"):
-        """Isi dropdown suara test. key_type: 'gemini' | 'cloud' | 'all'."""
+        """Isi dropdown suara test — Gemini voices only.
+
+        Per v1.0.25: Cloud TTS voices (Standard/Chirp3/Wavenet) di-remove untuk
+        simplify. Gemini key lebih umum dipakai user (dari AI Studio) dan support
+        multilingual voices yang natural. Cloud voices butuh Cloud TTS API
+        key terpisah yang jarang dipakai.
+
+        Parameter key_type dipertahankan untuk backward-compat tapi ignored.
+        """
         self.tts_voice_combo.clear()
         voices = []
         try:
@@ -1293,31 +1301,22 @@ class ConfigTab(QWidget):
             with open(voices_file, 'r', encoding='utf-8') as f:
                 voices_data = json.load(f)
 
-            if key_type == "gemini":
-                sections = ["gemini_flash"]
-            elif key_type == "cloud":
-                sections = ["gtts_standard", "chirp3"]
-            else:
-                sections = ["gemini_flash", "gtts_standard", "chirp3"]
-
-            for section in sections:
-                if section not in voices_data:
-                    continue
-                for lang_code, voice_list in voices_data[section].items():
+            if "gemini_flash" in voices_data:
+                for lang_code, voice_list in voices_data["gemini_flash"].items():
                     for v in voice_list:
-                        voices.append(f"{v['model']} ({v['gender']})")
+                        label = f"{v['model']} ({v['gender']}) - {lang_code}"
+                        if label not in voices:
+                            voices.append(label)
         except Exception:
             pass
 
         if not voices:
-            voices = ["Gemini-Puck (MALE)", "Gemini-Aoede (FEMALE)", "id-ID-Standard-A (FEMALE)"]
+            voices = ["Gemini-Puck (MALE) - id-ID", "Gemini-Zephyr (FEMALE) - id-ID"]
 
         self.tts_voice_combo.addItems(voices)
 
-        # Default: Gemini-Puck untuk gemini/all, Standard pertama untuk cloud
-        default_prefix = "Gemini-Puck" if key_type != "cloud" else "id-ID-Standard"
         for i, v in enumerate(voices):
-            if v.startswith(default_prefix):
+            if v.startswith("Gemini-Puck"):
                 self.tts_voice_combo.setCurrentIndex(i)
                 break
 
