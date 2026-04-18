@@ -7,8 +7,10 @@ import random
 
 try:
     import pyvirtualcam
-except ImportError:
+    _pv_import_error = None
+except Exception as _e:  # catch ImportError + any init exception (e.g. numpy missing)
     pyvirtualcam = None
+    _pv_import_error = f"{type(_e).__name__}: {_e}"
 
 try:
     import cv2
@@ -23,6 +25,15 @@ except ImportError:
 from PyQt6.QtCore import QThread, pyqtSignal
 
 logger = logging.getLogger('VocaLive')
+
+# Log import state di module load — critical untuk debug "Backend: Tidak ada"
+if pyvirtualcam is None:
+    logger.warning(f"[VCAM_INIT] pyvirtualcam import FAILED: {_pv_import_error}")
+else:
+    try:
+        logger.info(f"[VCAM_INIT] pyvirtualcam OK — version={getattr(pyvirtualcam, '__version__', '?')}, file={pyvirtualcam.__file__}")
+    except Exception:
+        pass
 
 MAX_PLAYLIST_SIZE = 10
 SUPPORTED_BACKENDS = ["obs", "unitycapture"]
@@ -146,7 +157,7 @@ class VirtualCameraManager(QThread):
         Coba 'obs' dulu, lalu 'unitycapture'. Return None jika tidak ada.
         """
         if pyvirtualcam is None:
-            logger.warning("pyvirtualcam not installed — cannot detect backend")
+            logger.warning(f"[VCAM_DETECT] pyvirtualcam not loaded — reason: {_pv_import_error}")
             return None
 
         for backend in SUPPORTED_BACKENDS:
@@ -154,12 +165,14 @@ class VirtualCameraManager(QThread):
                 # Coba buka virtual camera dengan resolusi minimal untuk test
                 cam = pyvirtualcam.Camera(width=640, height=480, fps=30, backend=backend)
                 cam.close()
-                logger.info(f"Virtual camera backend detected: {backend}")
+                logger.info(f"[VCAM_DETECT] Backend detected: {backend}")
                 return backend
-            except Exception:
+            except Exception as e:
+                # Log exact error per backend — critical untuk debug saat "Tidak ada"
+                logger.warning(f"[VCAM_DETECT] Backend '{backend}' failed: {type(e).__name__}: {e}")
                 continue
 
-        logger.warning("No virtual camera backend detected")
+        logger.warning("[VCAM_DETECT] No backend detected — install OBS Virtual Camera or UnityCapture")
         return None
 
     # -----------------------------------------------------------------

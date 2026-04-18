@@ -154,7 +154,9 @@ a = Analysis(
         # Dead code / tidak dipakai VocaLive
         "whisper", "torch", "transformers", "speech_recognition",
         "customtkinter", "tensorflow", "tensorboard", "keras",
-        "nltk", "scipy", "numpy", "pandas", "matplotlib",
+        # NOTE: "numpy" HARUS include — pyvirtualcam hard-import numpy.
+        # Sebelumnya excluded → pyvirtualcam ImportError → Backend 'Tidak ada'.
+        "nltk", "scipy", "pandas", "matplotlib",
         "sentence_transformers", "sklearn", "scikit-learn",
         "langchain", "langchain_community", "langchain_core",
         "openai", "anthropic", "chromadb", "faiss",
@@ -184,7 +186,11 @@ _BLOAT_PATTERNS = (
     "transformers", "tokenizers", "huggingface",
     "langchain", "langchain_community", "langchain_core",
     "sentence_transformers", "sklearn", "scikit",
-    "scipy", "numpy",  # numpy optional (virtual_camera try/except)
+    "scipy",
+    # NOTE: numpy sebelumnya di-exclude dengan asumsi "optional (virtual_camera try/except)".
+    # SALAH — pyvirtualcam/camera.py hard-import numpy di top level.
+    # Tanpa numpy bundled: import pyvirtualcam → ImportError → Backend "Tidak ada".
+    # numpy wajib include untuk Virtual Camera feature.
     "pandas", "matplotlib",
     "tensorflow", "tensorboard", "keras",
     "Wav2Lip", "dwpose", "sd-vae",
