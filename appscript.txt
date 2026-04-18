@@ -242,9 +242,9 @@ function doGet(e) {
     if (action === "version") {
       var VERSION_INFO = {
         "vocalive": {
-          "latest": "1.0.17",
-          "notes": "- NEW: Bilingual UI support (Indonesia / English) - auto-deteksi Windows locale\n- FIX: Polish Knowledge (DeepSeek) tidak lagi timeout - timeout scale dengan panjang output\n- FIX: Polish + Greeting AI sekarang ikut bahasa UI utama (install English → semua English)\n- FIX: Preview voice Gemini sesuai setting bahasa\n- FIX: AI reply + fallback + sales template konsisten per bahasa\n- Language switcher di Config Tab (restart app untuk apply)",
-          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.17/VocaLive-v1.0.17.zip"
+          "latest": "1.0.18",
+          "notes": "- FIX CRITICAL: UI label menampilkan teks benar (sebelumnya raw keys di v1.0.17)\n- FIX: Notifikasi update tidak lagi modal - bisa abaikan, klik tombol kuning kapan saja\n- FIX: Update installer tanpa window CMD hitam - ganti dengan notifikasi Windows proper\n- Bilingual UI support (Indonesia / English) + auto-deteksi locale\n- Polish Knowledge + Greeting AI ikut bahasa UI utama\n- DeepSeek timeout scale (Polish Knowledge tidak timeout lagi)",
+          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.18/VocaLive-v1.0.18.zip"
         },
         "tikdance": {
           "latest": "1.1.3",
