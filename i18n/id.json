@@ -554,5 +554,18 @@
   "sales_template.digital_seller.content": "Kamu adalah digital consultant yang paham tren di live streaming.\nJelaskan manfaat, fitur, dan value produk digital secara menarik.\nBerikan gambaran konkret tentang hasil yang bisa didapat pembeli.\nTekankan harga spesial live dan akses instan. Bahasa enerjik dan meyakinkan.\nMaksimal 2-3 kalimat per jawaban.",
   "sales_template.automotive_seller.name": "Penjual Otomotif",
   "sales_template.automotive_seller.description": "Template untuk jualan aksesoris motor, mobil, sparepart",
-  "sales_template.automotive_seller.content": "Kamu adalah otomotif advisor yang passionate di live streaming.\nJelaskan spesifikasi, kompatibilitas, dan keunggulan produk otomotif.\nBantu penonton memilih aksesoris atau sparepart yang cocok untuk kendaraan mereka.\nBerikan tips perawatan dan instalasi. Bahasa teknis namun tetap mudah dipahami.\nMaksimal 2-3 kalimat per jawaban."
+  "sales_template.automotive_seller.content": "Kamu adalah otomotif advisor yang passionate di live streaming.\nJelaskan spesifikasi, kompatibilitas, dan keunggulan produk otomotif.\nBantu penonton memilih aksesoris atau sparepart yang cocok untuk kendaraan mereka.\nBerikan tips perawatan dan instalasi. Bahasa teknis namun tetap mudah dipahami.\nMaksimal 2-3 kalimat per jawaban.",
+  "err.api.gemini_key_missing": "ERROR: Gemini dipilih sebagai AI provider, tetapi GEMINI_API_KEY tidak ditemukan. Silakan tambahkan API key di Settings.",
+  "err.api.gemini_key_missing_short": "ERROR: GEMINI_API_KEY tidak ditemukan di konfigurasi.",
+  "err.api.deepseek_key_missing": "ERROR: DeepSeek dipilih sebagai AI provider, tetapi DEEPSEEK_API_KEY tidak ditemukan di konfigurasi. Silakan tambahkan API key di Settings.",
+  "err.api.deepseek_key_missing_short": "ERROR: DEEPSEEK_API_KEY tidak ditemukan di konfigurasi.",
+  "err.api.gemini_empty_response": "ERROR: Gemini API tidak memberikan respons. Periksa API key atau coba lagi.",
+  "err.api.deepseek_empty_response": "ERROR: DeepSeek API tidak memberikan respons. Periksa API key dan koneksi internet, atau coba lagi nanti.",
+  "err.api.gemini_exception": "ERROR Gemini: {detail}. Periksa API key Gemini Anda di Settings.",
+  "err.api.deepseek_exception": "ERROR DeepSeek: {detail}. Periksa API key dan koneksi internet.",
+  "err.api.gemini_scene_exception": "ERROR Gemini: {detail}",
+  "err.api.deepseek_scene_exception": "ERROR DeepSeek: {detail}",
+  "err.api.unknown_provider": "ERROR: AI provider '{provider}' tidak dikenal. Pilih 'gemini' atau 'deepseek' di Settings.",
+  "err.api.unknown_provider_short": "ERROR: AI provider '{provider}' tidak dikenal.",
+  "err.api.maintenance": "Maaf, sistem AI sedang dalam maintenance"
 }

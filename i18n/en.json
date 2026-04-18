@@ -554,5 +554,18 @@
   "sales_template.digital_seller.content": "You are a trend-savvy digital consultant on live streaming.\nExplain the benefits, features, and value of digital products in an engaging way.\nGive a concrete picture of the results buyers can achieve.\nHighlight special live prices and instant access. Use energetic and convincing language.\nMaximum 2-3 sentences per answer.",
   "sales_template.automotive_seller.name": "Automotive Seller",
   "sales_template.automotive_seller.description": "Template for selling motorcycle/car accessories and spare parts",
-  "sales_template.automotive_seller.content": "You are a passionate automotive advisor on live streaming.\nExplain specifications, compatibility, and advantages of automotive products.\nHelp viewers choose accessories or spare parts that fit their vehicle.\nShare maintenance and installation tips. Technical yet easy-to-understand language.\nMaximum 2-3 sentences per answer."
+  "sales_template.automotive_seller.content": "You are a passionate automotive advisor on live streaming.\nExplain specifications, compatibility, and advantages of automotive products.\nHelp viewers choose accessories or spare parts that fit their vehicle.\nShare maintenance and installation tips. Technical yet easy-to-understand language.\nMaximum 2-3 sentences per answer.",
+  "err.api.gemini_key_missing": "ERROR: Gemini is selected as the AI provider, but GEMINI_API_KEY is not found. Please add the API key in Settings.",
+  "err.api.gemini_key_missing_short": "ERROR: GEMINI_API_KEY not found in configuration.",
+  "err.api.deepseek_key_missing": "ERROR: DeepSeek is selected as the AI provider, but DEEPSEEK_API_KEY is not found in configuration. Please add the API key in Settings.",
+  "err.api.deepseek_key_missing_short": "ERROR: DEEPSEEK_API_KEY not found in configuration.",
+  "err.api.gemini_empty_response": "ERROR: Gemini API returned no response. Check your API key or try again.",
+  "err.api.deepseek_empty_response": "ERROR: DeepSeek API returned no response. Check your API key and internet connection, or try again later.",
+  "err.api.gemini_exception": "ERROR Gemini: {detail}. Check your Gemini API key in Settings.",
+  "err.api.deepseek_exception": "ERROR DeepSeek: {detail}. Check your API key and internet connection.",
+  "err.api.gemini_scene_exception": "ERROR Gemini: {detail}",
+  "err.api.deepseek_scene_exception": "ERROR DeepSeek: {detail}",
+  "err.api.unknown_provider": "ERROR: AI provider '{provider}' is not recognized. Choose 'gemini' or 'deepseek' in Settings.",
+  "err.api.unknown_provider_short": "ERROR: AI provider '{provider}' is not recognized.",
+  "err.api.maintenance": "Sorry, the AI system is under maintenance"
 }

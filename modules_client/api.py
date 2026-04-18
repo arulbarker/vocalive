@@ -16,6 +16,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from modules_client.config_manager import ConfigManager
+from modules_client.i18n import t
 
 logger = logging.getLogger('VocaLive.API')
 
@@ -140,7 +141,7 @@ class APIClient:
             except Exception as local_error:
                 logger.error(f"Local fallback failed: {local_error}")
 
-            return "Maaf, sistem AI sedang dalam maintenance"
+            return t("err.api.maintenance")
 
 # Global instance
 _api_client = APIClient()
@@ -265,7 +266,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
             print("[API] Using Gemini Flash Lite API (as configured)...")
             gemini_key = cfg.get("api_keys", {}).get("GEMINI_API_KEY")
             if not gemini_key:
-                error_msg = "ERROR: Gemini dipilih sebagai AI provider, tetapi GEMINI_API_KEY tidak ditemukan. Silakan tambahkan API key di Settings."
+                error_msg = t("err.api.gemini_key_missing")
                 print(f"[API] {error_msg}")
                 return error_msg
 
@@ -282,7 +283,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
                     pass
                 return reply
             else:
-                error_msg = "ERROR: Gemini API tidak memberikan respons. Periksa API key atau coba lagi."
+                error_msg = t("err.api.gemini_empty_response")
                 print(f"[API] {error_msg}")
                 try:
                     from modules_client.telemetry import capture as _tel_capture
@@ -293,7 +294,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
 
         except Exception as e:
             logger.error("[API] generate_reply error: %s", str(e))
-            error_msg = f"ERROR Gemini: {str(e)}. Periksa API key Gemini Anda di Settings."
+            error_msg = t("err.api.gemini_exception", detail=str(e))
             print(f"[API] {error_msg}")
             try:
                 from modules_client.telemetry import capture as _tel_capture
@@ -309,7 +310,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
             # Check API key first
             deepseek_key = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY")
             if not deepseek_key:
-                error_msg = "ERROR: DeepSeek dipilih sebagai AI provider, tetapi DEEPSEEK_API_KEY tidak ditemukan di konfigurasi. Silakan tambahkan API key di Settings."
+                error_msg = t("err.api.deepseek_key_missing")
                 print(f"[API] {error_msg}")
                 return error_msg
 
@@ -333,7 +334,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
                     pass
                 return reply
             else:
-                error_msg = "ERROR: DeepSeek API tidak memberikan respons. Periksa API key dan koneksi internet, atau coba lagi nanti."
+                error_msg = t("err.api.deepseek_empty_response")
                 print(f"[API] {error_msg}")
                 try:
                     from modules_client.telemetry import capture as _tel_capture
@@ -344,7 +345,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
 
         except Exception as e:
             logger.error("[API] generate_reply error: %s", str(e))
-            error_msg = f"ERROR DeepSeek: {str(e)}. Periksa API key dan koneksi internet."
+            error_msg = t("err.api.deepseek_exception", detail=str(e))
             print(f"[API] {error_msg}")
             try:
                 from modules_client.telemetry import capture as _tel_capture
@@ -354,7 +355,7 @@ def generate_reply(prompt: str, timeout: int = 15, fast_mode: bool = False, max_
             return error_msg
 
     else:
-        error_msg = f"ERROR: AI provider '{ai_provider}' tidak dikenal. Pilih 'gemini' atau 'deepseek' di Settings."
+        error_msg = t("err.api.unknown_provider", provider=ai_provider)
         print(f"[API] {error_msg}")
         return error_msg
 
@@ -388,25 +389,25 @@ def generate_reply_with_scene(prompt: str, fast_mode: bool = False) -> tuple[str
     if ai_provider == "gemini":
         gemini_key = cfg.get("api_keys", {}).get("GEMINI_API_KEY")
         if not gemini_key:
-            return "ERROR: GEMINI_API_KEY tidak ditemukan di konfigurasi.", 0
+            return t("err.api.gemini_key_missing_short"), 0
         try:
             from modules_client.gemini_ai import generate_reply as gemini_gen
             raw = gemini_gen(prompt, max_tokens=max_tokens, fast_mode=fast_mode, product_context=product_context)
         except Exception as e:
             logger.error(f"generate_reply_with_scene Gemini error: {e}")
-            return f"ERROR Gemini: {e}", 0
+            return t("err.api.gemini_scene_exception", detail=str(e)), 0
     elif ai_provider == "deepseek":
         deepseek_key = cfg.get("api_keys", {}).get("DEEPSEEK_API_KEY")
         if not deepseek_key:
-            return "ERROR: DEEPSEEK_API_KEY tidak ditemukan di konfigurasi.", 0
+            return t("err.api.deepseek_key_missing_short"), 0
         try:
             from modules_client.deepseek_ai import generate_reply as deepseek_gen
             raw = deepseek_gen(prompt, max_tokens=max_tokens, fast_mode=fast_mode, product_context=product_context)
         except Exception as e:
             logger.error(f"generate_reply_with_scene DeepSeek error: {e}")
-            return f"ERROR DeepSeek: {e}", 0
+            return t("err.api.deepseek_scene_exception", detail=str(e)), 0
     else:
-        return f"ERROR: AI provider '{ai_provider}' tidak dikenal.", 0
+        return t("err.api.unknown_provider_short", provider=ai_provider), 0
 
     if not raw:
         return "", 0
