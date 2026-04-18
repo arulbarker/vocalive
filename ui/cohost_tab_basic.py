@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
 try:
     from modules_client.api import generate_reply_with_scene
     from modules_client.config_manager import ConfigManager
+    from modules_client.i18n import t
     from modules_client.logger import Logger
     from modules_server.tts_engine import speak
 except ImportError as e:
@@ -532,7 +533,7 @@ class SimpleTikTokListener(QThread):
                 self.start_timestamp = time.time()  # Record connection time
                 self._grace_period_over = False  # Reset grace period on every connect
                 logger.info("[COHOST] TikTok connected: username=%s", self.username)
-                self.logMessage.emit("INFO", f"✅ Connected! Menunggu {self.CONNECT_GRACE_PERIOD:.0f}s untuk skip history lama...")
+                self.logMessage.emit("INFO", t("cohost.listener.connected_wait", seconds=f"{self.CONNECT_GRACE_PERIOD:.0f}"))
                 try:
                     from modules_client.config_manager import ConfigManager as _CM
                     from modules_client.telemetry import capture as _tel_capture
@@ -556,7 +557,7 @@ class SimpleTikTokListener(QThread):
                         return
                     # Log when grace period just ended
                     if was_grace and self._grace_period_over:
-                        self.logMessage.emit("INFO", "✅ Grace period selesai — mulai tangkap komentar LIVE")
+                        self.logMessage.emit("INFO", t("cohost.listener.grace_done"))
 
                     # Extract author and message
                     author = event.user.nickname if safe_attr_check(event.user, 'nickname') else str(event.user.unique_id)
@@ -617,7 +618,7 @@ class SimpleTikTokListener(QThread):
 
             @self.client.on(DisconnectEvent)
             async def on_disconnect(event):
-                self.logMessage.emit("INFO", "Disconnected from TikTok Live")
+                self.logMessage.emit("INFO", t("cohost.listener.disconnected"))
                 self.running = False
 
             self.logMessage.emit("INFO", "[TikTok] Event handlers registered successfully")
@@ -631,9 +632,9 @@ class SimpleTikTokListener(QThread):
             self.logMessage.emit("INFO", "[TikTok] client.run() completed (connection closed)")
 
         except ImportError:
-            self.logMessage.emit("ERROR", "❌ TikTokLive library not found. Install with: pip install TikTokLive")
+            self.logMessage.emit("ERROR", t("cohost.listener.tiktok_not_installed"))
         except Exception as e:
-            self.logMessage.emit("ERROR", f"❌ TikTok listener error: {e}")
+            self.logMessage.emit("ERROR", t("cohost.listener.error", reason=str(e)))
             import traceback
             self.logMessage.emit("DEBUG", f"Full traceback: {traceback.format_exc()}")
 
@@ -787,11 +788,11 @@ class CohostTabBasicSimplified(QWidget):
                         thread.wait(1000)
                 self.active_reply_threads.clear()
 
-            self.log_message("INFO", "Application closing - all processes stopped")
+            self.log_message("INFO", t("cohost.log.closing"))
             event.accept()
 
         except Exception as e:
-            self.log_message("ERROR", f"Error during close: {e}")
+            self.log_message("ERROR", t("cohost.log.close_error", reason=str(e)))
             event.accept()
 
     def init_ui(self):
@@ -801,7 +802,7 @@ class CohostTabBasicSimplified(QWidget):
 
         # Add tutorial button at the top — compact, tidak full-width
         tutorial_row = QHBoxLayout()
-        tutorial_button = QPushButton("📺 Panduan Penggunaan")
+        tutorial_button = QPushButton(t("cohost.btn.tutorial"))
         tutorial_button.setFixedHeight(36)
         tutorial_button.setFixedWidth(200)
         tutorial_button.setStyleSheet(btn_accent("font-size: 12px; padding: 4px 16px;"))
@@ -821,23 +822,23 @@ class CohostTabBasicSimplified(QWidget):
         layout = QVBoxLayout(content_widget)
 
         # Basic controls with status indicator
-        controls_group = QGroupBox("⚡ Controls")
+        controls_group = QGroupBox(t("cohost.group.controls"))
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(12)
 
-        self.start_button = QPushButton("▶  Mulai Auto Reply")
+        self.start_button = QPushButton(t("cohost.btn.start"))
         self.start_button.setStyleSheet(btn_success("font-size: 13px; padding: 10px 22px; min-width: 160px;"))
         self.start_button.clicked.connect(self.start)
 
-        self.stop_button = QPushButton("■  Stop")
+        self.stop_button = QPushButton(t("cohost.btn.stop"))
         self.stop_button.setStyleSheet(btn_danger("font-size: 13px; padding: 10px 22px; min-width: 120px;"))
         self.stop_button.clicked.connect(self.stop)
 
         # Status indicator — pakai status_badge
-        self.status_indicator = QLabel("🔴  OFF")
+        self.status_indicator = QLabel(t("cohost.status.off"))
         self.status_indicator.setStyleSheet(status_badge(ERROR, size=13))
 
-        status_text = QLabel("Status:")
+        status_text = QLabel(t("cohost.label.status"))
         status_text.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px;")
 
         controls_layout.addWidget(self.start_button)
@@ -849,7 +850,7 @@ class CohostTabBasicSimplified(QWidget):
         controls_group.setLayout(controls_layout)
 
         # Platform selection
-        platform_group = QGroupBox("Platform")
+        platform_group = QGroupBox(t("cohost.group.platform"))
         platform_layout = QVBoxLayout()
 
         self.platform_combo = QComboBox()
@@ -860,18 +861,18 @@ class CohostTabBasicSimplified(QWidget):
         platform_layout.addWidget(self.platform_combo)
 
         # YouTube Video ID input
-        self.video_id_label = QLabel("YouTube Video ID:")
+        self.video_id_label = QLabel(t("cohost.label.youtube_video_id"))
         platform_layout.addWidget(self.video_id_label)
         self.video_id_input = QLineEdit()
-        self.video_id_input.setPlaceholderText("Enter YouTube video ID")
+        self.video_id_input.setPlaceholderText(t("cohost.placeholder.youtube_video_id"))
         self.video_id_input.setText(self.cfg.get("video_id", ""))
         platform_layout.addWidget(self.video_id_input)
 
         # TikTok Nickname input
-        self.tiktok_label = QLabel("TikTok Nickname:")
+        self.tiktok_label = QLabel(t("cohost.label.tiktok_nickname"))
         platform_layout.addWidget(self.tiktok_label)
         self.tiktok_input = QLineEdit()
-        self.tiktok_input.setPlaceholderText("Enter TikTok username (without @)")
+        self.tiktok_input.setPlaceholderText(t("cohost.placeholder.tiktok_nickname"))
         self.tiktok_input.setText(self.cfg.get("tiktok_nickname", ""))
         platform_layout.addWidget(self.tiktok_input)
 
@@ -881,16 +882,16 @@ class CohostTabBasicSimplified(QWidget):
         self._update_platform_ui(self.platform_combo.currentText())
 
         # Context info (managed via Config tab)
-        context_info = QLabel("📋 Context Setting: Diatur melalui Config Tab → Template Live Selling")
+        context_info = QLabel(t("cohost.label.context_info"))
         context_info.setStyleSheet(f"color: {PRIMARY}; font-weight: bold; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 6px; margin: 5px;")
 
         # Language & Voice Settings Group
-        language_group = QGroupBox("Language & Voice Settings")
+        language_group = QGroupBox(t("cohost.group.language_voice"))
         language_layout = QVBoxLayout()
 
         # Language selection
         lang_layout = QHBoxLayout()
-        lang_layout.addWidget(QLabel("Output Language:"))
+        lang_layout.addWidget(QLabel(t("cohost.label.output_language")))
         self.language_combo = QComboBox()
         self.language_combo.addItems(["Indonesia", "Malaysia", "English"])
         current_lang = self.cfg.get("output_language", "Indonesia")
@@ -901,13 +902,13 @@ class CohostTabBasicSimplified(QWidget):
 
         # Voice selection
         voice_layout = QHBoxLayout()
-        voice_layout.addWidget(QLabel("Voice:"))
+        voice_layout.addWidget(QLabel(t("cohost.label.voice")))
         self.voice_combo = QComboBox()
         self.update_voice_options(current_lang)
         voice_layout.addWidget(self.voice_combo)
 
         # Preview button
-        self.preview_voice_btn = QPushButton("🔊 Preview")
+        self.preview_voice_btn = QPushButton(t("cohost.btn.preview"))
         self.preview_voice_btn.setFixedWidth(80)
         self.preview_voice_btn.clicked.connect(self.preview_selected_voice)
         voice_layout.addWidget(self.preview_voice_btn)
@@ -917,55 +918,49 @@ class CohostTabBasicSimplified(QWidget):
         language_group.setLayout(language_layout)
 
         # Trigger & Settings Group
-        settings_group = QGroupBox("🎯 Trigger & Queue Settings")
+        settings_group = QGroupBox(t("cohost.group.trigger_queue"))
         settings_layout = QVBoxLayout()
 
         # Trigger words input (max 5 triggers)
         trigger_layout = QHBoxLayout()
-        trigger_layout.addWidget(QLabel("Trigger Words (max 5):"))
+        trigger_layout.addWidget(QLabel(t("cohost.label.trigger_words")))
         self.trigger_input = QLineEdit()
         existing_triggers = self.cfg.get("trigger_words", [])
         if isinstance(existing_triggers, list):
             self.trigger_input.setText(", ".join(existing_triggers))
-        self.trigger_input.setPlaceholderText("bang,halo,salam,oke,dan (max 5, kosong = balas semua)")
+        self.trigger_input.setPlaceholderText(t("cohost.placeholder.trigger_words"))
         trigger_layout.addWidget(self.trigger_input)
 
-        save_trigger_btn = QPushButton("💾 Save")
+        save_trigger_btn = QPushButton(t("cohost.btn.save"))
         save_trigger_btn.setStyleSheet(btn_ghost())
         save_trigger_btn.clicked.connect(self.save_trigger_settings)
         trigger_layout.addWidget(save_trigger_btn)
         settings_layout.addLayout(trigger_layout)
 
         # Trigger info label
-        trigger_info = QLabel("💡 Tips: Kosongkan untuk membalas semua komentar. Tanda tanya (?) otomatis dibalas.")
+        trigger_info = QLabel(t("cohost.label.trigger_tips"))
         trigger_info.setStyleSheet(label_subtitle())
         settings_layout.addWidget(trigger_info)
 
         # Cooldown settings
         cooldown_layout = QHBoxLayout()
-        cooldown_layout.addWidget(QLabel("Cooldown/Penonton (mnt):"))
+        cooldown_layout.addWidget(QLabel(t("cohost.label.cooldown")))
         self.viewer_cooldown_spin = QSpinBox()
         self.viewer_cooldown_spin.setRange(0, 30)  # 0 = tidak ada cooldown (reply semua komentar)
         self.viewer_cooldown_spin.setValue(self.cfg.get("viewer_cooldown_minutes", 1))
-        self.viewer_cooldown_spin.setSpecialValueText("Semua")  # tampilkan "Semua" saat nilai 0
-        self.viewer_cooldown_spin.setToolTip(
-            "0 = Balas semua komentar (cocok untuk streamer baru)\n"
-            "1-5 = Batasi tiap penonton 1-5 menit sekali (cocok untuk stream ramai)"
-        )
+        self.viewer_cooldown_spin.setSpecialValueText(t("cohost.label.cooldown_all"))  # tampilkan "Semua" saat nilai 0
+        self.viewer_cooldown_spin.setToolTip(t("cohost.tooltip.cooldown"))
         cooldown_layout.addWidget(self.viewer_cooldown_spin)
 
-        cooldown_layout.addWidget(QLabel("Max Antrian:"))
+        cooldown_layout.addWidget(QLabel(t("cohost.label.max_queue")))
         self.queue_spin = QSpinBox()
         self.queue_spin.setRange(1, 50)  # naikkan max ke 50 untuk stream sangat ramai
         self.queue_spin.setValue(self.cfg.get("cohost_max_queue", 10))
-        self.queue_spin.setToolTip(
-            "Jumlah komentar yang menunggu giliran dibalas.\n"
-            "Stream sepi: 5-10 | Stream ramai: 15-30"
-        )
+        self.queue_spin.setToolTip(t("cohost.tooltip.max_queue"))
         cooldown_layout.addWidget(self.queue_spin)
 
         # Sequential Greeting Timer
-        cooldown_layout.addWidget(QLabel("Greeting Timer (sec):"))
+        cooldown_layout.addWidget(QLabel(t("cohost.label.greeting_timer")))
         self.greeting_timer_spin = QDoubleSpinBox()
         self.greeting_timer_spin.setRange(0.5, 999999)  # 0.5 second minimum, unlimited maximum
         self.greeting_timer_spin.setValue(self.cfg.get("sequential_greeting_interval", 180))
@@ -982,7 +977,7 @@ class CohostTabBasicSimplified(QWidget):
 
         # Mode info (Random only)
         mode_info_layout = QHBoxLayout()
-        mode_info = QLabel("🎲 Mode Sapaan: Random (Acak dari slot yang terisi)")
+        mode_info = QLabel(t("cohost.label.greeting_mode_random"))
         mode_info.setStyleSheet(f"color: {SUCCESS}; font-weight: bold; font-size: 12px; padding: 5px; background-color: {BG_ELEVATED}; border-radius: 4px;")
         mode_info_layout.addWidget(mode_info)
         mode_info_layout.addStretch()
@@ -1007,19 +1002,19 @@ class CohostTabBasicSimplified(QWidget):
         layout.addWidget(settings_group)
 
         # Unified Status & Activity Table (BIG TABLE)
-        status_group = QGroupBox("📊 Live Status & Activity Monitor")
+        status_group = QGroupBox(t("cohost.group.status_monitor"))
         status_layout = QVBoxLayout()
 
         # Create comprehensive status table
         self.status_table = QTableWidget()
         self.status_table.setColumnCount(6)
         self.status_table.setHorizontalHeaderLabels([
-            "🕒 Time",
-            "👤 User",
-            "💬 Comment",
-            "🤖 AI Response",
-            "🎯 Trigger",
-            "📊 Status"
+            t("cohost.table.col.time"),
+            t("cohost.table.col.user"),
+            t("cohost.table.col.comment"),
+            t("cohost.table.col.ai_response"),
+            t("cohost.table.col.trigger"),
+            t("cohost.table.col.status"),
         ])
 
         # Set table properties for big display
@@ -1074,21 +1069,21 @@ class CohostTabBasicSimplified(QWidget):
         summary_layout = QHBoxLayout()
 
         # Connection indicators — status_badge gives bordered pill style
-        self.ai_status_label = QLabel("🔴 AI: Disconnected")
+        self.ai_status_label = QLabel(t("cohost.badge.ai_disconnected"))
         self.ai_status_label.setStyleSheet(status_badge(ERROR))
 
-        self.listener_status_label = QLabel("🔴 Listener: Stopped")
+        self.listener_status_label = QLabel(t("cohost.badge.listener_stopped"))
         self.listener_status_label.setStyleSheet(status_badge(ERROR))
 
-        self.tts_status_label = QLabel("🔴 TTS: Not Ready")
+        self.tts_status_label = QLabel(t("cohost.badge.tts_not_ready"))
         self.tts_status_label.setStyleSheet(status_badge(ERROR))
 
         # Greeting status
-        self.greeting_status_label = QLabel("⏹️ Greeting: Disabled")
+        self.greeting_status_label = QLabel(t("cohost.badge.greeting_disabled"))
         self.greeting_status_label.setStyleSheet(status_badge(TEXT_DIM))
 
         # Statistics
-        self.stats_label = QLabel("📈 0 Komentar | 0 Balasan | 0 Trigger")
+        self.stats_label = QLabel(t("cohost.stats.initial"))
         self.stats_label.setStyleSheet(status_badge(INFO))
 
         summary_layout.addWidget(self.ai_status_label)
@@ -1146,8 +1141,8 @@ class CohostTabBasicSimplified(QWidget):
         # Update voice options based on selected language (FIXED: Malaysia uses Malaysia voices)
         self.update_voice_options(language)
 
-        self.log_message("INFO", f"Output language changed to: {language}")
-        self.log_message("INFO", f"AI language set to: {ai_language}")
+        self.log_message("INFO", t("cohost.log.language_changed", language=language))
+        self.log_message("INFO", t("cohost.log.ai_language_set", language=ai_language))
 
     def update_voice_options(self, language):
         """Update voice options based on selected language using voices.json"""
@@ -1210,7 +1205,7 @@ class CohostTabBasicSimplified(QWidget):
                     voices = ["en-US-Standard-A (MALE)", "en-US-Standard-C (FEMALE)"]
 
         except Exception as e:
-            self.log_message("ERROR", f"Error loading voices: {e}")
+            self.log_message("ERROR", t("cohost.log.voice_load_error", reason=str(e)))
             # Fallback voices
             if language == "Indonesia":
                 voices = ["id-ID-Standard-A (FEMALE)", "id-ID-Standard-B (MALE)"]
@@ -1226,7 +1221,7 @@ class CohostTabBasicSimplified(QWidget):
         else:
             self.voice_combo.setCurrentIndex(0)
             self.cfg.set("tts_voice", voices[0])
-            self.log_message("INFO", f"Voice tersimpan '{saved_voice}' tidak tersedia, reset ke: {voices[0]}")
+            self.log_message("INFO", t("cohost.log.voice_reset", saved=saved_voice, fallback=voices[0]))
 
         # Disconnect dulu agar tidak double-connect saat update_voice_options dipanggil ulang
         try:
@@ -1238,19 +1233,19 @@ class CohostTabBasicSimplified(QWidget):
     def on_voice_changed(self, voice):
         """Handle voice selection change"""
         self.cfg.set("tts_voice", voice)
-        self.log_message("INFO", f"TTS voice changed to: {voice}")
+        self.log_message("INFO", t("cohost.log.voice_changed", voice=voice))
 
     def preview_selected_voice(self):
         """Preview the currently selected voice with sample text"""
         try:
             selected_voice = self.voice_combo.currentText()
             if not selected_voice:
-                self.log_message("WARN", "No voice selected for preview")
+                self.log_message("WARN", t("cohost.log.no_voice_preview"))
                 return
 
             # Disable preview button during playback
             self.preview_voice_btn.setEnabled(False)
-            self.preview_voice_btn.setText("🔊 Playing...")
+            self.preview_voice_btn.setText(t("cohost.btn.preview_playing"))
 
             # Extract voice model name (remove gender part)
             # Format: "en-IN-Chirp3-HD-Pulcherrima (FEMALE)" -> "en-IN-Chirp3-HD-Pulcherrima"
@@ -1290,13 +1285,13 @@ class CohostTabBasicSimplified(QWidget):
                     else:
                         sample_text = "Halo, ini adalah contoh suara untuk preview."
 
-            self.log_message("INFO", f"Playing voice preview: {selected_voice}")
+            self.log_message("INFO", t("cohost.log.voice_preview_playing", voice=selected_voice))
 
             def on_preview_finished():
                 """Callback when preview finished"""
                 self.preview_voice_btn.setEnabled(True)
-                self.preview_voice_btn.setText("🔊 Preview")
-                self.log_message("INFO", "Voice preview completed")
+                self.preview_voice_btn.setText(t("cohost.btn.preview"))
+                self.log_message("INFO", t("cohost.log.voice_preview_done"))
 
             # Play TTS preview with Google TTS only (avoid dual playback)
             success = speak(
@@ -1308,13 +1303,13 @@ class CohostTabBasicSimplified(QWidget):
             )
 
             if not success:
-                self.log_message("ERROR", f"Failed to preview voice: {selected_voice}")
+                self.log_message("ERROR", t("cohost.log.voice_preview_failed", voice=selected_voice))
                 on_preview_finished()  # Re-enable button
 
         except Exception as e:
-            self.log_message("ERROR", f"Voice preview error: {e}")
+            self.log_message("ERROR", t("cohost.log.voice_preview_error", reason=str(e)))
             self.preview_voice_btn.setEnabled(True)
-            self.preview_voice_btn.setText("🔊 Preview")
+            self.preview_voice_btn.setText(t("cohost.btn.preview"))
 
     def save_trigger_settings(self):
         """Save trigger words and cooldown settings with max 5 limit"""
@@ -1327,7 +1322,7 @@ class CohostTabBasicSimplified(QWidget):
                 if len(trigger_words) > 5:
                     trigger_words = trigger_words[:5]
                     self.trigger_input.setText(", ".join(trigger_words))
-                    self.log_message("WARN", "Trigger dibatasi maksimal 5, kelebihan dihapus")
+                    self.log_message("WARN", t("cohost.log.trigger_limit_exceeded"))
                 self.cfg.set("trigger_words", trigger_words)
             else:
                 self.cfg.set("trigger_words", [])
@@ -1350,10 +1345,19 @@ class CohostTabBasicSimplified(QWidget):
             if hasattr(self, 'sequential_greeting_manager'):
                 self.sequential_greeting_manager.set_greeting_interval(greeting_timer)
 
-            self.log_message("INFO", f"Settings saved: Triggers={trigger_words if trigger_text else 'None'}, Cooldown={self.cooldown_spin.value()}s, Queue={self.queue_spin.value()}, GreetingTimer={greeting_timer}s")
+            self.log_message(
+                "INFO",
+                t(
+                    "cohost.log.settings_saved",
+                    triggers=trigger_words if trigger_text else "None",
+                    cooldown=self.viewer_cooldown_spin.value(),
+                    queue=self.queue_spin.value(),
+                    timer=greeting_timer,
+                ),
+            )
 
         except Exception as e:
-            self.log_message("ERROR", f"Failed to save settings: {e}")
+            self.log_message("ERROR", t("cohost.log.settings_save_failed", reason=str(e)))
 
     def on_greeting_timer_changed(self, value):
         """Handle greeting timer spinbox change"""
@@ -1365,10 +1369,13 @@ class CohostTabBasicSimplified(QWidget):
             if hasattr(self, 'sequential_greeting_manager'):
                 self.sequential_greeting_manager.set_greeting_interval(value)
 
-            self.log_message("INFO", f"Greeting timer updated to {value} seconds ({value/60:.1f} minutes)")
+            self.log_message(
+                "INFO",
+                t("cohost.log.greeting_timer_updated", seconds=value, minutes=f"{value/60:.1f}"),
+            )
 
         except Exception as e:
-            self.log_message("ERROR", f"Failed to update greeting timer: {e}")
+            self.log_message("ERROR", t("cohost.log.greeting_timer_failed", reason=str(e)))
 
     def on_greeting_mode_changed(self, mode_text=None):
         """Handle greeting mode - Always use Random mode"""
@@ -1383,25 +1390,25 @@ class CohostTabBasicSimplified(QWidget):
             if hasattr(self, 'sequential_greeting_manager'):
                 self.sequential_greeting_manager.set_play_mode(mode)
 
-            self.log_message("INFO", "Greeting mode: Random")
+            self.log_message("INFO", t("cohost.log.greeting_mode_random"))
 
         except Exception as e:
-            self.log_message("ERROR", f"Failed to update greeting mode: {e}")
+            self.log_message("ERROR", t("cohost.log.greeting_mode_failed", reason=str(e)))
 
     def update_status_indicator(self, is_active):
         """Update the status indicator lamp"""
         if is_active:
-            self.status_indicator.setText("🟢  ON — Active")
+            self.status_indicator.setText(t("cohost.status.on_active"))
             self.status_indicator.setStyleSheet(status_badge(SUCCESS, size=13))
         else:
-            self.status_indicator.setText("🔴  OFF")
+            self.status_indicator.setText(t("cohost.status.off"))
             self.status_indicator.setStyleSheet(status_badge(ERROR, size=13))
 
     def start(self):
         """Start simplified listener"""
         # PERFORMANCE FIX: Prevent multiple simultaneous starts
         if hasattr(self, '_is_starting') and self._is_starting:
-            self.log_message("WARNING", "Start already in progress, please wait...")
+            self.log_message("WARNING", t("cohost.log.start_in_progress"))
             return
 
         # Set starting flag
@@ -1409,7 +1416,7 @@ class CohostTabBasicSimplified(QWidget):
 
         # Disable start button during startup
         self.start_button.setEnabled(False)
-        self.start_button.setText("Starting...")
+        self.start_button.setText(t("cohost.btn.starting"))
 
         try:
             # YouTube disabled — platform is TikTok only (CLAUDE.md "Re-enabling YouTube")
@@ -1437,7 +1444,7 @@ class CohostTabBasicSimplified(QWidget):
             if True:  # TikTok only
                 username = self.tiktok_input.text().strip()
                 if not username:
-                    self.log_message("ERROR", "Please enter a TikTok username")
+                    self.log_message("ERROR", t("cohost.log.tiktok_username_empty"))
                     return
 
                 # Save TikTok username
@@ -1447,7 +1454,7 @@ class CohostTabBasicSimplified(QWidget):
                 if self.analytics:
                     try:
                         self.analytics.start_session(platform="tiktok")
-                        self.log_message("INFO", "Analytics session started")
+                        self.log_message("INFO", t("cohost.log.analytics_started"))
                     except Exception as e:
                         self.logger.error(f"Failed to start analytics: {e}")
 
@@ -1458,7 +1465,7 @@ class CohostTabBasicSimplified(QWidget):
                 self.tiktok_listener_thread.logMessage.connect(self.log_message)
                 self.tiktok_listener_thread.start()
 
-                self.log_message("INFO", f"Started TikTok listener for @{username}")
+                self.log_message("INFO", t("cohost.log.tiktok_listener_started", username=username))
 
                 # Start old viewer greeting system if enabled (for backward compatibility)
                 self.viewer_greeting_manager.start_greeting_system()
@@ -1489,7 +1496,7 @@ class CohostTabBasicSimplified(QWidget):
             # Re-enable start button
             self._is_starting = False
             self.start_button.setEnabled(True)
-            self.start_button.setText("Start")
+            self.start_button.setText(t("cohost.btn.start_short"))
 
     def stop(self):
         """Stop all processes - with proper TikTok cleanup for restart support"""
@@ -1526,7 +1533,7 @@ class CohostTabBasicSimplified(QWidget):
         if self.analytics:
             try:
                 self.analytics.end_session()
-                self.log_message("INFO", "Analytics session ended and saved")
+                self.log_message("INFO", t("cohost.log.analytics_ended"))
             except Exception as e:
                 self.logger.error(f"Failed to end analytics: {e}")
 
@@ -1551,7 +1558,7 @@ class CohostTabBasicSimplified(QWidget):
         # Update status indicator
         self.update_status_indicator(False)
 
-        self.log_message("INFO", "Stopped all processes")
+        self.log_message("INFO", t("cohost.log.stopped_all"))
 
     def add_comment_to_display(self, username, message, comment_type="normal", ai_response=None):
         """Add comment to display — delegates to add_status_entry (comments_table dihapus dari UI)"""
@@ -1563,7 +1570,7 @@ class CohostTabBasicSimplified(QWidget):
             # ── legacy block di bawah ini dinonaktifkan ────────────────────────────────
             # row_position = self.comments_table.rowCount()   # AttributeError: no comments_table
         except Exception as e:
-            self.log_message("ERROR", f"Error adding comment to display: {e}")
+            self.log_message("ERROR", t("cohost.log.comment_display_error", reason=str(e)))
 
     def update_ai_response_in_table(self, username, message, ai_response):
         """No-op — update AI response ditangani oleh update_status_entry_with_ai_response"""
@@ -1669,13 +1676,13 @@ class CohostTabBasicSimplified(QWidget):
         # Toxic filter (berlaku untuk semua, termasuk VIP)
         if self.is_toxic(message):
             logger.debug("[COHOST] Filtered out: user=%s, reason=%s", author, "toxic")
-            self.log_message("WARN", f"Toxic content from {author}, ignored")
+            self.log_message("WARN", t("cohost.log.toxic_content", author=author))
             return
 
         # Spam filter — VIP bypass
         if not is_vip and self.is_spam(author, message):
             logger.debug("[COHOST] Filtered out: user=%s, reason=%s", author, "spam")
-            self.log_message("WARN", f"Spam from {author}, ignored")
+            self.log_message("WARN", t("cohost.log.spam_content", author=author))
             return
 
         # Cooldown check — VIP bypass; cooldown=0 berarti reply semua
@@ -1690,8 +1697,8 @@ class CohostTabBasicSimplified(QWidget):
         logger.debug("[COHOST] Filter passed: user=%s", author)
         self.viewer_cooldowns[author] = now
         self.reply_queue.append((author, message, now))
-        label = "⭐ VIP" if is_vip else author
-        self.log_message("INFO", f"Queued: {label}")
+        label = t("cohost.log.queued_vip") if is_vip else author
+        self.log_message("INFO", t("cohost.log.queued", label=label))
 
     def _process_queue(self):
         """Process reply queue — satu item per satu TTS (serialized pipeline)"""
@@ -1724,7 +1731,7 @@ class CohostTabBasicSimplified(QWidget):
         reply_thread.start()
         self.active_reply_threads.append(reply_thread)
 
-        self.log_message("INFO", f"Processing reply for: {author}")
+        self.log_message("INFO", t("cohost.log.processing_reply", author=author))
 
     def clean_ai_response(self, text):
         """Clean AI response completely for natural TTS - remove ALL formatting and symbols"""
@@ -1778,7 +1785,7 @@ class CohostTabBasicSimplified(QWidget):
         """Handle generated reply — display + TTS (non-blocking)"""
         # Jangan TTS-kan error message dari AI
         if reply.startswith("ERROR:") or reply.lower().startswith("error"):
-            self.log_message("ERROR", f"AI error untuk {author}, skip TTS: {reply[:80]}")
+            self.log_message("ERROR", t("cohost.log.ai_error_skip_tts", author=author, excerpt=reply[:80]))
             return
 
         clean_reply = self.clean_ai_response(reply)
@@ -1822,7 +1829,7 @@ class CohostTabBasicSimplified(QWidget):
         # Set busy SEBELUM mulai TTS — queue tidak akan diproses sampai TTS selesai
         self.reply_busy = True
         self.do_tts(clean_reply)
-        self.log_message("INFO", f"Reply → {author}")
+        self.log_message("INFO", t("cohost.log.reply_sent", author=author))
 
     def do_tts(self, text):
         """Mulai TTS di background thread — GUI tidak freeze"""
@@ -1844,10 +1851,10 @@ class CohostTabBasicSimplified(QWidget):
             self._tts_thread.finished.connect(self._on_tts_finished)
             self._tts_thread.start()
             logger.info("[COHOST] TTS queued: reply_len=%d", len(text))
-            self.log_message("TTS", f"Speaking: {voice_model}")
+            self.log_message("TTS", t("cohost.log.tts_speaking", voice=voice_model))
 
         except Exception as e:
-            self.log_message("ERROR", f"TTS error: {e}")
+            self.log_message("ERROR", t("cohost.log.tts_error", reason=str(e)))
             self.reply_busy = False  # Pastikan queue tidak terkunci selamanya
 
     def _on_tts_finished(self):
@@ -1857,7 +1864,7 @@ class CohostTabBasicSimplified(QWidget):
             if hasattr(self, 'sequential_greeting_manager'):
                 self.sequential_greeting_manager.on_trigger_complete()
         except Exception as e:
-            self.log_message("ERROR", f"TTS finished callback: {e}")
+            self.log_message("ERROR", t("cohost.log.tts_finished_error", reason=str(e)))
         finally:
             self.reply_busy = False  # Buka kunci — queue bisa proses item berikutnya
 
@@ -1926,7 +1933,11 @@ class CohostTabBasicSimplified(QWidget):
             self.logger.warning(f"Cooldown cleanup error: {e}")
 
     def add_status_entry(self, author, message, ai_response="", trigger="", status="Received"):
-        """Add entry to unified status table"""
+        """Add entry to unified status table.
+
+        ``status`` is an INTERNAL identifier (English constant) used for routing/color.
+        The displayed label is translated via ``cohost.row.status.*`` keys.
+        """
         try:
             current_time = datetime.now().strftime("%H:%M:%S")
 
@@ -1935,13 +1946,21 @@ class CohostTabBasicSimplified(QWidget):
 
             # Add data to columns
             self.status_table.setItem(0, 0, QTableWidgetItem(current_time))
-            self.status_table.setItem(0, 1, QTableWidgetItem(author or "System"))
+            self.status_table.setItem(0, 1, QTableWidgetItem(author or t("cohost.row.user_system")))
             self.status_table.setItem(0, 2, QTableWidgetItem(message[:100] + "..." if len(message) > 100 else message))
             self.status_table.setItem(0, 3, QTableWidgetItem(ai_response[:300] + "..." if len(ai_response) > 300 else ai_response))
             self.status_table.setItem(0, 4, QTableWidgetItem(trigger))
 
-            # Color-code status
-            status_item = QTableWidgetItem(status)
+            # Color-code status and map to translated label
+            status_label_map = {
+                "AI Reply": t("cohost.row.status.ai_reply"),
+                "Triggered": t("cohost.row.status.triggered"),
+                "Error": t("cohost.row.status.error"),
+                "Filtered": t("cohost.row.status.filtered"),
+                "Received": t("cohost.row.status.received"),
+            }
+            status_label = status_label_map.get(status, status)
+            status_item = QTableWidgetItem(status_label)
             if status == "AI Reply":
                 status_item.setBackground(QColor(SUCCESS))
             elif status == "Triggered":
@@ -1977,7 +1996,7 @@ class CohostTabBasicSimplified(QWidget):
                     self.status_table.setItem(row, 3, ai_item)
 
                     # Update status
-                    status_item = QTableWidgetItem("AI Reply")
+                    status_item = QTableWidgetItem(t("cohost.row.status.ai_reply"))
                     status_item.setBackground(QColor(SUCCESS))
                     self.status_table.setItem(row, 5, status_item)
 
@@ -2007,20 +2026,20 @@ class CohostTabBasicSimplified(QWidget):
                     ai_configured = bool(api_keys.get("OPENAI_API_KEY", "").strip())
 
                 if ai_configured:
-                    self.ai_status_label.setText("🟢 AI: Ready")
+                    self.ai_status_label.setText(t("cohost.badge.ai_ready"))
                     self.ai_status_label.setStyleSheet(status_badge(SUCCESS))
                 else:
-                    self.ai_status_label.setText("🔴 AI: Not Ready")
+                    self.ai_status_label.setText(t("cohost.badge.ai_not_ready"))
                     self.ai_status_label.setStyleSheet(status_badge(ERROR))
 
             if hasattr(self, 'listener_status_label'):
                 # Check listener status
                 is_running = (self.listener_thread and self.listener_thread.isRunning()) or (self.tiktok_listener_thread and self.tiktok_listener_thread.isRunning())
                 if is_running:
-                    self.listener_status_label.setText("🟢 Listener: Active")
+                    self.listener_status_label.setText(t("cohost.badge.listener_active"))
                     self.listener_status_label.setStyleSheet(status_badge(SUCCESS))
                 else:
-                    self.listener_status_label.setText("🔴 Listener: Stopped")
+                    self.listener_status_label.setText(t("cohost.badge.listener_stopped"))
                     self.listener_status_label.setStyleSheet(status_badge(ERROR))
 
             if hasattr(self, 'tts_status_label'):
@@ -2030,15 +2049,22 @@ class CohostTabBasicSimplified(QWidget):
 
                 # Check if either API key or credentials file exists
                 if (tts_api_key) or (tts_file and os.path.exists(tts_file)):
-                    self.tts_status_label.setText("🟢 TTS: Ready")
+                    self.tts_status_label.setText(t("cohost.badge.tts_ready"))
                     self.tts_status_label.setStyleSheet(status_badge(SUCCESS))
                 else:
-                    self.tts_status_label.setText("🔴 TTS: Not Ready")
+                    self.tts_status_label.setText(t("cohost.badge.tts_not_ready"))
                     self.tts_status_label.setStyleSheet(status_badge(ERROR))
 
             if hasattr(self, 'stats_label'):
                 # Update statistics
-                self.stats_label.setText(f"📈 Comments: {self.total_comments} | AI Replies: {self.total_ai_replies} | Triggers: {self.total_triggers}")
+                self.stats_label.setText(
+                    t(
+                        "cohost.stats.summary",
+                        comments=self.total_comments,
+                        replies=self.total_ai_replies,
+                        triggers=self.total_triggers,
+                    )
+                )
 
         except Exception as e:
             print(f"Error updating status summary: {e}")
@@ -2049,9 +2075,9 @@ class CohostTabBasicSimplified(QWidget):
         tutorial_url = "https://streammate-ai-seller.lovable.app/"
         try:
             webbrowser.open(tutorial_url)
-            self.log_message("INFO", "Tutorial video opened in browser")
+            self.log_message("INFO", t("cohost.log.tutorial_opened"))
         except Exception as e:
-            self.log_message("ERROR", f"Failed to open tutorial: {e}")
+            self.log_message("ERROR", t("cohost.log.tutorial_failed", reason=str(e)))
 
     def _clean_ai_response(self, raw_text):
         """Clean AI response from emojis, formatting, and special chars for TTS"""
@@ -2126,7 +2152,7 @@ class CohostTabBasicSimplified(QWidget):
             self.viewer_greeting_manager.add_viewer(username, display_name)
 
         except Exception as e:
-            self.log_message("ERROR", f"Error handling viewer join: {e}")
+            self.log_message("ERROR", t("cohost.log.viewer_join_error", reason=str(e)))
 
     def handle_viewer_greeting(self, username, display_name):
         """Handle greeting request from greeting manager"""
@@ -2144,10 +2170,18 @@ class CohostTabBasicSimplified(QWidget):
 
             # Add to reply queue with special greeting flag
             self.reply_queue.append(("🤖 Auto Greeting", username, greeting_prompt, True))  # True = is_greeting
-            self.log_message("INFO", f"Added sales greeting for @{username} ({display_name}) in {current_language}")
+            self.log_message(
+                "INFO",
+                t(
+                    "cohost.log.sales_greeting_added",
+                    username=username,
+                    display=display_name,
+                    language=current_language,
+                ),
+            )
 
         except Exception as e:
-            self.log_message("ERROR", f"Error handling viewer greeting: {e}")
+            self.log_message("ERROR", t("cohost.log.viewer_greeting_error", reason=str(e)))
 
     def update_greeting_status(self, status_message):
         """Update greeting status label"""
@@ -2166,7 +2200,7 @@ class CohostTabBasicSimplified(QWidget):
                     self.greeting_status_label.setStyleSheet(status_badge(TEXT_DIM))
 
         except Exception as e:
-            self.log_message("ERROR", f"Error updating greeting status: {e}")
+            self.log_message("ERROR", t("cohost.log.greeting_status_error", reason=str(e)))
 
 # Alias untuk kompatibilitas
 CohostTabBasic = CohostTabBasicSimplified
