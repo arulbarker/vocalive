@@ -929,37 +929,30 @@ class CohostTabBasicSimplified(QWidget):
         context_info = QLabel(t("cohost.label.context_info"))
         context_info.setStyleSheet(f"color: {PRIMARY}; font-weight: bold; padding: 8px; background-color: {BG_ELEVATED}; border-radius: 6px; margin: 5px;")
 
-        # Language & Voice Settings Group
-        language_group = QGroupBox(t("cohost.group.language_voice"))
-        language_layout = QVBoxLayout()
-
-        # Language selection
-        lang_layout = QHBoxLayout()
-        lang_layout.addWidget(QLabel(t("cohost.label.output_language")))
+        # v1.0.27: Language + Voice selection dipindah ke Config tab (master control).
+        # Cohost tab tidak lagi punya UI pemilihan bahasa/suara — pure cohost operation.
+        # Widget language_combo + voice_combo tetap dibuat sebagai hidden (backward-compat
+        # untuk method internal: on_language_changed, update_voice_options, preview_selected_voice,
+        # generate_cohost_reply yang baca self.language_combo.currentText()).
         self.language_combo = QComboBox()
         self.language_combo.addItems(["Indonesia", "Malaysia", "English"])
         current_lang = self.cfg.get("output_language", "Indonesia")
         self.language_combo.setCurrentText(current_lang)
         self.language_combo.currentTextChanged.connect(self.on_language_changed)
-        lang_layout.addWidget(self.language_combo)
-        language_layout.addLayout(lang_layout)
+        self.language_combo.setVisible(False)
 
-        # Voice selection
-        voice_layout = QHBoxLayout()
-        voice_layout.addWidget(QLabel(t("cohost.label.voice")))
         self.voice_combo = QComboBox()
         self.update_voice_options(current_lang)
-        voice_layout.addWidget(self.voice_combo)
+        self.voice_combo.setVisible(False)
 
-        # Preview button
-        self.preview_voice_btn = QPushButton(t("cohost.btn.preview"))
-        self.preview_voice_btn.setFixedWidth(80)
+        self.preview_voice_btn = QPushButton()
         self.preview_voice_btn.clicked.connect(self.preview_selected_voice)
-        voice_layout.addWidget(self.preview_voice_btn)
+        self.preview_voice_btn.setVisible(False)
 
-        language_layout.addLayout(voice_layout)
-
-        language_group.setLayout(language_layout)
+        # Placeholder — tidak ditampilkan di UI, hanya penampung agar referensi ke
+        # language_group di bawah tidak crash
+        language_group = QGroupBox()
+        language_group.setVisible(False)
 
         # Trigger & Settings Group
         settings_group = QGroupBox(t("cohost.group.trigger_queue"))

@@ -74,17 +74,28 @@ class TTSEngine:
                 logger.warning(f"Failed to initialize pyttsx3: {e}")
 
     def _initialize_google_tts(self):
-        """Initialize Google Cloud TTS — supports API key or service account credentials"""
-        # Always try to load an API key from settings first (simplest auth)
+        """Initialize Google TTS — Gemini API key unified dengan AI provider.
+
+        Per v1.0.26: prefer api_keys.GEMINI_API_KEY (unified single key) karena
+        voice dropdown sudah Gemini-only. Fallback ke google_tts_api_key lama
+        untuk backward-compat dengan user existing yang sudah isi field tsb.
+        """
         try:
             settings = self._load_settings()
+            # Priority 1: unified Gemini key (shared dengan AI provider kalau AI=Gemini)
+            api_key = settings.get('api_keys', {}).get('GEMINI_API_KEY', '').strip()
+            if api_key:
+                self.google_api_key = api_key
+                logger.info("TTS using unified GEMINI_API_KEY (from AI section)")
+                return
+            # Priority 2: legacy google_tts_api_key (backward-compat)
             api_key = settings.get('google_tts_api_key', '').strip()
             if api_key:
                 self.google_api_key = api_key
-                logger.info("Google Cloud TTS will use API key authentication")
+                logger.info("TTS using legacy google_tts_api_key (consider migrating to GEMINI_API_KEY)")
                 return
         except Exception as e:
-            logger.warning(f"Failed to read google_tts_api_key from settings: {e}")
+            logger.warning(f"Failed to read API key from settings: {e}")
 
         if not texttospeech:
             logger.warning("Google Cloud TTS library not available")

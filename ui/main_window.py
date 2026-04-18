@@ -835,6 +835,16 @@ class MainWindow(QMainWindow):
                         logger.info(f"[MAIN] Voice list Cohost diperbarui setelah deteksi key_type={key_type}")
                     self.config_tab.tts_key_type_changed.connect(_on_key_type)
 
+                # v1.0.27: Sync output_language dari Config → Cohost (Cohost language_combo hidden)
+                if (hasattr(self, 'cohost_tab') and
+                        hasattr(self.config_tab, 'output_language_changed') and
+                        hasattr(self.cohost_tab, 'language_combo')):
+                    def _on_output_lang(language):
+                        # Set hidden language_combo di Cohost → trigger on_language_changed chain
+                        self.cohost_tab.language_combo.setCurrentText(language)
+                        logger.info(f"[MAIN] Output language synced Cohost ← Config: {language}")
+                    self.config_tab.output_language_changed.connect(_on_output_lang)
+
                 # Wire Greeting AI status callback — must be after both tabs exist
                 try:
                     if (hasattr(self, 'cohost_tab') and

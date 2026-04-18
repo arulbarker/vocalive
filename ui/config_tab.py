@@ -312,6 +312,7 @@ class ConfigTab(QWidget):
 
     tts_key_type_changed = pyqtSignal(str)  # "gemini" | "cloud" | "all"
     greeting_status_changed = pyqtSignal(str, str)  # state, message
+    output_language_changed = pyqtSignal(str)  # "Indonesia" | "Malaysia" | "English"
 
     def __init__(self):
         super().__init__()
@@ -382,8 +383,19 @@ class ConfigTab(QWidget):
         ui_lang_layout.addStretch()
         layout.addLayout(ui_lang_layout)
 
+        # v1.0.27: Master Output Language selector di PALING ATAS
+        # Setting ini master control untuk SEMUA output audio/AI:
+        # - AI reply ke komentar viewer TikTok
+        # - Greeting saat app start + auto-generated greetings
+        # - Preview voice, Test TTS
+        # - Polish Knowledge output
+        # - Sales template content
+        self.create_output_language_section(layout)
+
         # AI Provider Section
         self.create_ai_provider_section(layout)
+        # v1.0.26: TTS section langsung di bawah AI provider (per user request)
+        self.create_google_tts_section(layout)
 
         # Viewer Greeting Section
         self.create_viewer_greeting_section(layout)
@@ -391,8 +403,8 @@ class ConfigTab(QWidget):
         # Sales Template Section
         self.create_sales_template_section(layout)
 
-        # Google TTS Section
-        self.create_google_tts_section(layout)
+        # NOTE: Google TTS Section sudah dipanggil langsung setelah AI provider (line 388).
+        # Tidak panggil lagi di sini untuk hindari duplicate widget.
 
         # Status Section
         self.create_status_section(layout)
@@ -585,6 +597,163 @@ class ConfigTab(QWidget):
                 font-weight: bold;
             }}
         """)
+
+    def create_output_language_section(self, layout):
+        """Master output audio section (v1.0.27).
+
+        Master control untuk SEMUA output AI + TTS:
+        - Bahasa Output (Indonesia/Malaysia/English)
+        - Voice (Gemini voices, auto-filter by language)
+        - Preview voice button
+
+        Dipindahkan dari Cohost tab supaya user punya satu source of truth
+        di Config tab. Cohost tab sekarang pure operation (start/stop/log).
+        """
+        group = QGroupBox(t("config.section.output_audio"))
+        group_layout = QVBoxLayout(group)
+        group_layout.setSpacing(12)
+
+        # Info
+        info = QLabel(t("config.output.info"))
+        info.setWordWrap(True)
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
+        group_layout.addWidget(info)
+
+        # Language row
+        lang_row = QHBoxLayout()
+        lang_label = QLabel(t("config.output.label.language"))
+        lang_label.setMinimumWidth(130)
+        lang_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        lang_row.addWidget(lang_label)
+
+        self.output_lang_combo = QComboBox()
+        self.output_lang_combo.addItems(["Indonesia", "Malaysia", "English"])
+        current_lang = self.cfg.get("output_language", "Indonesia")
+        self.output_lang_combo.setCurrentText(current_lang)
+        self.output_lang_combo.currentTextChanged.connect(self._on_output_lang_changed)
+        lang_row.addWidget(self.output_lang_combo)
+        lang_row.addStretch()
+        group_layout.addLayout(lang_row)
+
+        # Voice row
+        voice_row = QHBoxLayout()
+        voice_label = QLabel(t("config.output.label.voice"))
+        voice_label.setMinimumWidth(130)
+        voice_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        voice_row.addWidget(voice_label)
+
+        self.output_voice_combo = QComboBox()
+        self.output_voice_combo.setMinimumWidth(280)
+        voice_row.addWidget(self.output_voice_combo)
+
+        self.output_preview_btn = QPushButton(t("config.output.btn.preview"))
+        self.output_preview_btn.setFixedWidth(100)
+        self.output_preview_btn.clicked.connect(self._on_output_preview_clicked)
+        voice_row.addWidget(self.output_preview_btn)
+        voice_row.addStretch()
+        group_layout.addLayout(voice_row)
+
+        # Populate voice combo berdasar current language
+        self._populate_output_voice_combo(current_lang)
+
+        # Connect voice change → save ke settings
+        self.output_voice_combo.currentTextChanged.connect(self._on_output_voice_changed)
+
+        layout.addWidget(group)
+
+    def _populate_output_voice_combo(self, language: str):
+        """Isi voice combo berdasar language — Gemini voices only."""
+        self.output_voice_combo.blockSignals(True)
+        self.output_voice_combo.clear()
+        try:
+            voices_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'voices.json')
+            with open(voices_file, 'r', encoding='utf-8') as f:
+                voices_data = json.load(f)
+            lang_key = {"Indonesia": "id-ID", "Malaysia": "ms-MY"}.get(language, "en-US")
+            voices = []
+            if "gemini_flash" in voices_data and lang_key in voices_data["gemini_flash"]:
+                for v in voices_data["gemini_flash"][lang_key]:
+                    voices.append(f"{v['model']} ({v['gender']})")
+            if not voices:
+                voices = ["Gemini-Puck (MALE)", "Gemini-Zephyr (FEMALE)"]
+            self.output_voice_combo.addItems(voices)
+            # Set saved voice if exists
+            saved = self.cfg.get("tts_voice", voices[0])
+            if saved in voices:
+                self.output_voice_combo.setCurrentText(saved)
+            else:
+                self.output_voice_combo.setCurrentIndex(0)
+        except Exception as e:
+            logger.error(f"Failed to populate output voice: {e}")
+            self.output_voice_combo.addItems(["Gemini-Puck (MALE)", "Gemini-Zephyr (FEMALE)"])
+        self.output_voice_combo.blockSignals(False)
+
+    def _on_output_lang_changed(self, language: str):
+        """Handler saat user pilih bahasa output. Save + emit signal + update voice list."""
+        # Save ke settings + derive ai_language
+        self.cfg.set("output_language", language)
+        ai_lang_map = {"Indonesia": "indonesian", "Malaysia": "malaysian", "English": "english"}
+        self.cfg.set("ai_language", ai_lang_map.get(language, "indonesian"))
+        # Refresh voice list untuk bahasa baru
+        self._populate_output_voice_combo(language)
+        # Emit signal untuk Cohost tab sync
+        self.output_language_changed.emit(language)
+        logger.info(f"[CONFIG] Output language → {language}")
+
+    def _on_output_voice_changed(self, voice: str):
+        """Save voice selection ke settings."""
+        if voice:
+            self.cfg.set("tts_voice", voice)
+            logger.info(f"[CONFIG] TTS voice → {voice}")
+
+    def _on_output_preview_clicked(self):
+        """Preview voice yang dipilih dengan sample text."""
+        voice = self.output_voice_combo.currentText()
+        lang = self.output_lang_combo.currentText()
+        if not voice:
+            QMessageBox.warning(self, t("common.warning"), t("config.output.err.no_voice"))
+            return
+        # Check Gemini API key
+        api_key = self.cfg.get("api_keys", {}).get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            api_key = self.cfg.get("google_tts_api_key", "").strip()
+        if not api_key:
+            QMessageBox.warning(self, t("common.error"), t("config.output.err.no_api_key"))
+            return
+
+        # Sample text dari i18n — default Indonesian/English/Malaysian samples
+        # Kalau locale spesifik tidak ada sample terpisah, pakai generic sample
+        sample_en = "Hello, this is a voice preview sample. Welcome!"
+        sample_id = "Halo, ini adalah contoh suara untuk preview. Selamat datang!"
+        sample_ms = "Helo, ini contoh suara untuk preview. Selamat datang!"
+        samples = {"Indonesia": sample_id, "Malaysia": sample_ms, "English": sample_en}
+        lang_codes = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}
+        voice_model = voice.split('(')[0].strip()
+        sample = samples.get(lang, sample_id)
+
+        self.output_preview_btn.setEnabled(False)
+        self.output_preview_btn.setText(t("config.output.btn.playing"))
+
+        def on_done():
+            self.output_preview_btn.setEnabled(True)
+            self.output_preview_btn.setText(t("config.output.btn.preview"))
+
+        try:
+            from modules_server.tts_engine import speak
+            success = speak(
+                text=sample, voice_name=voice_model,
+                language_code=lang_codes.get(lang, "id-ID"),
+                on_finished=on_done, force_google_tts=True
+            )
+            if not success:
+                on_done()
+                from modules_server.tts_engine import get_tts_engine
+                err = getattr(get_tts_engine(), 'last_error', '') or "Unknown error (check logs/system.log)"
+                QMessageBox.warning(self, t("common.error"),
+                    t("config.output.err.preview_failed", voice=voice, err=err))
+        except Exception as e:
+            on_done()
+            QMessageBox.critical(self, t("common.error"), f"{type(e).__name__}: {e}")
 
     def create_ai_provider_section(self, layout):
         """Create AI Provider section with flexible API key input"""
@@ -838,101 +1007,74 @@ class ConfigTab(QWidget):
         layout.addWidget(group)
 
     def create_google_tts_section(self, layout):
-        """Create Google TTS section with API Key only (simplified)"""
+        """TTS section — conditional Gemini API key input berdasar AI provider.
+
+        Rules (per v1.0.26):
+        - AI Provider = Gemini → TTS pakai same key dari AI section (tidak ada input di TTS)
+        - AI Provider = DeepSeek → TTS butuh Gemini key terpisah (input muncul di TTS section)
+
+        Input `tts_api_key_input` dinamis visible/hidden via _update_tts_key_visibility()
+        yang dipanggil dari on_provider_changed.
+        """
         group = QGroupBox(t("config.section.tts"))
         group_layout = QVBoxLayout(group)
-        group_layout.setSpacing(15)
+        group_layout.setSpacing(12)
 
-        # Description with better styling
-        desc = QLabel(t("config.tts.desc"))
-        desc.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
-        group_layout.addWidget(desc)
+        # Info label — konten berubah dinamis via _update_tts_key_visibility()
+        self.tts_info_label = QLabel()
+        self.tts_info_label.setWordWrap(True)
+        self.tts_info_label.setStyleSheet(
+            f"color: {ACCENT}; font-size: 12px; padding: 8px; "
+            f"background-color: {BG_ELEVATED}; border-radius: 6px;"
+        )
+        group_layout.addWidget(self.tts_info_label)
 
-        # Info about Gemini Flash TTS
-        gemini_info = QLabel(t("config.tts.info_gemini"))
-        gemini_info.setStyleSheet(f"color: {INFO}; font-size: 11px; font-style: italic; padding: 5px; background-color: {BG_ELEVATED}; border-radius: 4px;")
-        group_layout.addWidget(gemini_info)
+        # Conditional API key input — visible hanya kalau AI=DeepSeek
+        self.tts_key_container = QWidget()
+        key_row = QHBoxLayout(self.tts_key_container)
+        key_row.setContentsMargins(0, 0, 0, 0)
 
-        # Baris 1: API Key input + tombol Lihat
-        api_key_container = QHBoxLayout()
-        api_key_label = QLabel(t("config.label.api_key"))
-        api_key_label.setMinimumWidth(80)
-        api_key_label.setStyleSheet("font-weight: bold; font-size: 13px;")
-        api_key_container.addWidget(api_key_label)
+        key_label = QLabel(t("config.tts.label.gemini_key"))
+        key_label.setMinimumWidth(120)
+        key_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        key_row.addWidget(key_label)
 
         self.tts_api_key_input = QLineEdit()
-        self.tts_api_key_input.setPlaceholderText(t("config.tts.placeholder"))
+        self.tts_api_key_input.setPlaceholderText(t("config.tts.placeholder.gemini_key"))
         self.tts_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.tts_api_key_input.textChanged.connect(self.on_tts_api_key_changed)
-        api_key_container.addWidget(self.tts_api_key_input)
+        self.tts_api_key_input.textChanged.connect(self._on_tts_gemini_key_changed)
+        key_row.addWidget(self.tts_api_key_input)
 
-        show_api_btn = QPushButton(t("config.btn.show"))
-        show_api_btn.setProperty("class", "secondary")
-        show_api_btn.setMinimumWidth(70)
-        show_api_btn.setMaximumWidth(90)
-        show_api_btn.setToolTip(t("config.tooltip.show_api_key"))
-        show_api_btn.clicked.connect(lambda: self.toggle_password_visibility(self.tts_api_key_input))
-        api_key_container.addWidget(show_api_btn)
-        group_layout.addLayout(api_key_container)
+        show_btn = QPushButton(t("config.btn.show_key"))
+        show_btn.setProperty("class", "secondary")
+        show_btn.setFixedWidth(70)
+        show_btn.clicked.connect(lambda: self.toggle_password_visibility(self.tts_api_key_input))
+        key_row.addWidget(show_btn)
 
-        # Baris 2: tombol Deteksi Tipe (baris sendiri agar tidak terpotong)
-        detect_row = QHBoxLayout()
-        self.tts_detect_btn = QPushButton(t("config.btn.detect_key_type"))
-        self.tts_detect_btn.setMinimumWidth(180)
-        self.tts_detect_btn.setMaximumWidth(220)
-        self.tts_detect_btn.setFixedHeight(32)
-        self.tts_detect_btn.setToolTip(t("config.tooltip.detect_key"))
-        self.tts_detect_btn.setEnabled(False)
-        self.tts_detect_btn.clicked.connect(self._detect_key_type)
-        detect_row.addWidget(self.tts_detect_btn)
-        detect_row.addStretch()
-        group_layout.addLayout(detect_row)
+        group_layout.addWidget(self.tts_key_container)
 
-        # Key type detection result label
-        self.tts_key_type_label = QLabel(t("config.tts.key_type_undetected"))
-        self.tts_key_type_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 11px; padding: 3px 5px;")
-        group_layout.addWidget(self.tts_key_type_label)
+        # Hidden legacy widgets — tidak visible tapi di-reference method lain
+        self.tts_detect_btn = QPushButton()
+        self.tts_detect_btn.setVisible(False)
+        self.tts_key_type_label = QLabel()
+        self.tts_key_type_label.setVisible(False)
 
-        # Info singkat
-        info_label = QLabel(t("config.tts.info_compat"))
-        info_label.setStyleSheet(
-            f"color: {ACCENT}; font-size: 11px; padding: 5px 5px; "
-            f"background-color: {BG_ELEVATED}; border-radius: 4px;"
-        )
-        group_layout.addWidget(info_label)
-
-        # Voice selector for test
-        voice_row = QHBoxLayout()
-        voice_row_label = QLabel(t("config.label.test_voice"))
-        voice_row_label.setMinimumWidth(80)
-        voice_row_label.setStyleSheet("font-weight: bold; font-size: 13px;")
-        voice_row.addWidget(voice_row_label)
-
+        # v1.0.26: Voice combo + Test button dihapus dari TTS section.
+        # Voice selection hanya di section 'Output Suara & Bahasa' di atas (master).
+        # Test TTS dilakukan via Preview button di Output Suara section.
+        #
+        # Hidden backward-compat widgets — tetap dibuat supaya method lain
+        # yang reference (test_google_tts, _populate_tts_voice_combo, on_tts_api_key_changed)
+        # tidak crash.
         self.tts_voice_combo = QComboBox()
-        self.tts_voice_combo.setMinimumWidth(280)
-        self._populate_tts_voice_combo("all")  # default: semua voice
-        voice_row.addWidget(self.tts_voice_combo)
-        voice_row.addStretch()
-        group_layout.addLayout(voice_row)
+        self.tts_voice_combo.setVisible(False)
+        self._populate_tts_voice_combo("all")
 
-        # Button container
-        tts_button_layout = QHBoxLayout()
+        self.tts_test_btn = QPushButton()
+        self.tts_test_btn.setVisible(False)
 
-        # Test button
-        self.tts_test_btn = QPushButton(t("config.btn.test_tts"))
-        self.tts_test_btn.setProperty("class", "success")
-        self.tts_test_btn.clicked.connect(self.test_google_tts)
-        self.tts_test_btn.setEnabled(False)  # Disabled until API key is provided
-        tts_button_layout.addWidget(self.tts_test_btn)
-
-        tts_button_layout.addStretch()
-        group_layout.addLayout(tts_button_layout)
-
-        # Status with better styling
         self.tts_status = QLabel(t("config.tts.status_no_key"))
-        self.tts_status.setProperty("class", "status-info")
-        self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
-        group_layout.addWidget(self.tts_status)
+        self.tts_status.setVisible(False)
 
         layout.addWidget(group)
 
@@ -1093,7 +1235,63 @@ class ConfigTab(QWidget):
             self.api_key_input.setPlaceholderText(t("config.placeholder.deepseek_key"))
         elif provider == "Gemini Flash Lite":
             self.api_key_input.setPlaceholderText(t("config.placeholder.gemini_key"))
+        # v1.0.26: toggle TTS API key input visibility
+        self._update_tts_key_visibility(provider)
         self.update_status_overview()
+
+    def _update_tts_key_visibility(self, provider: str):
+        """Show/hide Gemini API Key input di TTS section berdasar AI provider.
+
+        - AI=Gemini → key sudah di AI section, TTS pakai same → hide input, info-only
+        - AI=DeepSeek → butuh Gemini key terpisah untuk TTS → show input
+        """
+        if not hasattr(self, 'tts_key_container'):
+            return  # TTS section belum di-create
+
+        is_gemini_ai = provider == "Gemini Flash Lite"
+        self.tts_key_container.setVisible(not is_gemini_ai)
+
+        if is_gemini_ai:
+            self.tts_info_label.setText(t("config.tts.info_provider_gemini"))
+            # Sync TTS status dari AI key — kalau user sudah isi Gemini key di AI section,
+            # TTS otomatis available karena sharing key
+            self._sync_tts_status_to_ai_key()
+        else:
+            self.tts_info_label.setText(t("config.tts.info_provider_deepseek"))
+
+    def _sync_tts_status_to_ai_key(self):
+        """Set tts_status berdasar AI key input (karena shared key untuk Gemini provider)."""
+        if not hasattr(self, 'tts_status') or not hasattr(self, 'api_key_input'):
+            return
+        ai_key = self.api_key_input.text().strip()
+        if ai_key:
+            self.tts_status.setText(t("config.tts.status_ready"))
+            self.tts_status.setProperty("class", "status-warning")
+            self.tts_status.setStyleSheet(status_badge(WARNING))
+            if hasattr(self, 'tts_test_btn'):
+                self.tts_test_btn.setEnabled(True)
+        else:
+            self.tts_status.setText(t("config.tts.status_no_key"))
+            self.tts_status.setProperty("class", "status-info")
+            self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
+            if hasattr(self, 'tts_test_btn'):
+                self.tts_test_btn.setEnabled(False)
+
+    def _on_tts_gemini_key_changed(self):
+        """Auto-save Gemini TTS key ke api_keys.GEMINI_API_KEY saat user ketik."""
+        new_key = self.tts_api_key_input.text().strip()
+        if not new_key:
+            return
+        try:
+            cfg = self.cfg.get_all_settings()
+            if "api_keys" not in cfg:
+                cfg["api_keys"] = {}
+            cfg["api_keys"]["GEMINI_API_KEY"] = new_key
+            config_path = Path("config/settings.json")
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Failed to save Gemini TTS key: {e}")
 
     def on_api_key_changed(self):
         """Handle API key input change"""
@@ -1108,6 +1306,11 @@ class ConfigTab(QWidget):
             self.ai_status.setText(t("config.status.no_api_key"))
             self.ai_status.setProperty("class", "status-info")
             self.ai_status.setStyleSheet(status_badge(TEXT_DIM))
+
+        # v1.0.26: Kalau provider=Gemini, key ini juga dipakai TTS → sync TTS status
+        provider = self.provider_combo.currentText() if hasattr(self, 'provider_combo') else ""
+        if provider == "Gemini Flash Lite":
+            self._sync_tts_status_to_ai_key()
 
         self.update_status_overview()
 
@@ -1267,6 +1470,22 @@ class ConfigTab(QWidget):
             self.ai_status.setStyleSheet(status_badge(ERROR))
             return
 
+        # v1.0.26: Auto-save key ke settings SEBELUM test supaya TTS reinit
+        # (di on_test_result on success) bisa baca key yang benar.
+        try:
+            cfg = self.cfg.get_all_settings()
+            if "api_keys" not in cfg:
+                cfg["api_keys"] = {}
+            key_field = "GEMINI_API_KEY" if provider == "Gemini Flash Lite" else "DEEPSEEK_API_KEY"
+            cfg["api_keys"][key_field] = api_key
+            cfg["ai_provider"] = "gemini" if provider == "Gemini Flash Lite" else "deepseek"
+            config_path = Path("config/settings.json")
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+            logger.info(f"[CONFIG] Auto-saved {key_field} before test")
+        except Exception as e:
+            logger.warning(f"Auto-save before test failed: {e}")
+
         self.ai_test_btn.setText(t("config.btn.testing"))
         self.ai_test_btn.setEnabled(False)
 
@@ -1400,10 +1619,20 @@ class ConfigTab(QWidget):
         logger.info(f"[TTS_DETECT] gemini={supports_gemini}, cloud={supports_cloud} → key_type={key_type}")
 
     def test_google_tts(self):
-        """Test Google TTS API Key"""
-        api_key = self.tts_api_key_input.text().strip()
+        """Test TTS pakai unified GEMINI_API_KEY (per v1.0.26).
+
+        Tidak ada input field terpisah — key dibaca dari api_keys.GEMINI_API_KEY.
+        User isi key di section AI Provider di atas.
+        """
+        api_key = self.cfg.get("api_keys", {}).get("GEMINI_API_KEY", "").strip()
+        # Fallback: legacy google_tts_api_key untuk backward-compat
+        if not api_key:
+            api_key = self.cfg.get("google_tts_api_key", "").strip()
 
         if not api_key:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, t("common.error"),
+                "Gemini API Key belum diisi.\nIsi di section 'AI Provider' di atas.")
             self.tts_status.setText(t("config.tts.status_no_key_err"))
             self.tts_status.setStyleSheet(status_badge(ERROR))
             return
@@ -1502,6 +1731,19 @@ class ConfigTab(QWidget):
             self.ai_status.setText(t("config.status.prefix", message=message))
             self.ai_status.setProperty("class", "status-success")
             self.ai_status.setStyleSheet(status_badge(SUCCESS))
+            # v1.0.26: Kalau provider=Gemini, AI test sukses = TTS juga valid (same key)
+            provider = self.provider_combo.currentText() if hasattr(self, 'provider_combo') else ""
+            if provider == "Gemini Flash Lite" and hasattr(self, 'tts_status'):
+                self.tts_status.setText(t("config.tts.status_ok"))
+                self.tts_status.setProperty("class", "status-success")
+                self.tts_status.setStyleSheet(status_badge(SUCCESS))
+                # Reinit TTS engine supaya load key baru
+                try:
+                    from modules_server.tts_engine import reinitialize_tts_engine
+                    reinitialize_tts_engine()
+                    logger.info("[CONFIG] TTS engine reinitialized after AI Gemini test success")
+                except Exception as e:
+                    logger.warning(f"TTS reinit skipped: {e}")
         else:
             self.ai_status.setText(t("config.status.prefix", message=message))
             self.ai_status.setProperty("class", "status-error")
@@ -1621,24 +1863,29 @@ class ConfigTab(QWidget):
                 elif provider == "Gemini Flash Lite":
                     config["api_keys"]["GEMINI_API_KEY"] = api_key
 
-            # Save Google TTS API Key only
-            if tts_api_key:
-                config["google_tts_api_key"] = tts_api_key
-            else:
-                # Remove API key if empty
-                if "google_tts_api_key" in config:
-                    del config["google_tts_api_key"]
+            # v1.0.26: Simpan Gemini TTS key (kalau provider=DeepSeek, ada input terpisah)
+            # Kalau provider=Gemini, tts_api_key sengaja kosong (input hidden) — TTS pakai
+            # api_key (AI key) yang sudah disimpan di GEMINI_API_KEY di atas.
+            if tts_api_key and provider == "DeepSeek":
+                config["api_keys"]["GEMINI_API_KEY"] = tts_api_key
 
             # Save to file
             config_path = Path("config/settings.json")
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
 
-            # IMPORTANT: Reinitialize TTS engine to load new API key
-            if tts_api_key:
+            # IMPORTANT: Reinitialize TTS engine setelah GEMINI_API_KEY berubah.
+            # Dulu hanya reinit kalau tts_api_key diisi — tapi sekarang GEMINI_API_KEY bisa
+            # datang dari AI section (provider=Gemini) atau TTS input (provider=DeepSeek).
+            # Reinit kalau salah satu sumber menghasilkan key baru.
+            should_reinit_tts = (
+                (provider == "Gemini Flash Lite" and api_key) or  # AI Gemini → key shared
+                (provider == "DeepSeek" and tts_api_key)           # DeepSeek → separate Gemini key
+            )
+            if should_reinit_tts:
                 try:
                     from modules_server.tts_engine import reinitialize_tts_engine
-                    logger.info("[CONFIG] Reinitializing TTS engine with new API key...")
+                    logger.info("[CONFIG] Reinitializing TTS engine with new GEMINI_API_KEY...")
                     if reinitialize_tts_engine():
                         logger.info("[CONFIG] ✅ TTS engine reinitialized successfully")
                     else:
@@ -1686,7 +1933,6 @@ class ConfigTab(QWidget):
         """Load saved API keys and context"""
         try:
             api_keys = self.cfg.get("api_keys", {})
-            tts_api_key = self.cfg.get("google_tts_api_key", "")
             user_context = self.cfg.get("user_context", "")
 
             # Load AI API key berdasarkan ai_provider yang tersimpan
@@ -1698,9 +1944,19 @@ class ConfigTab(QWidget):
                 self.provider_combo.setCurrentText("DeepSeek")
                 self.api_key_input.setText(api_keys["DEEPSEEK_API_KEY"])
 
-            # Load Google TTS API Key
-            if tts_api_key and hasattr(self, 'tts_api_key_input'):
-                self.tts_api_key_input.setText(tts_api_key)
+            # v1.0.26: Gemini TTS key (dipakai kalau provider=DeepSeek)
+            # Populate input dengan GEMINI_API_KEY dari api_keys, bukan google_tts_api_key
+            if hasattr(self, 'tts_api_key_input'):
+                gemini_tts_key = api_keys.get("GEMINI_API_KEY", "")
+                # Fallback: legacy google_tts_api_key untuk backward-compat
+                if not gemini_tts_key:
+                    gemini_tts_key = self.cfg.get("google_tts_api_key", "")
+                self.tts_api_key_input.setText(gemini_tts_key)
+
+            # Set visibility TTS key berdasar current provider
+            if hasattr(self, '_update_tts_key_visibility'):
+                current_provider = self.provider_combo.currentText()
+                self._update_tts_key_visibility(current_provider)
                 self.tts_test_btn.setEnabled(True)
 
             # Load existing context

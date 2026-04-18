@@ -213,20 +213,26 @@ class VirtualCameraManager(QThread):
         self._skip_requested = False
         self.is_playing = True
 
+        # Lazy i18n import — backend module panggil t() untuk translated error emit
+        try:
+            from modules_client.i18n import t as _t
+        except Exception:
+            _t = lambda k, **kw: k  # fallback identity
+
         if pyvirtualcam is None:
-            self.errorOccurred.emit("pyvirtualcam not installed")
+            self.errorOccurred.emit(_t("camera.err.pyvirtualcam_missing"))
             self.is_playing = False
             self.playbackStopped.emit()
             return
 
         if cv2 is None:
-            self.errorOccurred.emit("OpenCV (cv2) not installed")
+            self.errorOccurred.emit(_t("camera.err.cv2_missing"))
             self.is_playing = False
             self.playbackStopped.emit()
             return
 
         if not self.playlist:
-            self.errorOccurred.emit("Playlist kosong")
+            self.errorOccurred.emit(_t("camera.err.playlist_empty"))
             self.is_playing = False
             self.playbackStopped.emit()
             return
@@ -234,7 +240,7 @@ class VirtualCameraManager(QThread):
         # Detect backend
         backend = self.detect_backend()
         if backend is None:
-            self.errorOccurred.emit("Tidak ada virtual camera backend (OBS/UnityCapture)")
+            self.errorOccurred.emit(_t("camera.err.no_backend"))
             self.is_playing = False
             self.playbackStopped.emit()
             return
@@ -252,7 +258,7 @@ class VirtualCameraManager(QThread):
                 width=cam_width, height=cam_height,
                 fps=int(cam_fps), backend=backend
             )
-            self.statusChanged.emit(f"Virtual camera aktif ({cam_width}x{cam_height} @ {int(cam_fps)}fps)")
+            self.statusChanged.emit(_t("camera.status.running", width=cam_width, height=cam_height, fps=int(cam_fps)))
             logger.info(f"Virtual camera opened: {cam_width}x{cam_height} @ {int(cam_fps)}fps, backend={backend}")
 
             # Main playback loop
@@ -279,7 +285,7 @@ class VirtualCameraManager(QThread):
                 self._cam = None
 
             self.is_playing = False
-            self.statusChanged.emit("Virtual camera stopped")
+            self.statusChanged.emit(_t("camera.status.stopped_msg"))
             self.playbackStopped.emit()
             logger.info("Virtual camera playback stopped")
 
