@@ -242,9 +242,9 @@ function doGet(e) {
     if (action === "version") {
       var VERSION_INFO = {
         "vocalive": {
-          "latest": "1.0.19",
-          "notes": "- FIX: OBS Virtual Camera sekarang terdeteksi di EXE\n- FIX CRITICAL: UI label menampilkan teks benar (sebelumnya raw keys di v1.0.17)\n- FIX: Notifikasi update tidak lagi modal - klik tombol kuning kapan saja\n- FIX: Update installer tanpa window CMD - ganti notifikasi Windows native\n- Bilingual UI Indonesia / English + auto-deteksi locale\n- Polish Knowledge + Greeting AI ikut bahasa UI utama\n- DeepSeek timeout scale (Polish Knowledge tidak timeout)",
-          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.19/VocaLive-v1.0.19.zip"
+          "latest": "1.0.20",
+          "notes": "- FIX: OBS Virtual Camera benar-benar terdeteksi (v1.0.19 belum cukup)\n- FIX: Popup update berhasil - text lebih clean, tanpa karakter aneh\n- FIX CRITICAL: UI label tampilkan teks benar (sebelumnya raw keys di v1.0.17)\n- FIX: Notifikasi update tidak modal - tombol kuning kapan saja\n- FIX: Update installer tanpa CMD window\n- Bilingual UI Indonesia / English + auto-deteksi locale\n- Polish Knowledge + Greeting AI ikut bahasa UI utama",
+          "url": "https://github.com/arulbarker/vocalive-release/releases/download/v1.0.20/VocaLive-v1.0.20.zip"
         },
         "tikdance": {
           "latest": "1.1.3",
