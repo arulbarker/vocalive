@@ -42,3 +42,67 @@ class TestSalesTemplatesI18n:
         from sales_templates import get_templates
         templates = get_templates()
         assert len(templates) == 10
+
+    def test_content_follows_output_language_indonesia(self, mocker):
+        """Audience split: UI=en tapi output=Indonesia → content harus Indonesian.
+
+        name/description ikut ui_language, content ikut output_language.
+        """
+        # UI=English translations
+        mocker.patch("modules_client.i18n._translations", {
+            "sales_template.general_seller.name": "General Seller",
+            "sales_template.general_seller.description": "English description",
+            "sales_template.general_seller.content": "You are an English assistant...",
+        })
+        mocker.patch("modules_client.i18n._reference_translations", {})
+        # output_language = Indonesia
+        mocker.patch(
+            "modules_client.config_manager.ConfigManager.get",
+            side_effect=lambda k, d=None: "Indonesia" if k == "output_language" else d,
+        )
+        # Mock _load_json_file → locale lookup ("id") mengembalikan Indonesian content
+        mocker.patch(
+            "modules_client.i18n._load_json_file",
+            return_value={
+                "sales_template.general_seller.content": "Kamu adalah asisten Indonesia...",
+            },
+        )
+
+        from sales_templates import get_templates
+        templates = get_templates()
+
+        # name & description → UI lang (English)
+        assert templates["general_seller"]["name"] == "General Seller"
+        assert templates["general_seller"]["description"] == "English description"
+        # content → output_language (Indonesian)
+        assert "Kamu adalah" in templates["general_seller"]["content"]
+
+    def test_content_follows_output_language_english(self, mocker):
+        """Audience split: UI=id tapi output=English → content harus English."""
+        # UI=Indonesian translations
+        mocker.patch("modules_client.i18n._translations", {
+            "sales_template.general_seller.name": "Penjual Umum",
+            "sales_template.general_seller.description": "Deskripsi Indonesia",
+            "sales_template.general_seller.content": "Kamu adalah asisten Indonesia...",
+        })
+        mocker.patch("modules_client.i18n._reference_translations", {})
+        # output_language = English
+        mocker.patch(
+            "modules_client.config_manager.ConfigManager.get",
+            side_effect=lambda k, d=None: "English" if k == "output_language" else d,
+        )
+        # Mock _load_json_file → locale lookup ("en") mengembalikan English content
+        mocker.patch(
+            "modules_client.i18n._load_json_file",
+            return_value={
+                "sales_template.general_seller.content": "You are an English assistant...",
+            },
+        )
+
+        from sales_templates import get_templates
+        templates = get_templates()
+
+        # name & description → UI lang (Indonesian)
+        assert templates["general_seller"]["name"] == "Penjual Umum"
+        # content → output_language (English)
+        assert "You are an English" in templates["general_seller"]["content"]
