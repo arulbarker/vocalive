@@ -1189,72 +1189,36 @@ class CohostTabBasicSimplified(QWidget):
         self.log_message("INFO", t("cohost.log.ai_language_set", language=ai_language))
 
     def update_voice_options(self, language):
-        """Update voice options based on selected language using voices.json"""
+        """Update voice options — Gemini voices only.
+
+        Per keputusan v1.0.25: simplify ke Gemini-only. Cloud TTS voices
+        (Standard, Wavenet, Chirp3) tidak ditampilkan karena:
+        1. Butuh Google Cloud TTS API key terpisah (berbeda dari Gemini AI Studio key)
+        2. User majority pakai Gemini key yang tidak support Cloud TTS → preview fail
+        3. Gemini voices sudah cukup: 19+ voices per language, multilingual, natural
+        """
         self.voice_combo.clear()
 
-        # Baca tipe key yang sudah dideteksi di Config tab
-        key_type = self.cfg.get("tts_key_type", "all")  # "gemini" | "cloud" | "all"
-
         try:
-            # Load voices from voices.json
             voices_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "voices.json")
             with open(voices_file, 'r', encoding='utf-8') as f:
                 voices_data = json.load(f)
 
-            # Tentukan section yang ditampilkan berdasarkan tipe key
-            if key_type == "gemini":
-                id_sections  = ["gemini_flash"]
-                my_sections  = ["gemini_flash"]
-                en_sections  = ["gemini_flash"]
-            elif key_type == "cloud":
-                id_sections  = ["gtts_standard", "gtts_wavenet", "chirp3"]
-                my_sections  = ["gtts_standard", "chirp3"]
-                en_sections  = ["gtts_standard", "chirp3"]
-            else:  # "all" atau belum dideteksi
-                id_sections  = ["gtts_standard", "gtts_wavenet", "chirp3", "gemini_flash"]
-                my_sections  = ["gtts_standard", "chirp3", "gemini_flash"]
-                en_sections  = ["gtts_standard", "chirp3"]
+            # Map language → locale key di voices.json
+            lang_key = {"Indonesia": "id-ID", "Malaysia": "ms-MY"}.get(language, "en-US")
 
             voices = []
-            if language == "Indonesia":
-                for voice_type in id_sections:
-                    if voice_type in voices_data and "id-ID" in voices_data[voice_type]:
-                        for voice in voices_data[voice_type]["id-ID"]:
-                            voices.append(f"{voice['model']} ({voice['gender']})")
+            if "gemini_flash" in voices_data and lang_key in voices_data["gemini_flash"]:
+                for voice in voices_data["gemini_flash"][lang_key]:
+                    voices.append(f"{voice['model']} ({voice['gender']})")
 
-            elif language == "Malaysia":
-                for voice_type in my_sections:
-                    if voice_type in voices_data and "ms-MY" in voices_data[voice_type]:
-                        for voice in voices_data[voice_type]["ms-MY"]:
-                            voices.append(f"{voice['model']} ({voice['gender']})")
-
-            else:  # English
-                for lang_code in ["en-US", "en-GB", "en-AU", "en-IN"]:
-                    for voice_type in en_sections:
-                        if voice_type in voices_data and lang_code in voices_data[voice_type]:
-                            for voice in voices_data[voice_type][lang_code]:
-                                voices.append(f"{voice['model']} ({voice['gender']})")
-                # Gemini voices for English (hanya jika tidak mode cloud-only)
-                if key_type != "cloud" and "gemini_flash" in voices_data and "en-US" in voices_data["gemini_flash"]:
-                    for voice in voices_data["gemini_flash"]["en-US"]:
-                        voices.append(f"{voice['model']} ({voice['gender']})")
-
-            # Fallback to default voices if loading fails
+            # Fallback kalau voices.json missing/corrupt — pakai Gemini default
             if not voices:
-                if language == "Indonesia":
-                    voices = ["id-ID-Standard-A (FEMALE)", "id-ID-Standard-B (MALE)"]
-                elif language == "Malaysia":
-                    voices = ["ms-MY-Standard-A (FEMALE)", "ms-MY-Standard-B (MALE)"]
-                else:
-                    voices = ["en-US-Standard-A (MALE)", "en-US-Standard-C (FEMALE)"]
+                voices = ["Gemini-Puck (MALE)", "Gemini-Zephyr (FEMALE)"]
 
         except Exception as e:
             self.log_message("ERROR", t("cohost.log.voice_load_error", reason=str(e)))
-            # Fallback voices
-            if language == "Indonesia":
-                voices = ["id-ID-Standard-A (FEMALE)", "id-ID-Standard-B (MALE)"]
-            else:
-                voices = ["en-US-Standard-A (MALE)", "en-US-Standard-C (FEMALE)"]
+            voices = ["Gemini-Puck (MALE)", "Gemini-Zephyr (FEMALE)"]
 
         self.voice_combo.addItems(voices)
 
