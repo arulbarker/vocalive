@@ -79,9 +79,28 @@ def current_language() -> str:
 
 
 def _i18n_dir() -> Path:
-    """Return path folder i18n/ — bekerja di dev mode dan frozen EXE."""
+    """Return path folder i18n/. Handles dev mode, PyInstaller onefile, dan onedir.
+
+    Kritis: PyInstaller onefile extract bundled data ke sys._MEIPASS (temp dir),
+    BUKAN ke Path(sys.executable).parent (folder EXE). Sebelumnya assume onedir
+    → JSON tidak ketemu di onefile build → UI tampilkan raw keys.
+    """
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent / "i18n"
+        # 1. PyInstaller onefile: sys._MEIPASS adalah temp extraction dir
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidate = Path(meipass) / "i18n"
+            if candidate.exists():
+                return candidate
+        # 2. Onedir mode (atau fallback): folder EXE
+        exe_dir_candidate = Path(sys.executable).parent / "i18n"
+        if exe_dir_candidate.exists():
+            return exe_dir_candidate
+        # 3. Last resort: return _MEIPASS path anyway (log akan tell us kalau missing)
+        if meipass:
+            return Path(meipass) / "i18n"
+        return exe_dir_candidate
+    # Dev mode: project root
     return Path(__file__).parent.parent / "i18n"
 
 
