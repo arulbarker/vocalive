@@ -1059,38 +1059,22 @@ class ConfigTab(QWidget):
         self.tts_key_type_label = QLabel()
         self.tts_key_type_label.setVisible(False)
 
-        # Voice selector for test
-        voice_row = QHBoxLayout()
-        voice_row_label = QLabel(t("config.label.test_voice"))
-        voice_row_label.setMinimumWidth(80)
-        voice_row_label.setStyleSheet("font-weight: bold; font-size: 13px;")
-        voice_row.addWidget(voice_row_label)
-
+        # v1.0.26: Voice combo + Test button dihapus dari TTS section.
+        # Voice selection hanya di section 'Output Suara & Bahasa' di atas (master).
+        # Test TTS dilakukan via Preview button di Output Suara section.
+        #
+        # Hidden backward-compat widgets — tetap dibuat supaya method lain
+        # yang reference (test_google_tts, _populate_tts_voice_combo, on_tts_api_key_changed)
+        # tidak crash.
         self.tts_voice_combo = QComboBox()
-        self.tts_voice_combo.setMinimumWidth(280)
-        self._populate_tts_voice_combo("all")  # default: semua voice
-        voice_row.addWidget(self.tts_voice_combo)
-        voice_row.addStretch()
-        group_layout.addLayout(voice_row)
+        self.tts_voice_combo.setVisible(False)
+        self._populate_tts_voice_combo("all")
 
-        # Button container
-        tts_button_layout = QHBoxLayout()
+        self.tts_test_btn = QPushButton()
+        self.tts_test_btn.setVisible(False)
 
-        # Test button
-        self.tts_test_btn = QPushButton(t("config.btn.test_tts"))
-        self.tts_test_btn.setProperty("class", "success")
-        self.tts_test_btn.clicked.connect(self.test_google_tts)
-        self.tts_test_btn.setEnabled(False)  # Disabled until API key is provided
-        tts_button_layout.addWidget(self.tts_test_btn)
-
-        tts_button_layout.addStretch()
-        group_layout.addLayout(tts_button_layout)
-
-        # Status with better styling
         self.tts_status = QLabel(t("config.tts.status_no_key"))
-        self.tts_status.setProperty("class", "status-info")
-        self.tts_status.setStyleSheet(status_badge(TEXT_DIM))
-        group_layout.addWidget(self.tts_status)
+        self.tts_status.setVisible(False)
 
         layout.addWidget(group)
 
