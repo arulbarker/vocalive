@@ -214,16 +214,19 @@ def install_update(zip_path: str) -> bool:
         except Exception:
             _ui_lang = "id"
 
+        # Message text untuk PowerShell MessageBox. Jangan pakai newline escape
+        # (`n) karena dibungkus single-quote di PowerShell → escape tidak expand.
+        # Satu kalimat cukup, lebih clean.
         if _ui_lang == "en":
             success_title = "VocaLive"
-            success_msg = "Update installed successfully.`nPlease open VocaLive from your desktop or Start menu."
+            success_msg = "Update successful. Please open the application manually."
             fail_title = "VocaLive Update"
-            fail_msg = "Update copy failed after multiple attempts.`nPlease reinstall VocaLive manually."
+            fail_msg = "Update failed. Please reinstall VocaLive manually."
         else:
             success_title = "VocaLive"
-            success_msg = "Update berhasil diinstal.`nSilakan buka VocaLive dari desktop atau Start menu."
+            success_msg = "Update berhasil, silakan buka aplikasi secara manual."
             fail_title = "VocaLive Update"
-            fail_msg = "Gagal menyalin file update setelah beberapa percobaan.`nSilakan install ulang VocaLive manual."
+            fail_msg = "Update gagal. Silakan install ulang VocaLive manual."
 
         # Batch script — TIDAK ada auto-launch, GUI popup di akhir via PowerShell MessageBox.
         # PowerShell dipanggil dengan WindowStyle Hidden supaya tidak flash console window.
