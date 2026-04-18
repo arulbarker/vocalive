@@ -51,7 +51,11 @@ class DeepSeekAI:
 
                 # Get custom context and language from settings
                 user_context = config_manager.get("user_context", "")
-                ai_language = config_manager.get("ai_language", "indonesian")  # Default to Indonesian
+                # Derive ai_language: prefer explicit, fallback dari output_language
+                ai_language = config_manager.get("ai_language")
+                if not ai_language:
+                    _out_lang = config_manager.get("output_language", "Indonesia")
+                    ai_language = {"Indonesia": "indonesian", "Malaysia": "malaysian", "English": "english"}.get(_out_lang, "indonesian")
 
                 # Build system message with language and context
                 language_prompts = {
