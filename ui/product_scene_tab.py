@@ -63,6 +63,7 @@ except ImportError:
 
 logger = logging.getLogger('VocaLive.ProductSceneTab')
 
+from modules_client.i18n import t
 from modules_client.product_scene_manager import ProductSceneManager
 
 
@@ -71,7 +72,7 @@ class AddProductDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Tambah Produk Baru")
+        self.setWindowTitle(t("product.dialog.add_title"))
         self.setMinimumWidth(480)
         self.setModal(True)
         self._video_path = ""
@@ -83,9 +84,9 @@ class AddProductDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
 
         # Nama produk
-        layout.addWidget(QLabel("Nama Produk:"))
+        layout.addWidget(QLabel(t("product.dialog.label.name")))
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Contoh: Celana Jeans Slim Fit Premium")
+        self.name_input.setPlaceholderText(t("product.dialog.placeholder.name"))
         self.name_input.setStyleSheet(f"""
             QLineEdit {{
                 background-color: {BG_SURFACE};
@@ -100,13 +101,13 @@ class AddProductDialog(QDialog):
         layout.addWidget(self.name_input)
 
         # File video
-        layout.addWidget(QLabel("File Video:"))
+        layout.addWidget(QLabel(t("product.dialog.label.video")))
         video_row = QHBoxLayout()
-        self.video_label = QLabel("Belum ada file dipilih")
+        self.video_label = QLabel(t("product.dialog.no_file"))
         self.video_label.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; padding: 2px;")
         self.video_label.setWordWrap(True)
 
-        btn_browse = QPushButton("📁 Pilih File")
+        btn_browse = QPushButton(t("product.dialog.btn.browse"))
         btn_browse.setStyleSheet(btn_secondary("font-size: 12px; padding: 7px 14px;"))
         btn_browse.clicked.connect(self._browse_video)
 
@@ -118,8 +119,8 @@ class AddProductDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.button(QDialogButtonBox.StandardButton.Save).setText("Simpan")
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Batal")
+        buttons.button(QDialogButtonBox.StandardButton.Save).setText(t("product.dialog.btn.save"))
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(t("product.dialog.btn.cancel"))
         buttons.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(btn_success())
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(btn_ghost())
         buttons.accepted.connect(self._on_save)
@@ -131,8 +132,8 @@ class AddProductDialog(QDialog):
     @pyqtSlot()
     def _browse_video(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Pilih File Video Produk", "",
-            "Video Files (*.mp4 *.avi *.mov *.mkv *.webm);;All Files (*)"
+            self, t("product.dialog.file_title"), "",
+            t("product.dialog.file_filter")
         )
         if path:
             self._video_path = path
@@ -144,10 +145,10 @@ class AddProductDialog(QDialog):
     def _on_save(self):
         name = self.name_input.text().strip()
         if not name:
-            QMessageBox.warning(self, "Nama Kosong", "Nama produk tidak boleh kosong.")
+            QMessageBox.warning(self, t("product.dialog.err.name_empty_title"), t("product.dialog.err.name_empty"))
             return
         if not self._video_path:
-            QMessageBox.warning(self, "File Belum Dipilih", "Pilih file video terlebih dahulu.")
+            QMessageBox.warning(self, t("product.dialog.err.no_video_title"), t("product.dialog.err.no_video"))
             return
         self.accept()
 
@@ -172,12 +173,9 @@ class ProductSceneTab(QWidget):
         layout.setSpacing(16)
 
         # Header
-        title = QLabel("Product Scene Manager")
+        title = QLabel(t("product.tab.title"))
         title.setStyleSheet(label_title(16))
-        subtitle = QLabel(
-            "Daftarkan produk dan file video MP4. "
-            "AI akan memilih scene yang sesuai saat menjelaskan produk."
-        )
+        subtitle = QLabel(t("product.tab.subtitle"))
         subtitle.setStyleSheet(label_subtitle(11))
         subtitle.setWordWrap(True)
         layout.addWidget(title)
@@ -185,24 +183,24 @@ class ProductSceneTab(QWidget):
 
         # Toolbar
         toolbar = QHBoxLayout()
-        self.btn_add = QPushButton("+ Tambah Produk")
+        self.btn_add = QPushButton(t("product.btn.add"))
         self.btn_add.setStyleSheet(btn_success())
         self.btn_add.clicked.connect(self._add_scene)
 
-        self.btn_remove = QPushButton("Hapus")
+        self.btn_remove = QPushButton(t("product.btn.remove"))
         self.btn_remove.setStyleSheet(btn_danger())
         self.btn_remove.clicked.connect(self._remove_selected)
 
-        self.btn_test = QPushButton("▶ Test Tampilkan")
+        self.btn_test = QPushButton(t("product.btn.test_show"))
         self.btn_test.setStyleSheet(btn_secondary())
         self.btn_test.clicked.connect(self._test_selected)
 
-        self.btn_preview = QPushButton("Preview Window")
+        self.btn_preview = QPushButton(t("product.btn.preview_window"))
         self.btn_preview.setFixedWidth(150)
         self.btn_preview.clicked.connect(self._toggle_preview)
         self._refresh_preview_btn()
 
-        self.btn_capture_mode = QPushButton("Capture Mode")
+        self.btn_capture_mode = QPushButton(t("product.btn.capture_mode"))
         self.btn_capture_mode.setFixedWidth(140)
         self.btn_capture_mode.clicked.connect(self._toggle_capture_mode)
         self._refresh_capture_mode_btn()
@@ -226,7 +224,11 @@ class ProductSceneTab(QWidget):
         # Table
         self.table = QTableWidget()
         self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["No", "Nama Produk", "File Video"])
+        self.table.setHorizontalHeaderLabels([
+            t("product.table.col.no"),
+            t("product.table.col.name"),
+            t("product.table.col.video"),
+        ])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -261,16 +263,16 @@ class ProductSceneTab(QWidget):
         size_layout = QHBoxLayout(size_frame)
         size_layout.setContentsMargins(16, 12, 16, 12)
 
-        size_layout.addWidget(QLabel("Ukuran Popup:"))
+        size_layout.addWidget(QLabel(t("product.label.popup_size")))
 
-        size_layout.addWidget(QLabel("Lebar:"))
+        size_layout.addWidget(QLabel(t("product.label.width")))
         self.spin_width = QSpinBox()
         self.spin_width.setRange(200, 1920)
         self.spin_width.setSuffix(" px")
         self.spin_width.valueChanged.connect(self._on_size_changed)
 
         size_layout.addWidget(self.spin_width)
-        size_layout.addWidget(QLabel("Tinggi (max 1080):"))
+        size_layout.addWidget(QLabel(t("product.label.height")))
 
         self.spin_height = QSpinBox()
         self.spin_height.setRange(400, 1080)
@@ -280,7 +282,7 @@ class ProductSceneTab(QWidget):
         size_layout.addWidget(self.spin_height)
         size_layout.addStretch()
 
-        info = QLabel("Setup TikTok Live Studio: Window Capture → 'VocaLive Product Display'")
+        info = QLabel(t("product.label.capture_info"))
         info.setStyleSheet(f"color: {WARNING}; font-size: 11px;")
         size_layout.addWidget(info)
 
@@ -319,8 +321,8 @@ class ProductSceneTab(QWidget):
         from modules_client.product_scene_manager import ProductSceneManager
         if len(self._psm.get_scenes()) >= ProductSceneManager.MAX_SCENES:
             QMessageBox.warning(
-                self, "Batas Maksimal",
-                f"Maksimal {ProductSceneManager.MAX_SCENES} produk. Hapus produk lama sebelum menambah baru."
+                self, t("product.err.max_limit_title"),
+                t("product.err.max_limit", max=ProductSceneManager.MAX_SCENES)
             )
             return
         dialog = AddProductDialog(self)
@@ -344,8 +346,8 @@ class ProductSceneTab(QWidget):
         except ValueError:
             return
         reply = QMessageBox.question(
-            self, "Konfirmasi Hapus",
-            f"Hapus produk ID {scene_id}?",
+            self, t("product.confirm.delete_title"),
+            t("product.confirm.delete", id=scene_id),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
@@ -356,11 +358,11 @@ class ProductSceneTab(QWidget):
     def _test_selected(self):
         """Test tampilkan popup dengan video produk yang dipilih."""
         if self._popup_window is None:
-            QMessageBox.warning(self, "Error", "Popup window belum diinisialisasi.")
+            QMessageBox.warning(self, t("common.error"), t("product.err.popup_not_init"))
             return
         row = self.table.currentRow()
         if row < 0:
-            QMessageBox.information(self, "Info", "Pilih produk dari tabel terlebih dahulu.")
+            QMessageBox.information(self, t("common.info"), t("product.info.select_row"))
             return
         id_item = self.table.item(row, 0)
         if not id_item:
@@ -371,7 +373,7 @@ class ProductSceneTab(QWidget):
             return
         scene = self._psm.get_scene_by_id(scene_id)
         if not scene or not scene.get("video_path"):
-            QMessageBox.warning(self, "Error", "File video belum dipilih untuk produk ini.")
+            QMessageBox.warning(self, t("common.error"), t("product.err.video_missing"))
             return
         self._popup_window.show_product(scene["video_path"])
 
@@ -379,7 +381,7 @@ class ProductSceneTab(QWidget):
     def _toggle_preview(self):
         """Toggle preview window: klik buka, klik lagi tutup."""
         if self._popup_window is None:
-            QMessageBox.warning(self, "Error", "Popup window belum diinisialisasi.")
+            QMessageBox.warning(self, t("common.error"), t("product.err.popup_not_init"))
             return
         if self._popup_window.isVisible() and not self._popup_window.capture_mode:
             # Sedang tampil → tutup
@@ -398,17 +400,17 @@ class ProductSceneTab(QWidget):
                    and self._popup_window.isVisible()
                    and not self._popup_window.capture_mode)
         if is_open:
-            self.btn_preview.setText("Preview Window ON")
+            self.btn_preview.setText(t("product.btn.preview_window_on"))
             self.btn_preview.setStyleSheet(btn_success("font-size: 12px; font-weight: 700;"))
         else:
-            self.btn_preview.setText("Preview Window")
+            self.btn_preview.setText(t("product.btn.preview_window"))
             self.btn_preview.setStyleSheet(btn_ghost("font-size: 12px;"))
 
     @pyqtSlot()
     def _toggle_capture_mode(self):
         """Toggle antara Capture Mode (offscreen) dan Preview Mode (onscreen)."""
         if self._popup_window is None:
-            QMessageBox.warning(self, "Error", "Popup window belum diinisialisasi.")
+            QMessageBox.warning(self, t("common.error"), t("product.err.popup_not_init"))
             return
         if self._popup_window.capture_mode:
             self._popup_window.enter_preview_mode()
@@ -422,7 +424,7 @@ class ProductSceneTab(QWidget):
     def _refresh_capture_mode_btn(self):
         """Update tampilan tombol capture mode sesuai state."""
         if self._popup_window is not None and self._popup_window.capture_mode:
-            self.btn_capture_mode.setText("Capture Mode ON")
+            self.btn_capture_mode.setText(t("product.btn.capture_mode_on"))
             self.btn_capture_mode.setStyleSheet(
                 f"QPushButton {{ background-color: {PRIMARY}; color: white; "
                 f"border: none; border-radius: 6px; padding: 8px 12px; "
@@ -430,17 +432,17 @@ class ProductSceneTab(QWidget):
                 f"QPushButton:hover {{ background-color: #1D4ED8; }}"
             )
         else:
-            self.btn_capture_mode.setText("Capture Mode")
+            self.btn_capture_mode.setText(t("product.btn.capture_mode"))
             self.btn_capture_mode.setStyleSheet(btn_ghost("font-size: 12px;"))
 
     def _refresh_toggle_btn(self):
         """Update tampilan tombol toggle sesuai state enabled."""
         enabled = self._psm.get_enabled()
         if enabled:
-            self.btn_toggle.setText("● Popup Aktif")
+            self.btn_toggle.setText(t("product.btn.popup_on"))
             self.btn_toggle.setStyleSheet(btn_success("font-size: 12px; font-weight: 700;"))
         else:
-            self.btn_toggle.setText("○ Popup Mati")
+            self.btn_toggle.setText(t("product.btn.popup_off"))
             self.btn_toggle.setStyleSheet(
                 f"QPushButton {{ background-color: {BG_ELEVATED}; color: {TEXT_MUTED}; "
                 f"border: 1px solid {BORDER}; border-radius: 6px; padding: 8px 16px; "
