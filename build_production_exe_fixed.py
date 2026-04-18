@@ -154,7 +154,9 @@ a = Analysis(
         # Dead code / tidak dipakai VocaLive
         "whisper", "torch", "transformers", "speech_recognition",
         "customtkinter", "tensorflow", "tensorboard", "keras",
-        "nltk", "scipy", "numpy", "pandas", "matplotlib",
+        # NOTE: "numpy" HARUS include — pyvirtualcam hard-import numpy.
+        # Sebelumnya excluded → pyvirtualcam ImportError → Backend 'Tidak ada'.
+        "nltk", "scipy", "pandas", "matplotlib",
         "sentence_transformers", "sklearn", "scikit-learn",
         "langchain", "langchain_community", "langchain_core",
         "openai", "anthropic", "chromadb", "faiss",
