@@ -312,6 +312,7 @@ class ConfigTab(QWidget):
 
     tts_key_type_changed = pyqtSignal(str)  # "gemini" | "cloud" | "all"
     greeting_status_changed = pyqtSignal(str, str)  # state, message
+    output_language_changed = pyqtSignal(str)  # "Indonesia" | "Malaysia" | "English"
 
     def __init__(self):
         super().__init__()
@@ -381,6 +382,15 @@ class ConfigTab(QWidget):
         ui_lang_layout.addWidget(self.ui_lang_combo)
         ui_lang_layout.addStretch()
         layout.addLayout(ui_lang_layout)
+
+        # v1.0.27: Master Output Language selector di PALING ATAS
+        # Setting ini master control untuk SEMUA output audio/AI:
+        # - AI reply ke komentar viewer TikTok
+        # - Greeting saat app start + auto-generated greetings
+        # - Preview voice, Test TTS
+        # - Polish Knowledge output
+        # - Sales template content
+        self.create_output_language_section(layout)
 
         # AI Provider Section
         self.create_ai_provider_section(layout)
@@ -587,6 +597,166 @@ class ConfigTab(QWidget):
                 font-weight: bold;
             }}
         """)
+
+    def create_output_language_section(self, layout):
+        """Master output audio section (v1.0.27).
+
+        Master control untuk SEMUA output AI + TTS:
+        - Bahasa Output (Indonesia/Malaysia/English)
+        - Voice (Gemini voices, auto-filter by language)
+        - Preview voice button
+
+        Dipindahkan dari Cohost tab supaya user punya satu source of truth
+        di Config tab. Cohost tab sekarang pure operation (start/stop/log).
+        """
+        group = QGroupBox("🔊 Output Suara & Bahasa")
+        group_layout = QVBoxLayout(group)
+        group_layout.setSpacing(12)
+
+        # Info
+        info = QLabel(
+            "Setting ini berlaku untuk: AI reply ke komentar viewer, Greeting, "
+            "Preview suara di bawah, dan semua TTS output lainnya."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 12px; font-style: italic; padding: 5px;")
+        group_layout.addWidget(info)
+
+        # Language row
+        lang_row = QHBoxLayout()
+        lang_label = QLabel("Bahasa Output:")
+        lang_label.setMinimumWidth(130)
+        lang_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        lang_row.addWidget(lang_label)
+
+        self.output_lang_combo = QComboBox()
+        self.output_lang_combo.addItems(["Indonesia", "Malaysia", "English"])
+        current_lang = self.cfg.get("output_language", "Indonesia")
+        self.output_lang_combo.setCurrentText(current_lang)
+        self.output_lang_combo.currentTextChanged.connect(self._on_output_lang_changed)
+        lang_row.addWidget(self.output_lang_combo)
+        lang_row.addStretch()
+        group_layout.addLayout(lang_row)
+
+        # Voice row
+        voice_row = QHBoxLayout()
+        voice_label = QLabel("Voice (Gemini):")
+        voice_label.setMinimumWidth(130)
+        voice_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        voice_row.addWidget(voice_label)
+
+        self.output_voice_combo = QComboBox()
+        self.output_voice_combo.setMinimumWidth(280)
+        voice_row.addWidget(self.output_voice_combo)
+
+        self.output_preview_btn = QPushButton("🔊 Preview")
+        self.output_preview_btn.setFixedWidth(100)
+        self.output_preview_btn.clicked.connect(self._on_output_preview_clicked)
+        voice_row.addWidget(self.output_preview_btn)
+        voice_row.addStretch()
+        group_layout.addLayout(voice_row)
+
+        # Populate voice combo berdasar current language
+        self._populate_output_voice_combo(current_lang)
+
+        # Connect voice change → save ke settings
+        self.output_voice_combo.currentTextChanged.connect(self._on_output_voice_changed)
+
+        layout.addWidget(group)
+
+    def _populate_output_voice_combo(self, language: str):
+        """Isi voice combo berdasar language — Gemini voices only."""
+        self.output_voice_combo.blockSignals(True)
+        self.output_voice_combo.clear()
+        try:
+            voices_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'voices.json')
+            with open(voices_file, 'r', encoding='utf-8') as f:
+                voices_data = json.load(f)
+            lang_key = {"Indonesia": "id-ID", "Malaysia": "ms-MY"}.get(language, "en-US")
+            voices = []
+            if "gemini_flash" in voices_data and lang_key in voices_data["gemini_flash"]:
+                for v in voices_data["gemini_flash"][lang_key]:
+                    voices.append(f"{v['model']} ({v['gender']})")
+            if not voices:
+                voices = ["Gemini-Puck (MALE)", "Gemini-Zephyr (FEMALE)"]
+            self.output_voice_combo.addItems(voices)
+            # Set saved voice if exists
+            saved = self.cfg.get("tts_voice", voices[0])
+            if saved in voices:
+                self.output_voice_combo.setCurrentText(saved)
+            else:
+                self.output_voice_combo.setCurrentIndex(0)
+        except Exception as e:
+            logger.error(f"Failed to populate output voice: {e}")
+            self.output_voice_combo.addItems(["Gemini-Puck (MALE)", "Gemini-Zephyr (FEMALE)"])
+        self.output_voice_combo.blockSignals(False)
+
+    def _on_output_lang_changed(self, language: str):
+        """Handler saat user pilih bahasa output. Save + emit signal + update voice list."""
+        # Save ke settings + derive ai_language
+        self.cfg.set("output_language", language)
+        ai_lang_map = {"Indonesia": "indonesian", "Malaysia": "malaysian", "English": "english"}
+        self.cfg.set("ai_language", ai_lang_map.get(language, "indonesian"))
+        # Refresh voice list untuk bahasa baru
+        self._populate_output_voice_combo(language)
+        # Emit signal untuk Cohost tab sync
+        self.output_language_changed.emit(language)
+        logger.info(f"[CONFIG] Output language → {language}")
+
+    def _on_output_voice_changed(self, voice: str):
+        """Save voice selection ke settings."""
+        if voice:
+            self.cfg.set("tts_voice", voice)
+            logger.info(f"[CONFIG] TTS voice → {voice}")
+
+    def _on_output_preview_clicked(self):
+        """Preview voice yang dipilih dengan sample text."""
+        voice = self.output_voice_combo.currentText()
+        lang = self.output_lang_combo.currentText()
+        if not voice:
+            QMessageBox.warning(self, t("common.warning"), "Voice belum dipilih.")
+            return
+        # Check Gemini API key
+        api_key = self.cfg.get("api_keys", {}).get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            api_key = self.cfg.get("google_tts_api_key", "").strip()
+        if not api_key:
+            QMessageBox.warning(self, t("common.error"),
+                "Gemini API Key belum diset.\nIsi di section AI Provider di atas.")
+            return
+        # Sample text per language
+        samples = {
+            "Indonesia": "Halo, ini adalah contoh suara untuk preview. Selamat datang!",
+            "Malaysia": "Helo, ini contoh suara untuk preview. Selamat datang!",
+            "English": "Hello, this is a voice preview sample. Welcome!"
+        }
+        lang_codes = {"Indonesia": "id-ID", "Malaysia": "ms-MY", "English": "en-US"}
+        voice_model = voice.split('(')[0].strip()
+        sample = samples.get(lang, samples["Indonesia"])
+
+        self.output_preview_btn.setEnabled(False)
+        self.output_preview_btn.setText("⏳ Playing...")
+
+        def on_done():
+            self.output_preview_btn.setEnabled(True)
+            self.output_preview_btn.setText("🔊 Preview")
+
+        try:
+            from modules_server.tts_engine import speak
+            success = speak(
+                text=sample, voice_name=voice_model,
+                language_code=lang_codes.get(lang, "id-ID"),
+                on_finished=on_done, force_google_tts=True
+            )
+            if not success:
+                on_done()
+                from modules_server.tts_engine import get_tts_engine
+                err = get_tts_engine().last_error or "Unknown error"
+                QMessageBox.warning(self, t("common.error"),
+                    f"Preview gagal:\n{voice}\n\n{err}")
+        except Exception as e:
+            on_done()
+            QMessageBox.critical(self, t("common.error"), f"{type(e).__name__}: {e}")
 
     def create_ai_provider_section(self, layout):
         """Create AI Provider section with flexible API key input"""
