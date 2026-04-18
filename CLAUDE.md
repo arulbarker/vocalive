@@ -38,8 +38,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.12** | 2026-04-08 | Fix: hapus auto-launch dari batch — start "" menyebabkan DLL error PyInstaller |
 | **v1.0.13** | 2026-04-08 | Fix ROOT CAUSE: quit langsung (100ms) bukan 2.5s — _MEI cleanup sebelum batch start |
 | **v1.0.14** | 2026-04-16 | Fix: listener hanya baca komentar LIVE (grace period 3s), sembunyikan Ukuran Popup |
+| **v1.0.15** | 2026-04-18 | Bilingual UI support (Indonesia / English), OS locale detection, migration user existing |
 
-**Versi saat ini: v1.0.14**
+**Versi saat ini: v1.0.15**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
@@ -176,6 +177,19 @@ CI pipeline: `.github/workflows/test.yml` (pytest di Windows) + `lint.yml` (ruff
 - [ ] `dist/VocaLive-vX.X.X.zip` size ~236MB (tidak >500MB)
 - [ ] EXE tidak dianggap virus oleh Windows Defender
 - [ ] Tidak ada folder `torch`, `nvidia`, `cuda`, `OpenGL` di dist
+
+#### 🌐 Bilingual / i18n
+- [ ] Fresh install di Windows id-ID → UI muncul Indonesia
+- [ ] Fresh install di Windows en-US → UI muncul English
+- [ ] Update dari v1.0.14 → UI tetap Indonesia (migration)
+- [ ] Ganti UI lang di Config Tab → restart → semua tab pakai bahasa baru
+- [ ] License dialog tampil sesuai UI lang (saat first install sebelum login)
+- [ ] Update dialog tampil sesuai UI lang
+- [ ] Sales template dropdown: nama dan content sesuai UI lang
+- [ ] Template dikirim ke AI sesuai UI lang, tapi AI output tetap ikuti output_language
+- [ ] Error TTS ditampilkan dalam UI lang
+- [ ] Greeting AI tetap pakai output_language (UI=EN + output=ID → greeting ID)
+- [ ] PostHog event `app_launched` menyertakan property `ui_language`
 
 Catat hasil di GitHub Release notes. Kalau ada yang fail, **jangan rilis** — fix dulu atau dokumentasikan sebagai known issue.
 
@@ -425,6 +439,37 @@ Interval timer diatur di Cohost Tab (bukan Config Tab).
 **Path `greeting_cache/`**: selalu absolut — `Path(sys.executable).parent / "greeting_cache"` (frozen) atau `project_root / "greeting_cache"` (dev). Jangan pakai path relatif → Access Denied di EXE mode.
 
 **Path `config/analytics/`**: sama, pakai `_get_app_root()` di `analytics_manager.py`.
+
+### Internationalization (i18n)
+
+VocaLive support bilingual UI: **Indonesia** dan **English**. UI language terpisah dari `output_language` AI (yang mengontrol bahasa AI ke viewer).
+
+1. **`modules_client/i18n.py`** — JSON dict-based translation manager. API publik: `init()`, `t(key, **kwargs)`, `current_language()`, `set_language(lang)`
+2. **`i18n/id.json`** dan **`i18n/en.json`** — flat dotted keys (`<area>.<component>.<element>`)
+3. **Detection**: fresh install → deteksi Windows locale (id/ms → ID, en-* → EN). User existing update → force "id" (migrasi cegah kejutan)
+4. **Switcher**: di Config Tab, apply setelah restart (bukan hot-reload)
+5. **Coverage test**: `tests/test_i18n.py::TestKeyCoverage` memastikan setiap `t("key")` di source ada di kedua JSON
+
+**Pattern refactor string widget:**
+
+```python
+from modules_client.i18n import t
+
+# SEBELUM
+btn = QPushButton("🚀 Mulai")
+# SESUDAH
+btn = QPushButton(t("cohost.btn.start"))
+```
+
+**Non-UI strings yang di-translate:** sales templates (`sales_templates.py` → `get_templates()` lazy), AI/TTS error messages, license dialog, update dialog.
+
+**Non-UI strings yang TIDAK di-translate:**
+- Developer log (`logger.*`) — konsisten untuk Sentry/MCP debugging
+- Voice identifier (`Gemini-Puck`, `id-ID-Chirp3-*`)
+- User data (greeting slots, product names, trigger_words, user_context, tiktok_nickname)
+- `output_language` combo values (tetap literal "Indonesia"/"Malaysia"/"English")
+
+**Special case — Greeting AI Generator prompt:** mengikuti `output_language` (bahasa viewer dengar AI), BUKAN `ui_language` (bahasa app UI). Diimplementasi via dict lookup terpisah di `greeting_ai_generator.py`, bukan lewat `t()`.
 
 ### TTS API Key Detection & Voice Filtering
 
