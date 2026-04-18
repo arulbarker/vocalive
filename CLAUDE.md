@@ -39,8 +39,9 @@ Palet warna resmi VocaLive. **Jangan ganti tanpa konfirmasi eksplisit dari user.
 | **v1.0.13** | 2026-04-08 | Fix ROOT CAUSE: quit langsung (100ms) bukan 2.5s — _MEI cleanup sebelum batch start |
 | **v1.0.14** | 2026-04-16 | Fix: listener hanya baca komentar LIVE (grace period 3s), sembunyikan Ukuran Popup |
 | **v1.0.15** | 2026-04-18 | Bilingual UI support (Indonesia / English), OS locale detection, migration user existing |
+| **v1.0.16** | 2026-04-18 | Fix bilingual audit: AI prompt + fallback + sales template content ikut output_language, preview voice Gemini pakai key yang benar, derive ai_language fallback |
 
-**Versi saat ini: v1.0.15**
+**Versi saat ini: v1.0.16**
 
 Versioning: `MAJOR` = breaking change, `MINOR` = fitur baru backward-compatible, `PATCH` = bug fix.
 
